@@ -14,6 +14,10 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SuperIndexRouteImport } from './routes/super.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as SuperSettingsRouteImport } from './routes/super.settings'
+import { Route as SuperHostelsRouteImport } from './routes/super.hostels'
+import { Route as SuperDashboardRouteImport } from './routes/super.dashboard'
+import { Route as SuperAnalyticsRouteImport } from './routes/super.analytics'
 
 const SuperRoute = SuperRouteImport.update({
   id: '/super',
@@ -40,16 +44,44 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
+const SuperSettingsRoute = SuperSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => SuperRoute,
+} as any)
+const SuperHostelsRoute = SuperHostelsRouteImport.update({
+  id: '/hostels',
+  path: '/hostels',
+  getParentRoute: () => SuperRoute,
+} as any)
+const SuperDashboardRoute = SuperDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => SuperRoute,
+} as any)
+const SuperAnalyticsRoute = SuperAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => SuperRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/super': typeof SuperRouteWithChildren
+  '/super/analytics': typeof SuperAnalyticsRoute
+  '/super/dashboard': typeof SuperDashboardRoute
+  '/super/hostels': typeof SuperHostelsRoute
+  '/super/settings': typeof SuperSettingsRoute
   '/admin/': typeof AdminIndexRoute
   '/super/': typeof SuperIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/super/analytics': typeof SuperAnalyticsRoute
+  '/super/dashboard': typeof SuperDashboardRoute
+  '/super/hostels': typeof SuperHostelsRoute
+  '/super/settings': typeof SuperSettingsRoute
   '/admin': typeof AdminIndexRoute
   '/super': typeof SuperIndexRoute
 }
@@ -58,15 +90,45 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/super': typeof SuperRouteWithChildren
+  '/super/analytics': typeof SuperAnalyticsRoute
+  '/super/dashboard': typeof SuperDashboardRoute
+  '/super/hostels': typeof SuperHostelsRoute
+  '/super/settings': typeof SuperSettingsRoute
   '/admin/': typeof AdminIndexRoute
   '/super/': typeof SuperIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/super' | '/admin/' | '/super/'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/super'
+    | '/super/analytics'
+    | '/super/dashboard'
+    | '/super/hostels'
+    | '/super/settings'
+    | '/admin/'
+    | '/super/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/super'
-  id: '__root__' | '/' | '/admin' | '/super' | '/admin/' | '/super/'
+  to:
+    | '/'
+    | '/super/analytics'
+    | '/super/dashboard'
+    | '/super/hostels'
+    | '/super/settings'
+    | '/admin'
+    | '/super'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/super'
+    | '/super/analytics'
+    | '/super/dashboard'
+    | '/super/hostels'
+    | '/super/settings'
+    | '/admin/'
+    | '/super/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -112,6 +174,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/super/settings': {
+      id: '/super/settings'
+      path: '/settings'
+      fullPath: '/super/settings'
+      preLoaderRoute: typeof SuperSettingsRouteImport
+      parentRoute: typeof SuperRoute
+    }
+    '/super/hostels': {
+      id: '/super/hostels'
+      path: '/hostels'
+      fullPath: '/super/hostels'
+      preLoaderRoute: typeof SuperHostelsRouteImport
+      parentRoute: typeof SuperRoute
+    }
+    '/super/dashboard': {
+      id: '/super/dashboard'
+      path: '/dashboard'
+      fullPath: '/super/dashboard'
+      preLoaderRoute: typeof SuperDashboardRouteImport
+      parentRoute: typeof SuperRoute
+    }
+    '/super/analytics': {
+      id: '/super/analytics'
+      path: '/analytics'
+      fullPath: '/super/analytics'
+      preLoaderRoute: typeof SuperAnalyticsRouteImport
+      parentRoute: typeof SuperRoute
+    }
   }
 }
 
@@ -126,10 +216,18 @@ const AdminRouteChildren: AdminRouteChildren = {
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 interface SuperRouteChildren {
+  SuperAnalyticsRoute: typeof SuperAnalyticsRoute
+  SuperDashboardRoute: typeof SuperDashboardRoute
+  SuperHostelsRoute: typeof SuperHostelsRoute
+  SuperSettingsRoute: typeof SuperSettingsRoute
   SuperIndexRoute: typeof SuperIndexRoute
 }
 
 const SuperRouteChildren: SuperRouteChildren = {
+  SuperAnalyticsRoute: SuperAnalyticsRoute,
+  SuperDashboardRoute: SuperDashboardRoute,
+  SuperHostelsRoute: SuperHostelsRoute,
+  SuperSettingsRoute: SuperSettingsRoute,
   SuperIndexRoute: SuperIndexRoute,
 }
 

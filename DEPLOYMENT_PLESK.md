@@ -15,7 +15,7 @@ Important:
 
 - Plesk can run this app on Node `18.20.6`.
 - Build the app before deployment, then push the generated `dist/` folder with the repo.
-- Do not point Plesk at the compiled `dist/server/server.js` file directly. Use the root `server.cjs` bootstrap instead.
+- Do not point Plesk at the compiled `dist/server/server.js` file directly. Use `bootstrap/server.js` as the startup file instead.
 - In Plesk, install runtime dependencies only. Use `NODE_ENV=production` or `npm install --omit=dev` so Vite/esbuild dev tooling is not installed on the server.
 
 ## Start
@@ -29,7 +29,7 @@ npm run start
 That runs:
 
 ```powershell
-node server.cjs
+node bootstrap/server.js
 ```
 
 ## Environment variables

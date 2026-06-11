@@ -8,8 +8,9 @@ import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { clearRole, type Role } from "@/lib/role";
+import { clearSession, type Role } from "@/lib/role";
 import { Button } from "@/components/ui/button";
+import { logout } from "@/lib/api";
 
 const superNav = [
   { to: "/super/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -102,7 +103,11 @@ export function AppSidebar({ role }: { role: Role }) {
           variant="ghost"
           size="sm"
           className="justify-start gap-2"
-          onClick={() => { clearRole(); navigate({ to: "/" }); }}
+          onClick={async () => {
+            await logout();
+            clearSession();
+            navigate({ to: "/" });
+          }}
         >
           <LogOut className="h-4 w-4" />
           <span className="group-data-[collapsible=icon]:hidden">Sign out</span>

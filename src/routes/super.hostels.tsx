@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { Plus, Search, Pencil, Trash2, Ban, CheckCircle2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus, Search, Pencil, Ban, CheckCircle2 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,12 +9,26 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { hostels as seed, type Hostel } from "@/lib/mock-data";
+import { createHostel, getSuperHostels, setHostelStatus, updateHostel } from "@/lib/api";
 import { toast } from "sonner";
+
+type HostelRow = {
+  id: string;
+  hostel_name: string;
+  email: string;
+  status: string;
+  created_at: string;
+  _count?: { students: number; parents: number; staff: number; leaveRequests: number };
+};
 
 export const Route = createFileRoute("/super/hostels")({
   head: () => ({ meta: [{ title: "Hostel Management · HostelOS" }] }),
@@ -21,27 +36,49 @@ export const Route = createFileRoute("/super/hostels")({
 });
 
 function HostelsPage() {
-  const [list, setList] = useState<Hostel[]>(seed);
+  const queryClient = useQueryClient();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
-  const filtered = list.filter(h => h.name.toLowerCase().includes(q.toLowerCase()) || h.email.toLowerCase().includes(q.toLowerCase()));
+  const [editing, setEditing] = useState<HostelRow | null>(null);
 
-  const addHostel = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    const h: Hostel = {
-      id: `H${String(list.length + 1).padStart(3, "0")}`,
-      name: String(f.get("name") || ""), address: String(f.get("address") || ""),
-      phone: String(f.get("phone") || ""), email: String(f.get("email") || ""),
-      adminName: String(f.get("adminName") || ""), adminEmail: String(f.get("adminEmail") || ""),
-      students: 0, rooms: 0, status: "active", subscription: "trial",
-      createdAt: new Date().toISOString().slice(0, 10),
-    };
-    setList([h, ...list]); setOpen(false); toast.success("Hostel created");
-  };
+  const hostelsQuery = useQuery({ queryKey: ["super-hostels"], queryFn: getSuperHostels });
 
-  const toggle = (id: string) => setList(list.map(h => h.id === id ? { ...h, status: h.status === "active" ? "disabled" : "active" } : h));
-  const remove = (id: string) => { setList(list.filter(h => h.id !== id)); toast.success("Hostel deleted"); };
+  const list = useMemo(() => hostelsQuery.data?.data ?? [], [hostelsQuery.data]);
+  const filtered = list.filter((hostel) =>
+    hostel.hostel_name.toLowerCase().includes(q.toLowerCase()) || hostel.email.toLowerCase().includes(q.toLowerCase()),
+  );
+
+  const createMutation = useMutation({
+    mutationFn: createHostel,
+    onSuccess: async () => {
+      toast.success("Hostel created");
+      setOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ["super-hostels"] });
+      await queryClient.invalidateQueries({ queryKey: ["super-analytics"] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to create hostel"),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: { hostel_name?: string; email?: string; password?: string } }) => updateHostel(id, payload),
+    onSuccess: async () => {
+      toast.success("Hostel updated");
+      setEditing(null);
+      await queryClient.invalidateQueries({ queryKey: ["super-hostels"] });
+      await queryClient.invalidateQueries({ queryKey: ["super-analytics"] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to update hostel"),
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "ACTIVE" | "DISABLED" }) => setHostelStatus(id, status),
+    onSuccess: async (_, variables) => {
+      toast.success(`Hostel ${variables.status === "ACTIVE" ? "enabled" : "disabled"}`);
+      await queryClient.invalidateQueries({ queryKey: ["super-hostels"] });
+      await queryClient.invalidateQueries({ queryKey: ["super-analytics"] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to update status"),
+  });
 
   return (
     <>
@@ -58,23 +95,12 @@ function HostelsPage() {
                 <DialogTitle>Create new hostel</DialogTitle>
                 <DialogDescription>Provision a new hostel workspace and admin account.</DialogDescription>
               </DialogHeader>
-              <form onSubmit={addHostel} className="grid gap-4 md:grid-cols-2">
-                <Field name="name" label="Hostel Name" required />
-                <Field name="email" label="Hostel Email" type="email" required />
-                <Field name="phone" label="Phone Number" required />
-                <Field name="logo" label="Logo URL" />
-                <div className="md:col-span-2"><Field name="address" label="Address" required /></div>
-                <div className="md:col-span-2 mt-2 border-t border-border pt-3">
-                  <p className="text-sm font-medium">Admin account</p>
-                </div>
-                <Field name="adminName" label="Admin Name" required />
-                <Field name="adminEmail" label="Admin Email" type="email" required />
-                <div className="md:col-span-2"><Field name="adminPassword" label="Admin Password" type="password" required /></div>
-                <DialogFooter className="md:col-span-2">
-                  <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-                  <Button type="submit">Create Hostel</Button>
-                </DialogFooter>
-              </form>
+              <HostelForm
+                isCreate
+                onSubmit={(payload) => createMutation.mutate(payload)}
+                submitLabel={createMutation.isPending ? "Creating..." : "Create Hostel"}
+                onCancel={() => setOpen(false)}
+              />
             </DialogContent>
           </Dialog>
         }
@@ -85,16 +111,8 @@ function HostelsPage() {
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <div className="relative max-w-sm flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Search hostels…" value={q} onChange={e => setQ(e.target.value)} className="pl-9" />
+              <Input placeholder="Search hostels…" value={q} onChange={(e) => setQ(e.target.value)} className="pl-9" />
             </div>
-            <Select defaultValue="all">
-              <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="disabled">Disabled</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
 
           <div className="overflow-x-auto rounded-lg border border-border/60">
@@ -102,41 +120,48 @@ function HostelsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Hostel</TableHead>
-                  <TableHead>Admin</TableHead>
                   <TableHead>Students</TableHead>
-                  <TableHead>Subscription</TableHead>
+                  <TableHead>Staff</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map(h => (
-                  <TableRow key={h.id}>
+                {filtered.map((hostel) => (
+                  <TableRow key={hostel.id}>
                     <TableCell>
-                      <div className="font-medium">{h.name}</div>
-                      <div className="text-xs text-muted-foreground">{h.email}</div>
+                      <div className="font-medium">{hostel.hostel_name}</div>
+                      <div className="text-xs text-muted-foreground">{hostel.email}</div>
                     </TableCell>
+                    <TableCell>{hostel._count?.students ?? 0}</TableCell>
+                    <TableCell>{hostel._count?.staff ?? 0}</TableCell>
                     <TableCell>
-                      <div>{h.adminName}</div>
-                      <div className="text-xs text-muted-foreground">{h.adminEmail}</div>
-                    </TableCell>
-                    <TableCell>{h.students}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="capitalize">{h.subscription}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={h.status === "active" ? "bg-success text-success-foreground hover:bg-success" : "bg-muted text-muted-foreground hover:bg-muted"}>
-                        {h.status}
+                      <Badge
+                        className={
+                          hostel.status === "ACTIVE"
+                            ? "bg-success text-success-foreground hover:bg-success"
+                            : "bg-muted text-muted-foreground hover:bg-muted"
+                        }
+                      >
+                        {hostel.status.toLowerCase()}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        <Button size="icon" variant="ghost"><Pencil className="h-4 w-4" /></Button>
-                        <Button size="icon" variant="ghost" onClick={() => toggle(h.id)}>
-                          {h.status === "active" ? <Ban className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                        <Button size="icon" variant="ghost" onClick={() => setEditing(hostel)}>
+                          <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button size="icon" variant="ghost" onClick={() => remove(h.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() =>
+                            statusMutation.mutate({
+                              id: hostel.id,
+                              status: hostel.status === "ACTIVE" ? "DISABLED" : "ACTIVE",
+                            })
+                          }
+                        >
+                          {hostel.status === "ACTIVE" ? <Ban className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
                         </Button>
                       </div>
                     </TableCell>
@@ -147,15 +172,105 @@ function HostelsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit hostel</DialogTitle>
+            <DialogDescription>Update hostel details and admin login settings.</DialogDescription>
+          </DialogHeader>
+          {editing ? (
+            <HostelForm
+              initial={editing}
+              isCreate={false}
+              onSubmit={(payload) => updateMutation.mutate({ id: editing.id, payload })}
+              submitLabel={updateMutation.isPending ? "Saving..." : "Save changes"}
+              onCancel={() => setEditing(null)}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
 
-function Field({ name, label, type = "text", required }: { name: string; label: string; type?: string; required?: boolean }) {
+function HostelForm({
+  initial,
+  isCreate,
+  onSubmit,
+  submitLabel,
+  onCancel,
+}: {
+  initial?: Partial<HostelRow>;
+  isCreate: boolean;
+  onSubmit: (payload: { hostel_name?: string; email?: string; password?: string; admin_name?: string; admin_email?: string; admin_password?: string }) => void;
+  submitLabel: string;
+  onCancel: () => void;
+}) {
+  return (
+    <form
+      className="grid gap-4 md:grid-cols-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget);
+        onSubmit({
+          hostel_name: String(form.get("hostel_name") ?? ""),
+          email: String(form.get("email") ?? ""),
+          password: String(form.get("password") ?? "") || undefined,
+          ...(isCreate
+            ? {
+                admin_name: String(form.get("admin_name") ?? ""),
+                admin_email: String(form.get("admin_email") ?? ""),
+                admin_password: String(form.get("admin_password") ?? "") || undefined,
+              }
+            : {}),
+        });
+      }}
+    >
+      <Field name="hostel_name" label="Hostel Name" defaultValue={initial?.hostel_name ?? ""} required />
+      <Field name="email" label="Hostel Email" type="email" defaultValue={initial?.email ?? ""} required />
+      <div className="md:col-span-2">
+        <Field name="password" label="Admin Password" type="password" defaultValue="" helper="Leave blank to keep the existing password." />
+      </div>
+      {isCreate ? (
+        <>
+          <Field name="admin_name" label="Hostel Admin Name" required />
+          <Field name="admin_email" label="Hostel Admin Email" type="email" required />
+          <div className="md:col-span-2">
+            <Field name="admin_password" label="Hostel Admin Password" type="password" helper="Leave blank to use the default reset password." />
+          </div>
+        </>
+      ) : null}
+      <DialogFooter className="md:col-span-2">
+        <Button type="button" variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit">{submitLabel}</Button>
+      </DialogFooter>
+    </form>
+  );
+}
+
+function Field({
+  name,
+  label,
+  type = "text",
+  required,
+  defaultValue,
+  helper,
+}: {
+  name: string;
+  label: string;
+  type?: string;
+  required?: boolean;
+  defaultValue?: string;
+  helper?: string;
+}) {
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={name}>{label}</Label>
-      <Input id={name} name={name} type={type} required={required} />
+      <Input id={name} name={name} type={type} required={required} defaultValue={defaultValue} />
+      {helper ? <p className="text-xs text-muted-foreground">{helper}</p> : null}
     </div>
   );
 }

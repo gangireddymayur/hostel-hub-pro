@@ -1,14 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { Building2, CheckCircle2, GraduationCap, ClipboardList } from "lucide-react";
 import { PageHeader } from "@/components/dashboard-shell";
 import { StatCard } from "@/components/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  BarChart, Bar, Legend,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  BarChart,
+  Bar,
+  Legend,
 } from "recharts";
-import { hostels, monthlyGrowth, weeklyLeaves } from "@/lib/mock-data";
+import { getSuperAnalytics, getSuperHostels } from "@/lib/api";
 
 export const Route = createFileRoute("/super/dashboard")({
   head: () => ({ meta: [{ title: "Super Admin Dashboard · HostelOS" }] }),
@@ -16,20 +25,40 @@ export const Route = createFileRoute("/super/dashboard")({
 });
 
 function SuperDashboard() {
-  const totalHostels = hostels.length;
-  const activeHostels = hostels.filter(h => h.status === "active").length;
-  const totalStudents = hostels.reduce((s, h) => s + h.students, 0);
-  const totalLeaves = 1284;
+  const analyticsQuery = useQuery({ queryKey: ["super-analytics"], queryFn: getSuperAnalytics });
+  const hostelsQuery = useQuery({ queryKey: ["super-hostels"], queryFn: getSuperHostels });
+
+  const analytics = analyticsQuery.data?.data;
+  const hostels = hostelsQuery.data?.data ?? [];
+
+  if (analyticsQuery.isLoading || hostelsQuery.isLoading) {
+    return (
+      <>
+        <PageHeader title="Platform overview" description="Loading live data from the backend..." />
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">Loading dashboard…</CardContent>
+        </Card>
+      </>
+    );
+  }
+
+  const totalHostels = analytics?.hostels ?? hostels.length;
+  const activeHostels = hostels.filter((hostel) => hostel.status === "ACTIVE").length;
+  const totalStudents = analytics?.students ?? 0;
+  const totalLeaves = analytics?.leaveRequests ?? 0;
+  const recentHostels = [...hostels].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, 5);
+  const monthlyGrowth = analytics?.monthlyGrowth ?? [];
+  const weeklyLeaves = analytics?.weeklyLeaves ?? [];
 
   return (
     <>
       <PageHeader title="Platform overview" description="Real-time view of hostels, students and leave activity across the network." />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total Hostels" value={totalHostels} icon={Building2} tone="primary" trend="+3 this month" />
+        <StatCard label="Total Hostels" value={totalHostels} icon={Building2} tone="primary" trend="+ live" />
         <StatCard label="Active Hostels" value={activeHostels} icon={CheckCircle2} tone="success" hint={`${totalHostels - activeHostels} disabled`} />
-        <StatCard label="Total Students" value={totalStudents.toLocaleString()} icon={GraduationCap} tone="info" trend="+12.4% MoM" />
-        <StatCard label="Leave Requests" value={totalLeaves.toLocaleString()} icon={ClipboardList} tone="warning" hint="Last 30 days" />
+        <StatCard label="Total Students" value={totalStudents.toLocaleString()} icon={GraduationCap} tone="info" />
+        <StatCard label="Leave Requests" value={totalLeaves.toLocaleString()} icon={ClipboardList} tone="warning" hint="Across all hostels" />
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
@@ -76,18 +105,18 @@ function SuperDashboard() {
         <CardHeader><CardTitle>Recently added hostels</CardTitle></CardHeader>
         <CardContent>
           <div className="divide-y divide-border/60">
-            {hostels.slice(0, 5).map(h => (
-              <div key={h.id} className="flex items-center justify-between gap-4 py-3">
+            {recentHostels.map((hostel) => (
+              <div key={hostel.id} className="flex items-center justify-between gap-4 py-3">
                 <div className="min-w-0">
-                  <p className="truncate font-medium">{h.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">{h.address}</p>
+                  <p className="truncate font-medium">{hostel.hostel_name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{hostel.email}</p>
                 </div>
                 <div className="hidden text-right text-xs text-muted-foreground sm:block">
-                  <p>{h.students} students</p>
-                  <p>{h.rooms} rooms</p>
+                  <p>{hostel._count?.students ?? 0} students</p>
+                  <p>{hostel._count?.staff ?? 0} staff</p>
                 </div>
-                <Badge variant={h.status === "active" ? "default" : "secondary"} className={h.status === "active" ? "bg-success text-success-foreground hover:bg-success" : ""}>
-                  {h.status}
+                <Badge variant={hostel.status === "ACTIVE" ? "default" : "secondary"} className={hostel.status === "ACTIVE" ? "bg-success text-success-foreground hover:bg-success" : ""}>
+                  {hostel.status.toLowerCase()}
                 </Badge>
               </div>
             ))}

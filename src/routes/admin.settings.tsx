@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
 import { PageHeader } from "@/components/dashboard-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Upload } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { changePassword } from "@/lib/api";
+import { getSession } from "@/lib/role";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/settings")({
   head: () => ({ meta: [{ title: "Settings · HostelOS" }] }),
@@ -14,6 +18,13 @@ export const Route = createFileRoute("/admin/settings")({
 });
 
 function AdminSettings() {
+  const session = getSession();
+  const passwordMutation = useMutation({
+    mutationFn: changePassword,
+    onSuccess: () => toast.success("Password updated"),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to update password"),
+  });
+
   return (
     <>
       <PageHeader title="Hostel settings" description="Branding, notifications and integration preferences." />
@@ -22,16 +33,14 @@ function AdminSettings() {
           <CardHeader><CardTitle>Hostel details</CardTitle></CardHeader>
           <CardContent className="grid gap-4">
             <div className="flex items-center gap-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-glow text-2xl font-bold text-primary-foreground">SB</div>
+              <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-glow text-2xl font-bold text-primary-foreground">
+                {(session?.profile.email ?? "HA").slice(0, 2).toUpperCase()}
+              </div>
               <Button variant="outline" size="sm"><Upload className="h-4 w-4" /> Upload logo</Button>
             </div>
-            <div className="grid gap-1.5"><Label>Hostel name</Label><Input defaultValue="Sunrise Boys Hostel" /></div>
-            <div className="grid gap-1.5"><Label>Address</Label><Textarea defaultValue="12 College Rd, Bengaluru 560001" /></div>
-            <div className="grid gap-1.5 sm:grid-cols-2 sm:gap-4">
-              <div className="grid gap-1.5"><Label>Phone</Label><Input defaultValue="+91 9845012345" /></div>
-              <div className="grid gap-1.5"><Label>Email</Label><Input defaultValue="admin@sunrise.edu" /></div>
-            </div>
-            <Button className="w-fit">Save changes</Button>
+            <div className="grid gap-1.5"><Label>Hostel email</Label><Input defaultValue={session?.profile.email ?? ""} readOnly /></div>
+            <div className="grid gap-1.5"><Label>Address</Label><Textarea placeholder="Enter hostel address" /></div>
+            <Button className="w-fit" variant="outline">Save changes</Button>
           </CardContent>
         </Card>
 
@@ -40,26 +49,46 @@ function AdminSettings() {
             <CardHeader><CardTitle>Notifications</CardTitle></CardHeader>
             <CardContent className="grid gap-4">
               {[
-                ["New leave request","Notify when a parent approves a new request."],
-                ["Student returned late","Alert when a student misses expected return time."],
-                ["Daily summary","Email morning summary at 8:00 AM."],
-              ].map(([t, d]) => (
-                <div key={t} className="flex items-start justify-between gap-4">
-                  <div><p className="text-sm font-medium">{t}</p><p className="text-xs text-muted-foreground">{d}</p></div>
+                ["New leave request", "Notify when a parent approves a new request."],
+                ["Student returned late", "Alert when a student misses expected return time."],
+                ["Daily summary", "Email morning summary at 8:00 AM."],
+              ].map(([title, description]) => (
+                <div key={title} className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium">{title}</p>
+                    <p className="text-xs text-muted-foreground">{description}</p>
+                  </div>
                   <Switch defaultChecked />
                 </div>
               ))}
             </CardContent>
           </Card>
           <Card>
-            <CardHeader><CardTitle>Email settings</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Change password</CardTitle></CardHeader>
             <CardContent className="grid gap-4">
-              <div className="grid gap-1.5"><Label>SMTP host</Label><Input defaultValue="smtp.hostelos.app" /></div>
-              <div className="grid gap-1.5 sm:grid-cols-2 sm:gap-4">
-                <div className="grid gap-1.5"><Label>Port</Label><Input defaultValue="587" /></div>
-                <div className="grid gap-1.5"><Label>From email</Label><Input defaultValue="no-reply@sunrise.edu" /></div>
-              </div>
-              <Button className="w-fit" variant="outline">Test connection</Button>
+              <form
+                className="grid gap-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const form = new FormData(event.currentTarget);
+                  passwordMutation.mutate({
+                    currentPassword: String(form.get("currentPassword") ?? ""),
+                    newPassword: String(form.get("newPassword") ?? ""),
+                  });
+                }}
+              >
+                <div className="grid gap-1.5">
+                  <Label htmlFor="currentPassword">Current password</Label>
+                  <Input id="currentPassword" name="currentPassword" type="password" required />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="newPassword">New password</Label>
+                  <Input id="newPassword" name="newPassword" type="password" required />
+                </div>
+                <Button className="w-fit" type="submit">
+                  Update password
+                </Button>
+              </form>
             </CardContent>
           </Card>
         </div>

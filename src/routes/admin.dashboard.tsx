@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Users, BedDouble, MapPin, ClipboardList, CheckCircle2, XCircle } from "lucide-react";
 import { PageHeader } from "@/components/dashboard-shell";
 import { StatCard } from "@/components/stat-card";
@@ -6,9 +8,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
 } from "recharts";
-import { students, rooms, leaves, weeklyLeaves, outsideStudents } from "@/lib/mock-data";
+import { getHostelDashboard, getHostelStudents, getLeaveRequests } from "@/lib/api";
 
 export const Route = createFileRoute("/admin/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard · HostelOS" }] }),
@@ -16,19 +25,59 @@ export const Route = createFileRoute("/admin/dashboard")({
 });
 
 function AdminDashboard() {
-  const pending = leaves.filter(l => l.finalStatus.startsWith("pending")).length;
-  const approved = leaves.filter(l => l.finalStatus === "approved").length;
-  const rejected = leaves.filter(l => l.finalStatus === "rejected").length;
-  const recent = leaves.slice(0, 6);
+  const dashboardQuery = useQuery({ queryKey: ["hostel-dashboard"], queryFn: getHostelDashboard });
+  const studentsQuery = useQuery({ queryKey: ["hostel-students"], queryFn: getHostelStudents });
+  const leaveQuery = useQuery({ queryKey: ["hostel-leaves"], queryFn: getLeaveRequests });
+
+  const students = studentsQuery.data?.data ?? [];
+  const leaves = leaveQuery.data?.data ?? [];
+
+  const rooms = useMemo(() => {
+    return new Set(students.map((student) => student.room_number)).size;
+  }, [students]);
+
+  const outsideStudents = useMemo(
+    () => leaves.filter((leave) => leave.gatePass?.status === "OUT" || leave.final_status === "APPROVED").length,
+    [leaves],
+  );
+
+  const pending = dashboardQuery.data?.data.pendingLeaves ?? leaves.filter((leave) => leave.final_status === "PENDING").length;
+  const approved = dashboardQuery.data?.data.approvedLeaves ?? leaves.filter((leave) => leave.final_status === "APPROVED").length;
+  const rejected = leaves.filter((leave) => leave.final_status === "REJECTED").length;
+  const recent = [...leaves].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, 6);
+
+  const weeklyLeaves = useMemo(() => {
+    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    return days.map((day, index) => {
+      const dayIndex = (index + 1) % 7;
+      const dayLeaves = leaves.filter((leave) => new Date(leave.created_at).getDay() === dayIndex);
+      return {
+        day,
+        requests: dayLeaves.length,
+        approved: dayLeaves.filter((leave) => leave.final_status === "APPROVED").length,
+      };
+    });
+  }, [leaves]);
+
+  if (dashboardQuery.isLoading || studentsQuery.isLoading || leaveQuery.isLoading) {
+    return (
+      <>
+        <PageHeader title="Welcome back" description="Loading live hostel data..." />
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">Loading dashboard…</CardContent>
+        </Card>
+      </>
+    );
+  }
 
   return (
     <>
-      <PageHeader title="Welcome back" description="Here's what's happening at Sunrise Boys Hostel today." />
+      <PageHeader title="Welcome back" description="Here's what's happening at your hostel today." />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard label="Total Students" value={students.length} icon={Users} tone="primary" />
-        <StatCard label="Total Rooms" value={rooms.length} icon={BedDouble} tone="info" />
-        <StatCard label="Students Outside" value={outsideStudents.length} icon={MapPin} tone="warning" />
+        <StatCard label="Total Rooms" value={rooms} icon={BedDouble} tone="info" />
+        <StatCard label="Students Outside" value={outsideStudents} icon={MapPin} tone="warning" />
         <StatCard label="Pending Leaves" value={pending} icon={ClipboardList} tone="warning" />
         <StatCard label="Approved Leaves" value={approved} icon={CheckCircle2} tone="success" />
         <StatCard label="Rejected Leaves" value={rejected} icon={XCircle} tone="destructive" />
@@ -55,14 +104,22 @@ function AdminDashboard() {
         <Card>
           <CardHeader><CardTitle>Recent leave requests</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            {recent.map(l => (
-              <div key={l.id} className="flex items-center gap-3">
-                <Avatar className="h-9 w-9"><AvatarFallback className="bg-accent text-accent-foreground text-xs">{l.studentName.split(" ").map(s=>s[0]).slice(0,2).join("")}</AvatarFallback></Avatar>
+            {recent.map((leave) => (
+              <div key={leave.id} className="flex items-center gap-3">
+                <Avatar className="h-9 w-9">
+                  <AvatarFallback className="bg-accent text-accent-foreground text-xs">
+                    {leave.student.name
+                      .split(" ")
+                      .map((part) => part[0])
+                      .slice(0, 2)
+                      .join("")}
+                  </AvatarFallback>
+                </Avatar>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{l.studentName}</p>
-                  <p className="truncate text-xs text-muted-foreground">{l.reason}</p>
+                  <p className="truncate text-sm font-medium">{leave.student.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{leave.reason}</p>
                 </div>
-                <StatusBadge status={l.finalStatus} />
+                <StatusBadge status={leave.final_status.toLowerCase()} />
               </div>
             ))}
           </CardContent>
@@ -73,8 +130,11 @@ function AdminDashboard() {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const cls = status === "approved" ? "bg-success text-success-foreground hover:bg-success"
-    : status === "rejected" ? "bg-destructive text-destructive-foreground hover:bg-destructive"
-    : "bg-warning/20 text-warning-foreground dark:text-warning hover:bg-warning/20";
+  const cls =
+    status === "approved"
+      ? "bg-success text-success-foreground hover:bg-success"
+      : status === "rejected"
+        ? "bg-destructive text-destructive-foreground hover:bg-destructive"
+        : "bg-warning/20 text-warning-foreground dark:text-warning hover:bg-warning/20";
   return <Badge className={`capitalize ${cls}`}>{status}</Badge>;
 }

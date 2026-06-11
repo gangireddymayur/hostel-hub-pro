@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Search, Check, X } from "lucide-react";
 import { PageHeader } from "@/components/dashboard-shell";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { leaves as seed, type Leave } from "@/lib/mock-data";
+import { getLeaveRequests, reviewLeaveRequest } from "@/lib/api";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/leaves")({
@@ -18,23 +19,40 @@ export const Route = createFileRoute("/admin/leaves")({
 });
 
 function LeavesPage() {
-  const [list, setList] = useState<Leave[]>(seed);
+  const queryClient = useQueryClient();
   const [q, setQ] = useState("");
   const [reason, setReason] = useState("all");
 
-  const filter = (status?: string) => list.filter(l => {
-    if (status && l.finalStatus !== status) return false;
-    if (reason !== "all" && l.reason !== reason) return false;
-    if (q && !(l.studentName.toLowerCase().includes(q.toLowerCase()) || l.studentId.toLowerCase().includes(q.toLowerCase()))) return false;
-    return true;
+  const leavesQuery = useQuery({ queryKey: ["hostel-leaves"], queryFn: getLeaveRequests });
+  const list = useMemo(() => leavesQuery.data?.data ?? [], [leavesQuery.data]);
+
+  const reasons = useMemo(() => Array.from(new Set(list.map((leave) => leave.reason))), [list]);
+
+  const reviewMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "APPROVED" | "REJECTED" }) => reviewLeaveRequest(id, { status }),
+    onSuccess: async (_, variables) => {
+      toast.success(`Leave ${variables.status.toLowerCase()}`);
+      await queryClient.invalidateQueries({ queryKey: ["hostel-leaves"] });
+      await queryClient.invalidateQueries({ queryKey: ["hostel-dashboard"] });
+      await queryClient.invalidateQueries({ queryKey: ["hostel-reports"] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to update leave"),
   });
 
-  const setStatus = (id: string, s: "approved" | "rejected") => {
-    setList(list.map(l => l.id === id ? { ...l, finalStatus: s, hostelApproval: s } : l));
-    toast.success(`Leave ${s}`);
-  };
-
-  const reasons = Array.from(new Set(seed.map(l => l.reason)));
+  const filter = (status?: string) =>
+    list.filter((leave) => {
+      if (status && leave.final_status !== status) return false;
+      if (reason !== "all" && leave.reason !== reason) return false;
+      if (
+        q &&
+        !(
+          leave.student.name.toLowerCase().includes(q.toLowerCase()) ||
+          leave.student.student_id.toLowerCase().includes(q.toLowerCase())
+        )
+      )
+        return false;
+      return true;
+    });
 
   return (
     <>
@@ -45,13 +63,17 @@ function LeavesPage() {
           <div className="mb-4 flex flex-wrap gap-2">
             <div className="relative max-w-sm flex-1 min-w-[200px]">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Search by name or ID…" value={q} onChange={e => setQ(e.target.value)} className="pl-9" />
+              <Input placeholder="Search by name or ID…" value={q} onChange={(e) => setQ(e.target.value)} className="pl-9" />
             </div>
             <Select value={reason} onValueChange={setReason}>
               <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All reasons</SelectItem>
-                {reasons.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                {reasons.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {item}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -64,43 +86,70 @@ function LeavesPage() {
               <TabsTrigger value="all">History</TabsTrigger>
             </TabsList>
             {[
-              { v: "pending", filter: filter("pending hostel").concat(filter("pending parent")) },
-              { v: "approved", filter: filter("approved") },
-              { v: "rejected", filter: filter("rejected") },
+              { v: "pending", filter: filter("PENDING") },
+              { v: "approved", filter: filter("APPROVED") },
+              { v: "rejected", filter: filter("REJECTED") },
               { v: "all", filter: filter() },
-            ].map(t => (
-              <TabsContent key={t.v} value={t.v} className="mt-4">
+            ].map((tab) => (
+              <TabsContent key={tab.v} value={tab.v} className="mt-4">
                 <div className="overflow-x-auto rounded-lg border border-border/60">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Student</TableHead><TableHead>Reason</TableHead><TableHead>Dates</TableHead>
-                        <TableHead>Parent</TableHead><TableHead>Hostel</TableHead><TableHead>Status</TableHead>
+                        <TableHead>Student</TableHead>
+                        <TableHead>Reason</TableHead>
+                        <TableHead>Dates</TableHead>
+                        <TableHead>Parent</TableHead>
+                        <TableHead>Hostel</TableHead>
+                        <TableHead>Status</TableHead>
                         <TableHead className="text-right">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {t.filter.map(l => (
-                        <TableRow key={l.id}>
+                      {tab.filter.map((leave) => (
+                        <TableRow key={leave.id}>
                           <TableCell>
-                            <div className="font-medium">{l.studentName}</div>
-                            <div className="text-xs text-muted-foreground">{l.studentId} · {l.room}</div>
+                            <div className="font-medium">{leave.student.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {leave.student.student_id} · {leave.student.room_number}
+                            </div>
                           </TableCell>
-                          <TableCell>{l.reason}</TableCell>
+                          <TableCell>{leave.reason}</TableCell>
                           <TableCell className="text-xs">
-                            <div>{l.fromDate} → {l.toDate}</div>
-                            <div className="text-muted-foreground">{l.outTime} / {l.returnTime}</div>
+                            <div>
+                              {new Date(leave.from_date).toLocaleDateString()} → {new Date(leave.to_date).toLocaleDateString()}
+                            </div>
+                            <div className="text-muted-foreground">
+                              {new Date(leave.out_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} /{" "}
+                              {new Date(leave.return_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </div>
                           </TableCell>
-                          <TableCell><ApprovalDot s={l.parentApproval} /></TableCell>
-                          <TableCell><ApprovalDot s={l.hostelApproval} /></TableCell>
-                          <TableCell><StatusBadge s={l.finalStatus} /></TableCell>
+                          <TableCell><ApprovalDot s={leave.parent_status.toLowerCase() as "pending" | "approved" | "rejected"} /></TableCell>
+                          <TableCell><ApprovalDot s={leave.hostel_status.toLowerCase() as "pending" | "approved" | "rejected"} /></TableCell>
+                          <TableCell><StatusBadge s={leave.final_status.toLowerCase()} /></TableCell>
                           <TableCell className="text-right">
-                            {l.finalStatus.startsWith("pending") ? (
+                            {leave.final_status === "PENDING" ? (
                               <div className="flex justify-end gap-1">
-                                <Button size="sm" variant="outline" onClick={() => setStatus(l.id, "approved")} className="text-success border-success/30 hover:bg-success/10"><Check className="h-4 w-4" /></Button>
-                                <Button size="sm" variant="outline" onClick={() => setStatus(l.id, "rejected")} className="text-destructive border-destructive/30 hover:bg-destructive/10"><X className="h-4 w-4" /></Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => reviewMutation.mutate({ id: leave.id, status: "APPROVED" })}
+                                  className="text-success border-success/30 hover:bg-success/10"
+                                >
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => reviewMutation.mutate({ id: leave.id, status: "REJECTED" })}
+                                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
                               </div>
-                            ) : <span className="text-xs text-muted-foreground">—</span>}
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -120,9 +169,13 @@ function ApprovalDot({ s }: { s: "pending" | "approved" | "rejected" }) {
   const c = s === "approved" ? "bg-success" : s === "rejected" ? "bg-destructive" : "bg-warning";
   return <div className="flex items-center gap-2 text-xs capitalize"><span className={`h-2 w-2 rounded-full ${c}`} />{s}</div>;
 }
+
 function StatusBadge({ s }: { s: string }) {
-  const cls = s === "approved" ? "bg-success text-success-foreground hover:bg-success"
-    : s === "rejected" ? "bg-destructive text-destructive-foreground hover:bg-destructive"
-    : "bg-warning/20 text-warning-foreground dark:text-warning hover:bg-warning/20";
+  const cls =
+    s === "approved"
+      ? "bg-success text-success-foreground hover:bg-success"
+      : s === "rejected"
+        ? "bg-destructive text-destructive-foreground hover:bg-destructive"
+        : "bg-warning/20 text-warning-foreground dark:text-warning hover:bg-warning/20";
   return <Badge className={`capitalize ${cls}`}>{s}</Badge>;
 }

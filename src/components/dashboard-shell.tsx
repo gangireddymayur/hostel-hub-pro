@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Bell, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getRole, initTheme, type Role } from "@/lib/role";
+import { Toaster } from "@/components/ui/sonner";
 
 export function DashboardShell({ expectedRole, children }: { expectedRole: Role; children?: ReactNode }) {
   const navigate = useNavigate();
@@ -45,6 +46,7 @@ export function DashboardShell({ expectedRole, children }: { expectedRole: Role;
           </div>
         </header>
         <main className="flex-1 p-4 md:p-6">{children ?? <Outlet />}</main>
+        <Toaster richColors position="top-right" />
       </SidebarInset>
     </SidebarProvider>
   );

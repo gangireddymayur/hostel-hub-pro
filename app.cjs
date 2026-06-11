@@ -1,7 +1,16 @@
 const http = require("node:http");
 const { Readable } = require("node:stream");
 
-const PORT = Number(process.env.PORT ?? process.env.NODE_PORT ?? 3000);
+function parsePort(value) {
+  const parsed = Number.parseInt(String(value ?? "").trim(), 10);
+  return Number.isInteger(parsed) && parsed >= 0 && parsed < 65536 ? parsed : undefined;
+}
+
+const PORT =
+  parsePort(process.env.PORT) ??
+  parsePort(process.env.NODE_PORT) ??
+  parsePort(process.env.IISNODE_PORT) ??
+  3000;
 const HOST = process.env.HOST ?? "0.0.0.0";
 
 function toRequestUrl(req) {

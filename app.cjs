@@ -13,6 +13,14 @@ const PORT =
   3000;
 const HOST = process.env.HOST ?? "0.0.0.0";
 
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught exception:", error);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled rejection:", reason);
+});
+
 function toRequestUrl(req) {
   const forwardedProto = req.headers["x-forwarded-proto"];
   const protocol = Array.isArray(forwardedProto)
@@ -29,7 +37,13 @@ async function readRequestBody(req) {
 
   const chunks = [];
   for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    if (Buffer.isBuffer(chunk)) {
+      chunks.push(chunk);
+    } else if (typeof chunk === "string") {
+      chunks.push(Buffer.from(chunk));
+    } else if (chunk instanceof Uint8Array) {
+      chunks.push(Buffer.from(chunk));
+    }
   }
 
   if (chunks.length === 0) {

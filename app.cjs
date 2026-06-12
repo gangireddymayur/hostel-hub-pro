@@ -449,11 +449,27 @@ function parseJsonMaybe(value) {
   }
 }
 
+async function ensureProfilePhotoColumn() {
+  if (!dbPool) return;
+  try {
+    const [columns] = await dbPool.query("SHOW COLUMNS FROM students LIKE 'profile_photo'");
+    if (columns.length === 0) {
+      console.log("Auto-Migration: Adding 'profile_photo' column to 'students' table...");
+      await dbPool.query("ALTER TABLE students ADD COLUMN profile_photo LONGTEXT NULL");
+      console.log("Auto-Migration: Column 'profile_photo' added successfully!");
+    }
+  } catch (error) {
+    console.error("Auto-Migration Error: Failed to check or add 'profile_photo' column:", error.message);
+  }
+}
+
 async function hydrateDataFromDatabase() {
   if (!dbPool) {
     db = loadData();
     return db;
   }
+
+  await ensureProfilePhotoColumn();
 
   try {
     const [

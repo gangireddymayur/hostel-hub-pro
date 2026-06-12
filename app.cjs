@@ -1,6 +1,8 @@
 const http = require("node:http");
 const { Readable } = require("node:stream");
 
+process.noDeprecation = true;
+
 function parsePort(value) {
   const parsed = Number.parseInt(String(value ?? "").trim(), 10);
   return Number.isInteger(parsed) && parsed >= 0 && parsed < 65536 ? parsed : undefined;

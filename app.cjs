@@ -57,6 +57,8 @@ const DB_PASSWORD = process.env.DB_PASSWORD ?? "";
 const DB_NAME = process.env.DB_NAME ?? "";
 const ACCESS_TTL_SECONDS = 60 * 60 * 24 * 7;
 const REFRESH_TTL_SECONDS = 60 * 60 * 24 * 30;
+const DEFAULT_SUPER_ADMIN_ID = "super_admin_87a9d497-8b89-47a9-8923-34c9da59d427";
+const DEFAULT_SUPER_ADMIN_EMAIL = "admin@hostelhub.local";
 
 let mysqlPoolFactory = null;
 let mysqlLoadError = null;
@@ -221,7 +223,7 @@ function defaultData() {
   const studentPassword = hashPassword("Student@12345");
 
   const hostelId = uuid("hostel");
-  const superAdminId = uuid("user");
+  const superAdminId = DEFAULT_SUPER_ADMIN_ID;
   const hostelAdminId = uuid("user");
   const securityUserId = uuid("user");
   const staffId = uuid("staff");
@@ -250,7 +252,7 @@ function defaultData() {
         hostelId: null,
         role: "SUPER_ADMIN",
         name: "Super Admin",
-        email: "admin@hostelhub.local",
+        email: DEFAULT_SUPER_ADMIN_EMAIL,
         passwordHash: superAdminPassword,
         status: "ACTIVE",
         tokenVersion: 0,
@@ -953,11 +955,36 @@ function loginHostelAdmin(identifier, payload) {
   return matched ?? null;
 }
 
-function loginSuperAdmin(identifier) {
+function mapSuperAdminRow(row) {
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    hostelId: null,
+    role: "SUPER_ADMIN",
+    name: String(row.name ?? "Super Admin"),
+    email: String(row.email ?? "").toLowerCase(),
+    passwordHash: String(row.password_hash ?? ""),
+    status: "ACTIVE",
+    tokenVersion: 0,
+    created_at: row.created_at ? new Date(row.created_at).toISOString() : nowIso(),
+  };
+}
+
+async function loginSuperAdmin(identifier) {
   const normalized = String(identifier ?? "").trim().toLowerCase();
-  return db.users.find(
-    (user) => user.role === "SUPER_ADMIN" && user.status === "ACTIVE" && user.email.toLowerCase() === normalized,
-  ) ?? null;
+  if (dbPool) {
+    const [rows] = await dbPool.query(
+      "SELECT id, email, password_hash, name, created_at FROM super_admins WHERE LOWER(email) = ? LIMIT 1",
+      [normalized],
+    );
+    return mapSuperAdminRow(rows[0] ?? null);
+  }
+
+  return (
+    db.users.find(
+      (user) => user.role === "SUPER_ADMIN" && user.status === "ACTIVE" && user.email.toLowerCase() === normalized,
+    ) ?? null
+  );
 }
 
 function updateHostelStatus(hostelId, status, actor) {
@@ -1055,7 +1082,7 @@ function computeSuperAnalytics() {
   };
 }
 
-function handleLogin(req, res, body) {
+async function handleLogin(req, res, body) {
   const type = normalizeRole(body.type);
   const identifier = String(body.identifier ?? "").trim();
   const password = String(body.password ?? "");
@@ -1066,7 +1093,7 @@ function handleLogin(req, res, body) {
 
   let user = null;
   if (type === "SUPER_ADMIN") {
-    user = loginSuperAdmin(identifier);
+    user = await loginSuperAdmin(identifier);
   } else if (type === "HOSTEL_ADMIN") {
     user = loginHostelAdmin(identifier, body);
   } else {

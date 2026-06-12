@@ -14,6 +14,7 @@ server.js            Node startup file (loads `app.cjs`)
 plesk-package.json   rename to package.json on the server
 web.config           iisnode handler for Windows/IIS
 db/schema.sql        MySQL schema for the production database
+db/seed.sql          optional starter data for the default super admin
 ```
 
 You do not need to upload `src/` or `node_modules/` for the site to run.
@@ -72,6 +73,9 @@ Hostel admin
 email: hosteladmin@hostelhub.local
 password: Hostel@12345
 ```
+
+If your production database is empty, run `db/seed.sql` after `db/schema.sql`
+to create the default super admin account.
 
 ## Troubleshooting
 

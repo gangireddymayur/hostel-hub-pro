@@ -1,82 +1,91 @@
-# Plesk Deployment — One-Click Style
+# Plesk Deployment (split build — works on Node 18)
 
-You do **not** need to build locally. Plesk can install dependencies and
-build the app in one step.
+This deploy avoids the "Node 20+" problem by **building locally** and only
+uploading static files + a tiny Node server to Plesk. Plesk never runs Vite,
+Tailwind, or TanStack — it just serves `dist/client/` and proxies `/api/*`.
 
-## ⚠️ Important: don't add `web.config`
+## What goes on Plesk
 
-Plesk's Node.js panel uses its own Node runner. If a `web.config` is also
-present, IIS/iisnode hijacks the request and you get:
+You only upload these to the application root:
 
 ```
-iisnode encountered an error... HRESULT: 0x2
-HTTP status: 500   subStatus: 1001
+dist/                ← built locally (npm run build)
+app.cjs              ← plain Node HTTP server, zero npm deps
+plesk-package.json   ← rename to package.json on the server
+web.config           ← iisnode handler (Plesk on Windows/IIS)
+.env (optional)      ← if you want to set API_BASE_URL in a file
 ```
 
-This repo ships **without** `web.config` on purpose. Don't add one back.
+That's it. No `node_modules`, no `src/`, no Vite config.
 
-## First-time setup (do this once)
+## Step-by-step
 
-In the Plesk Node.js panel for your domain, set:
+### 1. Build on your PC (one-time tooling install)
 
-| Field                    | Value          |
-| ------------------------ | -------------- |
-| Node.js Version          | 18.20.6 (or newer 18.x / 20.x) |
-| Package Manager          | npm            |
-| Application Mode         | `development`  ← **important** |
-| Application Startup File | `server.js`    |
+You need Node 20.x or 22.x on your local machine (only for the build).
+Get it from https://nodejs.org → LTS.
 
-Why `development` mode? Plesk's `production` mode runs
-`npm install --omit=dev`, which would skip Vite — and Vite is what builds
-the frontend. `development` mode installs everything, then the
-`postinstall` script builds. After build, only `node server.js` runs in
-production — Vite is never invoked at runtime, so there's no performance
-cost.
+```powershell
+npm install
+npm run build
+```
 
-Then add these **Custom environment variables**:
+This produces `dist/client/` (static frontend) and `dist/server/` (ignored
+by `app.cjs` — we don't use SSR on Plesk).
+
+### 2. Prepare upload bundle
+
+Copy these into a fresh folder and upload it to Plesk:
+
+| Source in repo         | Upload as              |
+| ---------------------- | ---------------------- |
+| `dist/`                | `dist/`                |
+| `app.cjs`              | `app.cjs`              |
+| `plesk-package.json`   | `package.json`         |
+| `web.config`           | `web.config`           |
+
+### 3. Plesk Node.js panel
+
+| Field                    | Value           |
+| ------------------------ | --------------- |
+| Node.js Version          | 18.20.6 is OK   |
+| Application Mode         | production      |
+| Application Startup File | `app.cjs`       |
+
+Add environment variable:
 
 ```env
-PLESK_BUILD=1
-NODE_ENV=production
 API_BASE_URL=https://your-backend.example.com/api
 ```
 
-- `PLESK_BUILD=1` tells `postinstall` to build automatically.
-- `API_BASE_URL` must point to your separately-deployed backend.
+(Use `VITE_API_URL` instead if you prefer — both are accepted.)
 
-## Deploy (every time)
+### 4. Install + start
 
-1. Upload the repo to your application root (no `dist/`, no `node_modules` needed).
-2. In the Plesk Node.js panel, click **NPM install**.
-   This installs deps **and** builds the frontend in one go.
-3. Click **Restart App**.
+In the Plesk Node.js panel:
 
-That's it. Two clicks per deploy.
+1. Click **NPM install** — installs nothing (deps list is empty), takes 1 second.
+2. Click **Restart App**.
+
+Done. The site is live.
 
 ## Updating the app later
 
-1. Upload the new code.
-2. Click **NPM install** → **Restart App**.
+1. Run `npm run build` locally.
+2. Upload the new `dist/` folder (overwrite).
+3. Click **Restart App** in Plesk.
 
-If you only changed env vars, **Restart App** alone is enough.
+If you change `app.cjs` itself, upload it too and **Restart App**.
+
+## Why this works on Node 18
+
+- Vite 7 / TanStack / Tailwind 4 only need Node 20+ to **build**.
+- The build output in `dist/client/` is plain HTML/JS/CSS — any Node version can serve it.
+- `app.cjs` is hand-written CommonJS using only Node built-ins (`http`, `fs`, `path`, `stream`) — fully Node 18-compatible.
 
 ## Troubleshooting
 
-- **`HRESULT: 0x2` / `subStatus: 1001`** — a `web.config` snuck back in.
-  Delete it and restart.
-- **"Build output not found"** in the browser — the build didn't run.
-  Confirm `PLESK_BUILD=1` is set in Plesk env vars and Application Mode is
-  `development`, then click **NPM install** again.
-- **`/api/*` returns 503 "API_BASE_URL is not configured"** — set
-  `API_BASE_URL` in Plesk env vars and **Restart App**.
-- **Login doesn't work** — this repo is the web portal only
-  (`SUPER_ADMIN`, `HOSTEL_ADMIN`). Your backend must be deployed
-  separately and reachable at the `API_BASE_URL` you configured.
-- **NPM install fails on the server** — open Plesk's "Run NPM commands"
-  tab and run `npm install` manually to see the full error.
-
-## Manual fallback (if NPM install on Plesk fails)
-
-Open the Plesk Node.js panel → **Run script** → type `build` and run it.
-Then **Restart App**. This forces the build step without re-running
-install.
+- **"Build output not found"** in the browser — you forgot to upload `dist/`.
+- **`/api/*` returns 503 "API_BASE_URL is not configured"** — set `API_BASE_URL` in the Plesk env vars and **Restart App**.
+- **iisnode 500.1001 / HRESULT 0x2** — the `web.config` handler path doesn't match the startup file. Confirm both point to `app.cjs`.
+- **Backend errors after login** — this repo is the web portal only. Your backend (Super Admin / Hostel Admin API) must be deployed separately and reachable at `API_BASE_URL`.

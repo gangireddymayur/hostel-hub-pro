@@ -1,0 +1,10 @@
+{
+  "name": "hostel-hub-web",
+  "version": "1.0.0",
+  "private": true,
+  "main": "app.cjs",
+  "scripts": {
+    "start": "node app.cjs"
+  },
+  "dependencies": {}
+}

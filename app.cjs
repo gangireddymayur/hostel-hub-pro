@@ -40,12 +40,6 @@ const dbPool =
       })
     : null;
 
-console.log(
-  `[startup] app.cjs loaded on ${HOST}:${PORT} | db=${DB_HOST ? "configured" : "missing"} | mysql2=${
-    mysqlPoolFactory ? "available" : "missing"
-  }`,
-);
-
 function parsePort(value) {
   const parsed = Number.parseInt(String(value ?? "").trim(), 10);
   return Number.isInteger(parsed) && parsed >= 0 && parsed < 65536 ? parsed : undefined;
@@ -1490,6 +1484,4 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`Hostel hub web app listening on http://${HOST}:${PORT}`);
-});
+server.listen(PORT, HOST);

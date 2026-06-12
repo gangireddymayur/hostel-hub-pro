@@ -12,7 +12,9 @@
     "start": "node server.js",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "plesk:build": "vite build",
+    "postinstall": "node -e \"if(process.env.PLESK_BUILD==='1'){require('child_process').execSync('npm run build',{stdio:'inherit'})}\""
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

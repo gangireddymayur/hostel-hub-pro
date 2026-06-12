@@ -1,0 +1,206 @@
+{
+  "hostels": [
+    {
+      "id": "hostel_ce4fb6e6-0d5a-44ce-b380-a89bb1d30571",
+      "hostel_name": "Hostel Hub Demo",
+      "email": "hostel@hostelhub.local",
+      "password_hash": "pbkdf2$sha256$120000$cca120240ce034fed55a982818ed6cf4$d5411e840e2b7890c125056d3bc2f3187658944a50ebd2b41fd6ac9fb9c5f177",
+      "status": "ACTIVE",
+      "created_at": "2026-06-12T02:21:35.174Z"
+    }
+  ],
+  "users": [
+    {
+      "id": "user_87a9d497-8b89-47a9-8923-34c9da59d427",
+      "hostelId": null,
+      "role": "SUPER_ADMIN",
+      "name": "Super Admin",
+      "email": "admin@hostelhub.local",
+      "passwordHash": "pbkdf2$sha256$120000$bfdcb41daa8ed0bb9fd485e4bcf35e18$39aec469fafb4555090279abda66550a53f650904a3bd8b970000932b578b2d6",
+      "status": "ACTIVE",
+      "tokenVersion": 0,
+      "created_at": "2026-06-12T02:21:35.174Z"
+    },
+    {
+      "id": "user_9143aa62-8d2f-4298-af86-a160bd148aa4",
+      "hostelId": "hostel_ce4fb6e6-0d5a-44ce-b380-a89bb1d30571",
+      "role": "HOSTEL_ADMIN",
+      "name": "Hostel Admin",
+      "email": "hosteladmin@hostelhub.local",
+      "passwordHash": "pbkdf2$sha256$120000$cca120240ce034fed55a982818ed6cf4$d5411e840e2b7890c125056d3bc2f3187658944a50ebd2b41fd6ac9fb9c5f177",
+      "status": "ACTIVE",
+      "tokenVersion": 0,
+      "created_at": "2026-06-12T02:21:35.174Z"
+    },
+    {
+      "id": "user_5f913175-0b42-42e3-8d48-6b682868761a",
+      "hostelId": "hostel_ce4fb6e6-0d5a-44ce-b380-a89bb1d30571",
+      "role": "SECURITY_GUARD",
+      "name": "Security Guard",
+      "email": "security@hostelhub.local",
+      "passwordHash": "pbkdf2$sha256$120000$e3da0aa4843130833c5fea9d2c237b90$3a534591cbf0e88d9cda2fd67f0c049e0b97cd873067afa9dcf591dd331a3009",
+      "status": "ACTIVE",
+      "tokenVersion": 0,
+      "created_at": "2026-06-12T02:21:35.174Z"
+    }
+  ],
+  "parents": [
+    {
+      "id": "parent_5fcf2ff3-3c30-4dfe-a1e3-e73c51192cab",
+      "hostel_id": "hostel_ce4fb6e6-0d5a-44ce-b380-a89bb1d30571",
+      "mobile": "9000000001",
+      "password_hash": "pbkdf2$sha256$120000$1bdd941988bf39d236c9aa9b66253837$e5a6bd54a86f6eb3b2fddc52ed441f202fa159f55c076c96141f5da34204bfe5",
+      "created_at": "2026-06-12T02:21:35.174Z"
+    },
+    {
+      "id": "parent_e51b9b70-3066-40b7-8c9f-ce4796601296",
+      "hostel_id": "hostel_ce4fb6e6-0d5a-44ce-b380-a89bb1d30571",
+      "mobile": "9000000002",
+      "password_hash": "pbkdf2$sha256$120000$1bdd941988bf39d236c9aa9b66253837$e5a6bd54a86f6eb3b2fddc52ed441f202fa159f55c076c96141f5da34204bfe5",
+      "created_at": "2026-06-12T02:21:35.174Z"
+    }
+  ],
+  "students": [
+    {
+      "id": "student_c3a051eb-8148-4dce-84ca-e2542f0cbf38",
+      "hostel_id": "hostel_ce4fb6e6-0d5a-44ce-b380-a89bb1d30571",
+      "student_id": "STU-1001",
+      "name": "Aarav Shah",
+      "room_number": "A-101",
+      "mobile": "8000000001",
+      "parent_mobile": "9000000001",
+      "profile_photo": null,
+      "password_hash": "pbkdf2$sha256$120000$1bdd941988bf39d236c9aa9b66253837$e5a6bd54a86f6eb3b2fddc52ed441f202fa159f55c076c96141f5da34204bfe5",
+      "status": "ACTIVE",
+      "created_at": "2026-06-12T02:21:35.174Z"
+    },
+    {
+      "id": "student_14b3e70c-45cb-4137-97a9-ecc642b7c80b",
+      "hostel_id": "hostel_ce4fb6e6-0d5a-44ce-b380-a89bb1d30571",
+      "student_id": "STU-1002",
+      "name": "Mira Patel",
+      "room_number": "A-102",
+      "mobile": "8000000002",
+      "parent_mobile": "9000000002",
+      "profile_photo": null,
+      "password_hash": "pbkdf2$sha256$120000$1bdd941988bf39d236c9aa9b66253837$e5a6bd54a86f6eb3b2fddc52ed441f202fa159f55c076c96141f5da34204bfe5",
+      "status": "ACTIVE",
+      "created_at": "2026-06-12T02:21:35.174Z"
+    }
+  ],
+  "staff": [
+    {
+      "id": "staff_1c230a16-1cc7-4dea-ba9b-bd4aa912c1d7",
+      "hostel_id": "hostel_ce4fb6e6-0d5a-44ce-b380-a89bb1d30571",
+      "role": "HOSTEL_ADMIN",
+      "name": "Hostel Admin",
+      "email": "hosteladmin@hostelhub.local",
+      "password_hash": "pbkdf2$sha256$120000$cca120240ce034fed55a982818ed6cf4$d5411e840e2b7890c125056d3bc2f3187658944a50ebd2b41fd6ac9fb9c5f177",
+      "created_at": "2026-06-12T02:21:35.174Z"
+    },
+    {
+      "id": "staff_d196912c-94c1-46be-a00f-3dcf56307cbb",
+      "hostel_id": "hostel_ce4fb6e6-0d5a-44ce-b380-a89bb1d30571",
+      "role": "SECURITY_GUARD",
+      "name": "Security Guard",
+      "email": "security@hostelhub.local",
+      "password_hash": "pbkdf2$sha256$120000$e3da0aa4843130833c5fea9d2c237b90$3a534591cbf0e88d9cda2fd67f0c049e0b97cd873067afa9dcf591dd331a3009",
+      "created_at": "2026-06-12T02:21:35.174Z"
+    }
+  ],
+  "leaveRequests": [
+    {
+      "id": "leave_c1528e50-35d0-4592-a937-249f9890d018",
+      "student_id": "student_c3a051eb-8148-4dce-84ca-e2542f0cbf38",
+      "reason": "Family function",
+      "from_date": "2026-06-12",
+      "to_date": "2026-06-13",
+      "out_time": "09:00",
+      "return_time": "18:00",
+      "parent_status": "APPROVED",
+      "hostel_status": "APPROVED",
+      "final_status": "APPROVED",
+      "created_at": "2026-06-12T02:21:35.174Z",
+      "note": "Seeded approved leave"
+    },
+    {
+      "id": "leave_bcb60f41-0c26-4750-994a-ddf1ef3eb907",
+      "student_id": "student_14b3e70c-45cb-4137-97a9-ecc642b7c80b",
+      "reason": "Medical appointment",
+      "from_date": "2026-06-12",
+      "to_date": "2026-06-14",
+      "out_time": "10:00",
+      "return_time": "17:00",
+      "parent_status": "PENDING",
+      "hostel_status": "PENDING",
+      "final_status": "PENDING",
+      "created_at": "2026-06-12T02:21:35.174Z",
+      "note": "Seeded pending leave"
+    }
+  ],
+  "gatePasses": [
+    {
+      "id": "gate_5fe73ae0-c6fb-4fed-8acb-e9d0b240320c",
+      "leave_request_id": "leave_c1528e50-35d0-4592-a937-249f9890d018",
+      "qr_code": "GP-FFCA037F",
+      "out_time_actual": null,
+      "in_time_actual": null,
+      "status": "ISSUED",
+      "created_at": "2026-06-12T02:21:35.175Z"
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": "audit_30d240eb-1630-49c7-9303-24b3c27b38df",
+      "action": "LOGIN",
+      "entity": "AUTH",
+      "entity_id": "user_9143aa62-8d2f-4298-af86-a160bd148aa4",
+      "actor_id": "user_9143aa62-8d2f-4298-af86-a160bd148aa4",
+      "actor_role": "HOSTEL_ADMIN",
+      "meta": {
+        "role": "HOSTEL_ADMIN"
+      },
+      "created_at": "2026-06-12T02:21:36.748Z"
+    },
+    {
+      "id": "audit_26249bbf-c21a-4b0c-8898-4dae33c68165",
+      "action": "LOGIN",
+      "entity": "AUTH",
+      "entity_id": "user_87a9d497-8b89-47a9-8923-34c9da59d427",
+      "actor_id": "user_87a9d497-8b89-47a9-8923-34c9da59d427",
+      "actor_role": "SUPER_ADMIN",
+      "meta": {
+        "role": "SUPER_ADMIN"
+      },
+      "created_at": "2026-06-12T02:21:35.769Z"
+    },
+    {
+      "id": "audit_1a92bd63-48a6-4989-afd8-2368b1db95c8",
+      "action": "SEED",
+      "entity": "SYSTEM",
+      "entity_id": null,
+      "actor_id": null,
+      "actor_role": "SYSTEM",
+      "meta": {
+        "message": "Initial seed data created"
+      },
+      "created_at": "2026-06-12T02:21:35.175Z"
+    }
+  ],
+  "refreshTokens": [
+    {
+      "jti": "refresh_9eb5b9ef-e64e-40f4-b2a4-dd2f8c2c975f",
+      "userId": "user_87a9d497-8b89-47a9-8923-34c9da59d427",
+      "expiresAt": 1783822895769,
+      "revokedAt": null,
+      "createdAt": "2026-06-12T02:21:35.769Z"
+    },
+    {
+      "jti": "refresh_945d2152-05ee-4b55-8914-765c5f083d32",
+      "userId": "user_9143aa62-8d2f-4298-af86-a160bd148aa4",
+      "expiresAt": 1783822896747,
+      "revokedAt": null,
+      "createdAt": "2026-06-12T02:21:36.747Z"
+    }
+  ]
+}

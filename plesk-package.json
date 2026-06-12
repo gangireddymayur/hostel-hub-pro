@@ -2,9 +2,9 @@
   "name": "hostel-hub-web",
   "version": "1.0.0",
   "private": true,
-  "main": "app.cjs",
+  "main": "server.js",
   "scripts": {
-    "start": "node app.cjs"
+    "start": "node server.js"
   },
   "dependencies": {}
 }

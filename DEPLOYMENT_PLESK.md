@@ -1,91 +1,69 @@
-# Plesk Deployment (split build — works on Node 18)
+# Plesk Deployment
 
-This deploy avoids the "Node 20+" problem by **building locally** and only
-uploading static files + a tiny Node server to Plesk. Plesk never runs Vite,
-Tailwind, or TanStack — it just serves `dist/client/` and proxies `/api/*`.
+This project now runs the frontend and backend from the same Plesk Node app.
+The UI is built locally, then Plesk serves `dist/client/` and handles `/api/*`
+from `app.cjs`.
 
 ## What goes on Plesk
 
-You only upload these to the application root:
+Upload these to the application root:
 
+```text
+dist/                built locally with `npm run build`
+server.js            Node startup file (loads `app.cjs`)
+plesk-package.json   rename to package.json on the server
+web.config           iisnode handler for Windows/IIS
 ```
-dist/                ← built locally (npm run build)
-app.cjs              ← plain Node HTTP server, zero npm deps
-plesk-package.json   ← rename to package.json on the server
-web.config           ← iisnode handler (Plesk on Windows/IIS)
-.env (optional)      ← if you want to set API_BASE_URL in a file
-```
 
-That's it. No `node_modules`, no `src/`, no Vite config.
+You do not need to upload `src/` or `node_modules/` for the site to run.
 
-## Step-by-step
+## Build locally
 
-### 1. Build on your PC (one-time tooling install)
-
-You need Node 20.x or 22.x on your local machine (only for the build).
-Get it from https://nodejs.org → LTS.
+Use Node 20+ on your PC for the build:
 
 ```powershell
 npm install
 npm run build
 ```
 
-This produces `dist/client/` (static frontend) and `dist/server/` (ignored
-by `app.cjs` — we don't use SSR on Plesk).
+This produces `dist/client/` for the browser and `dist/server/` from TanStack.
 
-### 2. Prepare upload bundle
+## Plesk Node settings
 
-Copy these into a fresh folder and upload it to Plesk:
+Set these in the Plesk Node.js panel:
 
-| Source in repo         | Upload as              |
-| ---------------------- | ---------------------- |
-| `dist/`                | `dist/`                |
-| `app.cjs`              | `app.cjs`              |
-| `plesk-package.json`   | `package.json`         |
-| `web.config`           | `web.config`           |
-
-### 3. Plesk Node.js panel
-
-| Field                    | Value           |
-| ------------------------ | --------------- |
-| Node.js Version          | 18.20.6 is OK   |
-| Application Mode         | production      |
-| Application Startup File | `app.cjs`       |
-
-Add environment variable:
-
-```env
-API_BASE_URL=https://your-backend.example.com/api
+```text
+Node.js Version          18.20.6 is OK
+Application Mode         production
+Application Startup File  server.js
 ```
 
-(Use `VITE_API_URL` instead if you prefer — both are accepted.)
+Optional environment variable:
 
-### 4. Install + start
+```env
+JWT_SECRET=change-me-in-plesk-env
+```
 
-In the Plesk Node.js panel:
+## Install and start
 
-1. Click **NPM install** — installs nothing (deps list is empty), takes 1 second.
+1. Click **NPM install**.
 2. Click **Restart App**.
 
-Done. The site is live.
+## Default seeded logins
 
-## Updating the app later
+```text
+Super admin
+email: admin@hostelhub.local
+password: Admin@12345
 
-1. Run `npm run build` locally.
-2. Upload the new `dist/` folder (overwrite).
-3. Click **Restart App** in Plesk.
-
-If you change `app.cjs` itself, upload it too and **Restart App**.
-
-## Why this works on Node 18
-
-- Vite 7 / TanStack / Tailwind 4 only need Node 20+ to **build**.
-- The build output in `dist/client/` is plain HTML/JS/CSS — any Node version can serve it.
-- `app.cjs` is hand-written CommonJS using only Node built-ins (`http`, `fs`, `path`, `stream`) — fully Node 18-compatible.
+Hostel admin
+email: hosteladmin@hostelhub.local
+password: Hostel@12345
+```
 
 ## Troubleshooting
 
-- **"Build output not found"** in the browser — you forgot to upload `dist/`.
-- **`/api/*` returns 503 "API_BASE_URL is not configured"** — set `API_BASE_URL` in the Plesk env vars and **Restart App**.
-- **iisnode 500.1001 / HRESULT 0x2** — the `web.config` handler path doesn't match the startup file. Confirm both point to `app.cjs`.
-- **Backend errors after login** — this repo is the web portal only. Your backend (Super Admin / Hostel Admin API) must be deployed separately and reachable at `API_BASE_URL`.
+- If the browser says build output is missing, upload `dist/` again.
+- If login fails, check `tmp/hlms-data.json` and the seeded credentials above.
+- If iisnode shows a 500.1001 error, confirm `web.config` points to `server.js`
+  and the Node startup file is `server.js` in Plesk.

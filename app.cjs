@@ -20,12 +20,6 @@ const DB_NAME = process.env.DB_NAME ?? "";
 const ACCESS_TTL_SECONDS = 60 * 60 * 24 * 7;
 const REFRESH_TTL_SECONDS = 60 * 60 * 24 * 30;
 
-console.log(
-  `[startup] app.cjs loaded on ${HOST}:${PORT} | db=${DB_HOST ? "configured" : "missing"} | mysql2=${
-    mysqlPoolFactory ? "available" : "missing"
-  }`,
-);
-
 let mysqlPoolFactory = null;
 try {
   ({ createPool: mysqlPoolFactory } = require("mysql2/promise"));
@@ -45,6 +39,12 @@ const dbPool =
         connectionLimit: 5,
       })
     : null;
+
+console.log(
+  `[startup] app.cjs loaded on ${HOST}:${PORT} | db=${DB_HOST ? "configured" : "missing"} | mysql2=${
+    mysqlPoolFactory ? "available" : "missing"
+  }`,
+);
 
 function parsePort(value) {
   const parsed = Number.parseInt(String(value ?? "").trim(), 10);

@@ -2,7 +2,6 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const mysql = require("mysql2/promise");
 
 process.noDeprecation = true;
 
@@ -21,9 +20,16 @@ const DB_NAME = process.env.DB_NAME ?? "";
 const ACCESS_TTL_SECONDS = 60 * 60 * 24 * 7;
 const REFRESH_TTL_SECONDS = 60 * 60 * 24 * 30;
 
+let mysqlPoolFactory = null;
+try {
+  ({ createPool: mysqlPoolFactory } = require("mysql2/promise"));
+} catch {
+  mysqlPoolFactory = null;
+}
+
 const dbPool =
-  DB_HOST && DB_USER && DB_PASSWORD && DB_NAME
-    ? mysql.createPool({
+  mysqlPoolFactory && DB_HOST && DB_USER && DB_PASSWORD && DB_NAME
+    ? mysqlPoolFactory({
         host: DB_HOST,
         port: DB_PORT,
         user: DB_USER,

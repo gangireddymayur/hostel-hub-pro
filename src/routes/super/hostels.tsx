@@ -129,7 +129,7 @@ function HostelsPage() {
             <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Create new hostel</DialogTitle>
-                <DialogDescription>Provision a new hostel workspace and admin account.</DialogDescription>
+                <DialogDescription>Provision a new hostel workspace. The hostel admin is created automatically with the same email and password.</DialogDescription>
               </DialogHeader>
               <HostelForm
                 isCreate
@@ -273,7 +273,7 @@ function HostelForm({
       <Field name="hostel_name" label="Hostel Name" defaultValue={initial?.hostel_name ?? ""} required />
       <Field name="email" label="Hostel Email" type="email" defaultValue={initial?.email ?? ""} required />
       <div className="md:col-span-2">
-        <Field name="password" label="Password" type="password" defaultValue="" helper="Used for both the hostel and its admin login." />
+        <Field name="password" label="Password" type="password" defaultValue="" helper="Used for both the hostel and its auto-created admin login." />
       </div>
       <DialogFooter className="md:col-span-2">
         <Button type="button" variant="ghost" onClick={onCancel}>

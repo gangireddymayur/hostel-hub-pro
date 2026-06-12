@@ -1219,11 +1219,10 @@ function createStaffRecord(hostelId, payload, actor) {
   return user;
 }
 
-function linkHostelAdmin(hostel, payload, actor) {
-  const slug = slugifyHostelName(hostel.hostel_name) || "hostel";
-  const adminName = String(payload.admin_name ?? "Hostel Admin").trim() || "Hostel Admin";
-  const adminEmail = String(hostel.email ?? `admin-${slug}@hostelhub.local`).trim().toLowerCase() || `admin-${slug}@hostelhub.local`;
-  const adminPassword = String(payload.admin_password ?? payload.password ?? "Admin@12345");
+function linkHostelAdmin(hostel, password, actor) {
+  const adminEmail = String(hostel.email ?? "").trim().toLowerCase();
+  const adminName = String(hostel.hostel_name ?? "Hostel Admin").trim() || "Hostel Admin";
+  const adminPassword = String(password ?? "Hostel@12345");
   if (db.users.some((user) => user.email.toLowerCase() === adminEmail)) {
     const error = new Error("Admin email already exists");
     error.statusCode = 409;
@@ -1278,7 +1277,7 @@ function createHostelRecord(payload, actor) {
     created_at: createdAt,
   };
   db.hostels.push(hostel);
-  const admin = linkHostelAdmin(hostel, payload, actor);
+  const admin = linkHostelAdmin(hostel, password, actor);
 
   addAudit("CREATE", "HOSTEL", hostel.id, actor, {
     hostel_name: hostel.hostel_name,
@@ -1558,9 +1557,25 @@ function handleUpdateHostel(req, res, hostelId, body) {
   if (!user) return;
   const hostel = findHostelById(hostelId);
   if (!hostel) return sendJson(res, 404, { error: "Hostel not found" });
-  if (body.hostel_name != null) hostel.hostel_name = String(body.hostel_name).trim();
-  if (body.email != null) hostel.email = String(body.email).trim().toLowerCase();
-  if (body.password != null && String(body.password).trim()) hostel.password_hash = hashPassword(String(body.password));
+  const nextName = body.hostel_name != null ? String(body.hostel_name).trim() : hostel.hostel_name;
+  const nextEmail = body.email != null ? String(body.email).trim().toLowerCase() : hostel.email;
+  const nextPassword = body.password != null && String(body.password).trim() ? String(body.password).trim() : null;
+
+  if (body.email != null && nextEmail !== hostel.email) {
+    const conflict = db.hostels.some((item) => item.id !== hostel.id && item.email.toLowerCase() === nextEmail);
+    if (conflict) return sendJson(res, 409, { error: "Hostel email already exists" });
+  }
+
+  hostel.hostel_name = nextName;
+  hostel.email = nextEmail;
+  if (nextPassword) hostel.password_hash = hashPassword(nextPassword);
+
+  const admin = db.staff.find((item) => item.hostel_id === hostel.id && item.role === "HOSTEL_ADMIN");
+  if (admin) {
+    admin.name = nextName;
+    admin.email = nextEmail;
+    if (nextPassword) admin.password_hash = hashPassword(nextPassword);
+  }
   addAudit("UPDATE", "HOSTEL", hostel.id, user, { hostel_name: hostel.hostel_name, email: hostel.email });
   persist();
   return sendJson(res, 200, { data: hostel });

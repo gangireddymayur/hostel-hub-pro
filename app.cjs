@@ -76,6 +76,23 @@ const dbPool =
       })
     : null;
 
+function getEnvDebugSnapshot() {
+  return {
+    cwd: process.cwd(),
+    root: ROOT,
+    hasDotEnv: fs.existsSync(path.join(ROOT, ".env")),
+    hasDotEnvLocal: fs.existsSync(path.join(ROOT, ".env.local")),
+    dbHostSet: Boolean(DB_HOST),
+    dbPortSet: Boolean(String(process.env.DB_PORT ?? "").trim()),
+    dbUserSet: Boolean(DB_USER),
+    dbPasswordSet: Boolean(DB_PASSWORD),
+    dbNameSet: Boolean(DB_NAME),
+    jwtSecretSet: Boolean(JWT_SECRET && JWT_SECRET !== "change-me-in-plesk-env"),
+    mysqlAvailable: Boolean(mysqlPoolFactory),
+    dbPoolConfigured: Boolean(dbPool),
+  };
+}
+
 let ssrServerPromise = null;
 
 async function getSsrServer() {
@@ -1449,6 +1466,10 @@ async function handleApi(req, res, pathname) {
     if (pathname === "/api/health" && req.method === "GET") {
       const dbState = await pingDatabase();
       return sendJson(res, 200, { ok: true, dbConfigured: dbState.configured, dbHealthy: dbState.healthy });
+    }
+
+    if (pathname === "/api/debug-env" && req.method === "GET") {
+      return sendJson(res, 200, { ok: true, data: getEnvDebugSnapshot() });
     }
 
     if (pathname === "/api/auth/login" && req.method === "POST") {

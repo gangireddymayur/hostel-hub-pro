@@ -1,80 +1,82 @@
-# Plesk Deployment
+# Plesk Deployment — One-Click Style
 
-This repo runs as a Node.js app under Plesk's built-in Node.js manager
-(Passenger), not under IIS/iisnode. Do **not** add a `web.config` — Plesk's
-Node runner and iisnode will fight each other and you'll get
-`HRESULT: 0x2, HTTP 500.1001` with empty stderr.
+You do **not** need to build locally. Plesk can install dependencies and
+build the app in one step.
 
-## 1. Build locally before uploading
+## ⚠️ Important: don't add `web.config`
 
-Plesk should not rebuild the frontend. Build on your machine, then upload
-the result together with the source.
+Plesk's Node.js panel uses its own Node runner. If a `web.config` is also
+present, IIS/iisnode hijacks the request and you get:
 
-```powershell
-npm install
-npm run build
+```
+iisnode encountered an error... HRESULT: 0x2
+HTTP status: 500   subStatus: 1001
 ```
 
-This produces a `dist/` directory. **Upload `dist/` along with the rest of
-the repo.** If `dist/client/` is missing on the server, the app returns
-500 with the message "Build output not found".
+This repo ships **without** `web.config` on purpose. Don't add one back.
 
-## 2. Install production dependencies on the server
+## First-time setup (do this once)
 
-In Plesk → Node.js panel, click **NPM install**. Make sure the app mode is
-`production` so dev tooling (Vite, esbuild) is skipped.
+In the Plesk Node.js panel for your domain, set:
 
-If you prefer the shell:
+| Field                    | Value          |
+| ------------------------ | -------------- |
+| Node.js Version          | 18.20.6 (or newer 18.x / 20.x) |
+| Package Manager          | npm            |
+| Application Mode         | `development`  ← **important** |
+| Application Startup File | `server.js`    |
 
-```powershell
-npm install --omit=dev
-```
+Why `development` mode? Plesk's `production` mode runs
+`npm install --omit=dev`, which would skip Vite — and Vite is what builds
+the frontend. `development` mode installs everything, then the
+`postinstall` script builds. After build, only `node server.js` runs in
+production — Vite is never invoked at runtime, so there's no performance
+cost.
 
-## 3. Plesk Node.js settings
-
-Configure the panel exactly like this:
-
-| Field                  | Value                                |
-| ---------------------- | ------------------------------------ |
-| Node.js Version        | 18.20.6 (or newer 18.x / 20.x)       |
-| Package Manager        | npm                                  |
-| Application Mode       | production                           |
-| Application Startup File | `server.js`                        |
-
-`server.js` simply does `require("./app.cjs")` — a plain Node HTTP server
-that serves the prebuilt `dist/client/` files and proxies `/api/*` to your
-backend. No Vite, no SSR, no native modules.
-
-## 4. Environment variables
-
-Set in Plesk → Node.js → "Custom environment variables":
+Then add these **Custom environment variables**:
 
 ```env
-API_BASE_URL=https://api.yourdomain.com/api
+PLESK_BUILD=1
+NODE_ENV=production
+API_BASE_URL=https://your-backend.example.com/api
 ```
 
-(`VITE_API_URL` is also accepted as a fallback name.)
+- `PLESK_BUILD=1` tells `postinstall` to build automatically.
+- `API_BASE_URL` must point to your separately-deployed backend.
 
-For local testing:
+## Deploy (every time)
 
-```env
-API_BASE_URL=http://localhost:4000/api
-```
+1. Upload the repo to your application root (no `dist/`, no `node_modules` needed).
+2. In the Plesk Node.js panel, click **NPM install**.
+   This installs deps **and** builds the frontend in one go.
+3. Click **Restart App**.
 
-## 5. Start / restart
+That's it. Two clicks per deploy.
 
-After uploading or changing env vars, click **Restart App** in the Plesk
-Node.js panel. That's it — no IIS handler, no `web.config`, no iisnode.
+## Updating the app later
+
+1. Upload the new code.
+2. Click **NPM install** → **Restart App**.
+
+If you only changed env vars, **Restart App** alone is enough.
 
 ## Troubleshooting
 
-- **`iisnode encountered an error... HRESULT: 0x2`** — a `web.config` is
-  present and forcing IIS to use iisnode. Delete `web.config` from the
-  application root and restart the app.
-- **"Build output not found"** — you didn't upload `dist/client/`. Rebuild
-  locally and upload it.
-- **`/api/*` returns 503 "API_BASE_URL is not configured"** — set the
-  `API_BASE_URL` env var in the Plesk Node.js panel and restart.
-- **Backend not reachable** — this repo is the web portal only
-  (`SUPER_ADMIN`, `HOSTEL_ADMIN`). Your separate backend must be deployed
-  and reachable at `API_BASE_URL` before login works.
+- **`HRESULT: 0x2` / `subStatus: 1001`** — a `web.config` snuck back in.
+  Delete it and restart.
+- **"Build output not found"** in the browser — the build didn't run.
+  Confirm `PLESK_BUILD=1` is set in Plesk env vars and Application Mode is
+  `development`, then click **NPM install** again.
+- **`/api/*` returns 503 "API_BASE_URL is not configured"** — set
+  `API_BASE_URL` in Plesk env vars and **Restart App**.
+- **Login doesn't work** — this repo is the web portal only
+  (`SUPER_ADMIN`, `HOSTEL_ADMIN`). Your backend must be deployed
+  separately and reachable at the `API_BASE_URL` you configured.
+- **NPM install fails on the server** — open Plesk's "Run NPM commands"
+  tab and run `npm install` manually to see the full error.
+
+## Manual fallback (if NPM install on Plesk fails)
+
+Open the Plesk Node.js panel → **Run script** → type `build` and run it.
+Then **Restart App**. This forces the build step without re-running
+install.

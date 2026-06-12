@@ -6,8 +6,9 @@ const crypto = require("node:crypto");
 process.noDeprecation = true;
 
 const ROOT = __dirname;
-const TMP_DIR = path.join(ROOT, "tmp");
-const DATA_FILE = path.join(TMP_DIR, "hlms-data.json");
+const APP_DATA_DIR = path.join(ROOT, "App_Data");
+const TMP_DIR = path.join(APP_DATA_DIR, "tmp");
+const DATA_FILE = path.join(APP_DATA_DIR, "hlms-data.json");
 const CLIENT_DIR = path.join(ROOT, "dist", "client");
 const CLIENT_ASSETS_DIR = path.join(CLIENT_DIR, "assets");
 const UPLOADS_DIR = path.join(TMP_DIR, "uploads");
@@ -32,6 +33,7 @@ function ensureDir(dirPath) {
   }
 }
 
+ensureDir(APP_DATA_DIR);
 ensureDir(TMP_DIR);
 ensureDir(UPLOADS_STUDENTS_DIR);
 

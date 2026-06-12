@@ -430,6 +430,15 @@ function normalizeDateOnly(value) {
   return text.includes("T") ? text.slice(0, 10) : text.slice(0, 10);
 }
 
+function toSqlDateTime(value) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${parsed.getUTCFullYear()}-${pad(parsed.getUTCMonth() + 1)}-${pad(parsed.getUTCDate())} ${pad(parsed.getUTCHours())}:${pad(parsed.getUTCMinutes())}:${pad(parsed.getUTCSeconds())}`;
+}
+
+
 function parseJsonMaybe(value) {
   if (value == null || value === "") return null;
   if (typeof value === "object") return value;
@@ -613,8 +622,8 @@ async function persist() {
           hostel.email,
           hostel.password_hash,
           hostel.status ?? "ACTIVE",
-          normalizeDateTime(hostel.created_at),
-          normalizeDateTime(hostel.updated_at ?? hostel.created_at),
+          toSqlDateTime(hostel.created_at),
+          toSqlDateTime(hostel.updated_at ?? hostel.created_at),
         ],
       );
     }
@@ -622,7 +631,7 @@ async function persist() {
     for (const user of db.users.filter((item) => item.role === "SUPER_ADMIN")) {
       await conn.query(
         "INSERT INTO super_admins (id, email, password_hash, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-        [user.id, user.email, user.passwordHash, user.name, normalizeDateTime(user.created_at), normalizeDateTime(user.updated_at ?? user.created_at)],
+        [user.id, user.email, user.passwordHash, user.name, toSqlDateTime(user.created_at), toSqlDateTime(user.updated_at ?? user.created_at)],
       );
     }
 
@@ -637,8 +646,8 @@ async function persist() {
           user.email,
           user.passwordHash,
           user.status ?? "ACTIVE",
-          normalizeDateTime(user.created_at),
-          normalizeDateTime(user.updated_at ?? user.created_at),
+          toSqlDateTime(user.created_at),
+          toSqlDateTime(user.updated_at ?? user.created_at),
         ],
       );
     }
@@ -652,8 +661,8 @@ async function persist() {
           parent.mobile,
           parent.password_hash,
           parent.status ?? "ACTIVE",
-          normalizeDateTime(parent.created_at),
-          normalizeDateTime(parent.updated_at ?? parent.created_at),
+          toSqlDateTime(parent.created_at),
+          toSqlDateTime(parent.updated_at ?? parent.created_at),
         ],
       );
     }
@@ -672,8 +681,8 @@ async function persist() {
           student.profile_photo,
           student.password_hash,
           student.status ?? "ACTIVE",
-          normalizeDateTime(student.created_at),
-          normalizeDateTime(student.updated_at ?? student.created_at),
+          toSqlDateTime(student.created_at),
+          toSqlDateTime(student.updated_at ?? student.created_at),
         ],
       );
     }
@@ -686,15 +695,15 @@ async function persist() {
           leave.hostel_id ?? studentById(leave.student_id)?.hostel_id ?? null,
           leave.student_id,
           leave.reason,
-          normalizeDateTime(leave.from_date),
-          normalizeDateTime(leave.to_date),
-          normalizeDateTime(leave.out_time),
-          normalizeDateTime(leave.return_time),
+          toSqlDateTime(leave.from_date),
+          toSqlDateTime(leave.to_date),
+          toSqlDateTime(leave.out_time),
+          toSqlDateTime(leave.return_time),
           leave.parent_status,
           leave.hostel_status,
           leave.final_status,
-          normalizeDateTime(leave.created_at),
-          normalizeDateTime(leave.updated_at ?? leave.created_at),
+          toSqlDateTime(leave.created_at),
+          toSqlDateTime(leave.updated_at ?? leave.created_at),
         ],
       );
     }
@@ -706,11 +715,11 @@ async function persist() {
           gatePass.id,
           gatePass.leave_request_id,
           gatePass.qr_code,
-          gatePass.out_time_actual,
-          gatePass.in_time_actual,
+          toSqlDateTime(gatePass.out_time_actual),
+          toSqlDateTime(gatePass.in_time_actual),
           gatePass.status ?? "APPROVED",
-          normalizeDateTime(gatePass.created_at),
-          normalizeDateTime(gatePass.updated_at ?? gatePass.created_at),
+          toSqlDateTime(gatePass.created_at),
+          toSqlDateTime(gatePass.updated_at ?? gatePass.created_at),
         ],
       );
     }
@@ -727,7 +736,7 @@ async function persist() {
           log.entity,
           log.entity_id,
           log.meta != null ? JSON.stringify(log.meta) : null,
-          normalizeDateTime(log.created_at),
+          toSqlDateTime(log.created_at),
         ],
       );
     }
@@ -740,9 +749,9 @@ async function persist() {
           token.userId,
           token.userRole ?? "HOSTEL_STAFF",
           token.tokenHash ?? "",
-          normalizeDateTime(token.expiresAt),
-          token.revokedAt ? normalizeDateTime(token.revokedAt) : null,
-          normalizeDateTime(token.createdAt),
+          toSqlDateTime(token.expiresAt),
+          toSqlDateTime(token.revokedAt),
+          toSqlDateTime(token.createdAt),
         ],
       );
     }

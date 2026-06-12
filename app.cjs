@@ -9,7 +9,7 @@ const ROOT = __dirname;
 const CLIENT_DIR = path.join(ROOT, "dist", "client");
 const CLIENT_ASSETS_DIR = path.join(CLIENT_DIR, "assets");
 
-const PORT = parsePort(process.env.PORT) ?? parsePort(process.env.NODE_PORT) ?? parsePort(process.env.IISNODE_PORT) ?? 3000;
+const LISTEN_TARGET = getListenTarget();
 const HOST = process.env.HOST ?? "0.0.0.0";
 const JWT_SECRET = process.env.JWT_SECRET ?? "change-me-in-plesk-env";
 const DB_HOST = process.env.DB_HOST ?? "";
@@ -43,6 +43,12 @@ const dbPool =
 function parsePort(value) {
   const parsed = Number.parseInt(String(value ?? "").trim(), 10);
   return Number.isInteger(parsed) && parsed >= 0 && parsed < 65536 ? parsed : undefined;
+}
+
+function getListenTarget() {
+  const raw = process.env.PORT ?? process.env.NODE_PORT ?? process.env.IISNODE_PORT;
+  const parsed = parsePort(raw);
+  return parsed ?? raw ?? 3000;
 }
 
 function nowIso() {
@@ -1484,4 +1490,8 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, HOST);
+if (typeof LISTEN_TARGET === "number") {
+  server.listen(LISTEN_TARGET, HOST);
+} else {
+  server.listen(LISTEN_TARGET);
+}

@@ -118,6 +118,9 @@ function getEnvDebugSnapshot() {
 }
 
 let ssrServerPromise = null;
+let lastHydrateError = null;
+let lastPersistError = null;
+
 
 async function getSsrServer() {
   if (!ssrServerPromise) {
@@ -396,7 +399,7 @@ function defaultData() {
         entity: "SYSTEM",
         entity_id: null,
         actor_id: null,
-        actor_role: "SYSTEM",
+        actor_role: "SUPER_ADMIN",
         meta: { message: "Initial seed data created" },
         created_at: nowIso(),
       },
@@ -577,6 +580,7 @@ async function hydrateDataFromDatabase() {
     };
     return db;
   } catch (error) {
+    lastHydrateError = error.message;
     console.warn("[db] hydrate failed, using local seed:", error.message);
     db = loadData();
     return db;
@@ -746,6 +750,7 @@ async function persist() {
     await conn.commit();
   } catch (error) {
     await conn.rollback();
+    lastPersistError = error.message;
     console.warn("[db] persist failed:", error.message);
   } finally {
     conn.release();
@@ -761,7 +766,7 @@ function addAudit(action, entity, entityId, actor, meta = {}) {
     entity,
     entity_id: entityId ?? null,
     actor_id: actor?.id ?? null,
-    actor_role: actor?.role ?? "SYSTEM",
+    actor_role: actor?.role ?? "SUPER_ADMIN",
     meta,
     created_at: nowIso(),
   });
@@ -1898,6 +1903,8 @@ async function handleApi(req, res, pathname) {
         dbConfigured: dbState.configured,
         dbHealthy: dbState.healthy,
         dbError: dbState.error,
+        lastHydrateError,
+        lastPersistError,
       });
     }
 

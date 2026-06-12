@@ -1462,24 +1462,36 @@ async function handleLogin(req, res, body) {
   const identifier = String(body.identifier ?? "").trim();
   const password = String(body.password ?? "");
 
-  if (!type || !identifier || !password) {
-    return sendJson(res, 400, { error: "type, identifier and password are required" });
+  if (!identifier || !password) {
+    return sendJson(res, 400, { error: "identifier and password are required" });
   }
 
   let user = null;
-  if (type === "SUPER_ADMIN") {
+
+  if (type === "AUTO" || !type) {
+    // Auto-detect: try Super Admin first, then Hostel Admin
     user = await loginSuperAdmin(identifier);
+    if (!user || !verifyPassword(password, user.passwordHash)) {
+      user = loginHostelAdmin(identifier, body);
+      if (user && !verifyPassword(password, user.passwordHash)) {
+        user = null;
+      }
+    }
+    if (!user) {
+      return sendJson(res, 401, { error: "Invalid email or password" });
+    }
+  } else if (type === "SUPER_ADMIN") {
+    user = await loginSuperAdmin(identifier);
+    if (!user || !verifyPassword(password, user.passwordHash)) {
+      return sendJson(res, 401, { error: "Invalid email or password" });
+    }
   } else if (type === "HOSTEL_ADMIN") {
     user = loginHostelAdmin(identifier, body);
+    if (!user || !verifyPassword(password, user.passwordHash)) {
+      return sendJson(res, 401, { error: "Invalid email or password" });
+    }
   } else {
     return sendJson(res, 400, { error: "Unsupported login type" });
-  }
-
-  if (!user) {
-    return sendJson(res, 401, { error: "Invalid credentials" });
-  }
-  if (!verifyPassword(password, user.passwordHash)) {
-    return sendJson(res, 401, { error: "Invalid credentials" });
   }
 
   const session = issueSession(user);

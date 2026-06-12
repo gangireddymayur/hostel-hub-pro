@@ -5,9 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { login } from "@/lib/api";
-import { getSession, initTheme, type Role, setSession } from "@/lib/role";
+import { getSession, initTheme, setSession } from "@/lib/role";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
@@ -22,7 +21,6 @@ export const Route = createFileRoute("/login")({
 
 function Landing() {
   const navigate = useNavigate();
-  const [role, setRole] = useState<Role>("super");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,8 +49,9 @@ function Landing() {
     setLoading(true);
     setError(null);
     try {
+      // Send type as AUTO — backend will detect role automatically
       const response = await login({
-        type: role === "super" ? "SUPER_ADMIN" : "HOSTEL_ADMIN",
+        type: "AUTO" as any,
         identifier,
         password,
       });
@@ -103,28 +102,12 @@ function Landing() {
               </div>
               <h3 className="mt-4 text-lg font-semibold">Sign in</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Use the role selector below and your real backend credentials.
+                Enter your email and password — your access level is detected automatically.
               </p>
 
               <form className="mt-6 grid gap-4" onSubmit={submit}>
-                <Tabs value={role} onValueChange={(value) => setRole(value as Role)}>
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="super">Super Admin</TabsTrigger>
-                    <TabsTrigger value="admin">Hostel Admin</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-
-                {role === "super" ? (
-                  <>
-                    <Field name="identifier" label="Email" type="email" defaultValue="" />
-                    <Field name="password" label="Password" type="password" defaultValue="" />
-                  </>
-                ) : (
-                  <>
-                    <Field name="identifier" label="Hostel Email" type="email" defaultValue="" />
-                    <Field name="password" label="Password" type="password" defaultValue="" />
-                  </>
-                )}
+                <Field name="identifier" label="Email" type="email" />
+                <Field name="password" label="Password" type="password" />
 
                 {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
@@ -148,9 +131,9 @@ function Landing() {
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-info/10 text-info">
                 <Building2 className="h-5 w-5" />
               </div>
-              <h3 className="mt-4 text-lg font-semibold">What’s included</h3>
+              <h3 className="mt-4 text-lg font-semibold">What's included</h3>
               <ul className="mt-4 space-y-3 text-sm text-muted-foreground">
-                <li className="flex items-start gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 text-success" />JWT-based authentication with role-based access control.</li>
+                <li className="flex items-start gap-2"><ShieldCheck className="mt-0.5 h-4 w-4 text-success" />JWT-based authentication with automatic role detection.</li>
                 <li className="flex items-start gap-2"><GraduationCap className="mt-0.5 h-4 w-4 text-success" />Multi-tenant hostel data separated per hostel workspace.</li>
                 <li className="flex items-start gap-2"><Building2 className="mt-0.5 h-4 w-4 text-success" />Web access is only for super admins and hostel admins.</li>
                 <li className="flex items-start gap-2"><BarChart3 className="mt-0.5 h-4 w-4 text-success" />Live dashboards, imports, reviews and reports backed by API.</li>
@@ -163,11 +146,11 @@ function Landing() {
   );
 }
 
-function Field({ name, label, type = "text", defaultValue }: { name: string; label: string; type?: string; defaultValue?: string }) {
+function Field({ name, label, type = "text" }: { name: string; label: string; type?: string }) {
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={name}>{label}</Label>
-      <Input id={name} name={name} type={type} defaultValue={defaultValue} required />
+      <Input id={name} name={name} type={type} required />
     </div>
   );
 }

@@ -10,6 +10,35 @@ const ROOT = __dirname;
 const CLIENT_DIR = path.join(ROOT, "dist", "client");
 const CLIENT_ASSETS_DIR = path.join(CLIENT_DIR, "assets");
 
+function loadEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return;
+
+  const content = fs.readFileSync(filePath, "utf8");
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+
+    const equalsIndex = trimmed.indexOf("=");
+    if (equalsIndex === -1) continue;
+
+    const key = trimmed.slice(0, equalsIndex).trim();
+    if (!key || process.env[key] != null) continue;
+
+    let value = trimmed.slice(equalsIndex + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    process.env[key] = value;
+  }
+}
+
+loadEnvFile(path.join(ROOT, ".env"));
+loadEnvFile(path.join(ROOT, ".env.local"));
+
 const LISTEN_TARGET = getListenTarget();
 const HOST = process.env.HOST ?? "0.0.0.0";
 const JWT_SECRET = process.env.JWT_SECRET ?? "change-me-in-plesk-env";

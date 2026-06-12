@@ -59,12 +59,14 @@ const ACCESS_TTL_SECONDS = 60 * 60 * 24 * 7;
 const REFRESH_TTL_SECONDS = 60 * 60 * 24 * 30;
 
 let mysqlPoolFactory = null;
+let mysqlLoadError = null;
 try {
   ({ createPool: mysqlPoolFactory } = require(MYSQL2_PROMISE_PATH));
 } catch {
   try {
     ({ createPool: mysqlPoolFactory } = require("mysql2/promise"));
-  } catch {
+  } catch (error) {
+    mysqlLoadError = error;
     mysqlPoolFactory = null;
   }
 }
@@ -97,6 +99,7 @@ function getEnvDebugSnapshot() {
     mysql2FileExists: fs.existsSync(vendorMysql2Path),
     sqlEscaperFileExists: fs.existsSync(vendorSqlEscaperPath),
     saferBufferFileExists: fs.existsSync(vendorSaferBufferPath),
+    mysqlLoadError: mysqlLoadError ? `${mysqlLoadError.name}: ${mysqlLoadError.message}` : null,
     dbHostSet: Boolean(DB_HOST),
     dbPortSet: Boolean(String(process.env.DB_PORT ?? "").trim()),
     dbUserSet: Boolean(DB_USER),

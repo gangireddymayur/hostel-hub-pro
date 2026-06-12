@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { ArrowRight, BarChart3, Building2, GraduationCap, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -41,16 +41,6 @@ function Landing() {
     window.addEventListener("hlms-auth-change", syncSession);
     return () => window.removeEventListener("hlms-auth-change", syncSession);
   }, [navigate]);
-
-  const defaults = useMemo(
-    () => ({
-      superEmail: "admin@hostelhub.local",
-      superPassword: "Admin@12345",
-      hostelEmail: "green-valley@hostel.test",
-      adminPassword: "Admin@12345",
-    }),
-    [],
-  );
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -126,13 +116,13 @@ function Landing() {
 
                 {role === "super" ? (
                   <>
-                    <Field name="identifier" label="Email" type="email" defaultValue={defaults.superEmail} />
-                    <Field name="password" label="Password" type="password" defaultValue={defaults.superPassword} />
+                    <Field name="identifier" label="Email" type="email" defaultValue="" />
+                    <Field name="password" label="Password" type="password" defaultValue="" />
                   </>
                 ) : (
                   <>
-                    <Field name="identifier" label="Hostel Email" type="email" defaultValue={defaults.hostelEmail} />
-                    <Field name="password" label="Password" type="password" defaultValue={defaults.adminPassword} />
+                    <Field name="identifier" label="Hostel Email" type="email" defaultValue="" />
+                    <Field name="password" label="Password" type="password" defaultValue="" />
                   </>
                 )}
 
@@ -165,12 +155,6 @@ function Landing() {
                 <li className="flex items-start gap-2"><Building2 className="mt-0.5 h-4 w-4 text-success" />Web access is only for super admins and hostel admins.</li>
                 <li className="flex items-start gap-2"><BarChart3 className="mt-0.5 h-4 w-4 text-success" />Live dashboards, imports, reviews and reports backed by API.</li>
               </ul>
-
-              <div className="mt-6 rounded-xl border border-border bg-background p-4 text-xs text-muted-foreground">
-                <p className="font-medium text-foreground">Test login</p>
-                <p className="mt-2">Super admin: <span className="font-mono text-foreground">{defaults.superEmail}</span></p>
-                <p>Password: <span className="font-mono text-foreground">{defaults.superPassword}</span></p>
-              </div>
             </CardContent>
           </Card>
         </div>

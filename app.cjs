@@ -16,11 +16,12 @@ const PORT =
   parsePort(process.env.IISNODE_PORT) ??
   3000;
 const HOST = process.env.HOST ?? "0.0.0.0";
+const API_BASE_URL = process.env.API_BASE_URL ?? process.env.VITE_API_URL ?? "";
 
-const API_BASE_URL = process.env.API_BASE_URL ?? process.env.VITE_API_URL ?? "http://localhost:4000/api";
 const ROOT = __dirname;
 const CLIENT_DIR = path.join(ROOT, "dist", "client");
 const CLIENT_ASSETS = path.join(CLIENT_DIR, "assets");
+const INDEX_FILE = path.join(CLIENT_DIR, "index.html");
 
 process.on("uncaughtException", (error) => {
   console.error("Uncaught exception:", error);
@@ -30,53 +31,24 @@ process.on("unhandledRejection", (reason) => {
   console.error("Unhandled rejection:", reason);
 });
 
-function toRequestUrl(req) {
+function requestUrl(req) {
   const forwardedProto = req.headers["x-forwarded-proto"];
   const protocol = Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto ?? "http";
   const host = req.headers.host ?? `localhost:${PORT}`;
-  return `${protocol}://${host}${req.url ?? "/"}`;
+  return new URL(req.url ?? "/", `${protocol}://${host}`);
 }
 
 async function readRequestBody(req) {
-  if (req.method === "GET" || req.method === "HEAD") {
-    return undefined;
-  }
+  if (req.method === "GET" || req.method === "HEAD") return undefined;
 
   const chunks = [];
   for await (const chunk of req) {
-    if (Buffer.isBuffer(chunk)) {
-      chunks.push(chunk);
-    } else if (typeof chunk === "string") {
-      chunks.push(Buffer.from(chunk));
-    } else if (chunk instanceof Uint8Array) {
-      chunks.push(Buffer.from(chunk));
-    }
+    if (Buffer.isBuffer(chunk)) chunks.push(chunk);
+    else if (typeof chunk === "string") chunks.push(Buffer.from(chunk));
+    else if (chunk instanceof Uint8Array) chunks.push(Buffer.from(chunk));
   }
 
-  if (chunks.length === 0) {
-    return undefined;
-  }
-
-  return Buffer.concat(chunks);
-}
-
-function copyHeaders(sourceHeaders, { includeHost = true } = {}) {
-  const headers = new Headers();
-
-  for (const [key, value] of Object.entries(sourceHeaders)) {
-    if (value == null) continue;
-    if (!includeHost && key.toLowerCase() === "host") continue;
-    if (["connection", "content-length", "transfer-encoding"].includes(key.toLowerCase())) continue;
-
-    if (Array.isArray(value)) {
-      headers.set(key, value.join(", "));
-      continue;
-    }
-
-    headers.set(key, value);
-  }
-
-  return headers;
+  return chunks.length ? Buffer.concat(chunks) : undefined;
 }
 
 function contentType(filePath) {
@@ -109,13 +81,13 @@ function contentType(filePath) {
   }
 }
 
-function getAssetFiles(pattern) {
+function listAssets(pattern) {
   if (!fs.existsSync(CLIENT_ASSETS)) return [];
   return fs.readdirSync(CLIENT_ASSETS).filter((file) => pattern.test(file)).sort();
 }
 
 function findBootstrapScript() {
-  const candidates = getAssetFiles(/^index-.*\.js$/);
+  const candidates = listAssets(/^index-.*\.js$/);
   for (const file of candidates) {
     const filePath = path.join(CLIENT_ASSETS, file);
     const contents = fs.readFileSync(filePath, "utf8");
@@ -125,7 +97,7 @@ function findBootstrapScript() {
 }
 
 function findStylesheet() {
-  return getAssetFiles(/^styles-.*\.css$/)[0] ?? null;
+  return listAssets(/^styles-.*\.css$/)[0] ?? null;
 }
 
 function buildHtml() {
@@ -170,65 +142,56 @@ function serveFile(res, filePath) {
 }
 
 async function proxyApi(req, res) {
-  try {
-    const upstreamUrl = new URL(req.url ?? "/", API_BASE_URL);
-    const body = await readRequestBody(req);
-    const response = await fetch(upstreamUrl, {
-      method: req.method,
-      headers: copyHeaders(req.headers, { includeHost: false }),
-      body,
-    });
-
-    res.writeHead(response.status, Object.fromEntries(response.headers.entries()));
-
-    if (req.method === "HEAD" || response.body == null) {
-      res.end();
-      return;
-    }
-
-    const readable = Readable.fromWeb(response.body);
-    readable.on("error", (error) => {
-      console.error(error);
-      if (!res.headersSent) {
-        res.statusCode = 500;
-      }
-      res.end();
-    });
-    readable.pipe(res);
-  } catch (error) {
-    console.error(error);
-    if (!res.headersSent) {
-      res.statusCode = 500;
-      res.setHeader("content-type", "text/plain; charset=utf-8");
-    }
-    res.end("Internal Server Error");
-  }
-}
-
-function serveAppShell(res) {
-  const indexPath = path.join(CLIENT_DIR, "index.html");
-  if (fs.existsSync(indexPath)) {
-    serveFile(res, indexPath);
+  if (!API_BASE_URL) {
+    res.writeHead(503, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(
+      JSON.stringify({
+        error: "API_BASE_URL is not configured",
+        message: "Set API_BASE_URL or VITE_API_URL in Plesk to point to your backend.",
+      }),
+    );
     return;
   }
 
-  const html = buildHtml();
-  if (!html) {
-    res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
-    res.end("Build output not found. Run `npm run build` first.");
+  const upstreamUrl = new URL(req.url ?? "/", API_BASE_URL);
+  const body = await readRequestBody(req);
+  const headers = new Headers();
+
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (value == null) continue;
+    const lower = key.toLowerCase();
+    if (["host", "connection", "content-length", "transfer-encoding"].includes(lower)) continue;
+    headers.set(key, Array.isArray(value) ? value.join(", ") : value);
+  }
+
+  const response = await fetch(upstreamUrl, {
+    method: req.method,
+    headers,
+    body,
+  });
+
+  res.writeHead(response.status, Object.fromEntries(response.headers.entries()));
+
+  if (req.method === "HEAD" || !response.body) {
+    res.end();
     return;
   }
 
-  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-  res.end(html);
+  Readable.fromWeb(response.body).pipe(res);
 }
 
 const server = http.createServer((req, res) => {
   try {
-    const requestPath = decodeURIComponent(new URL(toRequestUrl(req)).pathname);
+    const requestPath = decodeURIComponent(requestUrl(req).pathname);
 
     if (requestPath.startsWith("/api")) {
-      proxyApi(req, res);
+      proxyApi(req, res).catch((error) => {
+        console.error(error);
+        if (!res.headersSent) {
+          res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+        }
+        res.end("Internal Server Error");
+      });
       return;
     }
 
@@ -246,7 +209,20 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    serveAppShell(res);
+    if (fs.existsSync(INDEX_FILE)) {
+      serveFile(res, INDEX_FILE);
+      return;
+    }
+
+    const html = buildHtml();
+    if (html) {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(html);
+      return;
+    }
+
+    res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Build output not found. Run `npm run build` before deploying to Plesk.");
   } catch (error) {
     console.error(error);
     if (!res.headersSent) {

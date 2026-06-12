@@ -197,15 +197,15 @@ function verifyPassword(password, hash) {
 
 async function pingDatabase() {
   if (!dbPool) {
-    return { configured: false, healthy: false };
+    return { configured: false, healthy: false, error: "Database pool is not configured" };
   }
 
   try {
     await dbPool.query("SELECT 1 AS ok");
-    return { configured: true, healthy: true };
+    return { configured: true, healthy: true, error: null };
   } catch (error) {
     console.warn("[health] database check failed:", error.message);
-    return { configured: true, healthy: false };
+    return { configured: true, healthy: false, error: `${error.name}: ${error.message}` };
   }
 }
 
@@ -1486,7 +1486,12 @@ async function handleApi(req, res, pathname) {
   try {
     if (pathname === "/api/health" && req.method === "GET") {
       const dbState = await pingDatabase();
-      return sendJson(res, 200, { ok: true, dbConfigured: dbState.configured, dbHealthy: dbState.healthy });
+      return sendJson(res, 200, {
+        ok: true,
+        dbConfigured: dbState.configured,
+        dbHealthy: dbState.healthy,
+        dbError: dbState.error,
+      });
     }
 
     if (pathname === "/api/debug-env" && req.method === "GET") {

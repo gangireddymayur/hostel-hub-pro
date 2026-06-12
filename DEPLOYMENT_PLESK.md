@@ -17,6 +17,7 @@ Important:
 - Build the app before deployment, then push the generated `dist/` folder with the repo.
 - Do not point Plesk at the compiled `dist/server/server.js` file directly. Use `server/server.js` as the startup file instead.
 - In Plesk, install runtime dependencies only. Use `NODE_ENV=production` or `npm install --omit=dev` so Vite/esbuild dev tooling is not installed on the server.
+- If Plesk still reports that iisnode cannot capture logs, keep `web.config` in the repo root. It disables iisnode logging so the app pool does not need write access to a logs folder.
 
 ## Start
 

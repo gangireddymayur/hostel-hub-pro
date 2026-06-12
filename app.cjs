@@ -83,11 +83,20 @@ const dbPool =
     : null;
 
 function getEnvDebugSnapshot() {
+  const vendorMysql2Path = path.join(VENDOR_NODE_MODULES, "mysql2", "promise.js");
+  const vendorSqlEscaperPath = path.join(VENDOR_NODE_MODULES, "sql-escaper", "lib", "index.js");
+  const vendorSaferBufferPath = path.join(VENDOR_NODE_MODULES, "safer-buffer", "safer.js");
+
   return {
     cwd: process.cwd(),
     root: ROOT,
     hasDotEnv: fs.existsSync(path.join(ROOT, ".env")),
     hasDotEnvLocal: fs.existsSync(path.join(ROOT, ".env.local")),
+    vendorDirExists: fs.existsSync(path.join(ROOT, "vendor")),
+    vendorNodeModulesExists: fs.existsSync(VENDOR_NODE_MODULES),
+    mysql2FileExists: fs.existsSync(vendorMysql2Path),
+    sqlEscaperFileExists: fs.existsSync(vendorSqlEscaperPath),
+    saferBufferFileExists: fs.existsSync(vendorSaferBufferPath),
     dbHostSet: Boolean(DB_HOST),
     dbPortSet: Boolean(String(process.env.DB_PORT ?? "").trim()),
     dbUserSet: Boolean(DB_USER),

@@ -1045,6 +1045,15 @@ function userToStaffRecord(user) {
   };
 }
 
+function slugifyHostelName(name) {
+  return String(name ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32);
+}
+
 function studentById(studentId) {
   return db.students.find((student) => student.id === studentId) ?? null;
 }
@@ -1211,14 +1220,10 @@ function createStaffRecord(hostelId, payload, actor) {
 }
 
 function linkHostelAdmin(hostel, payload, actor) {
-  const adminName = String(payload.admin_name ?? "Hostel Admin").trim();
-  const adminEmail = String(payload.admin_email ?? hostel.email).trim().toLowerCase();
+  const slug = slugifyHostelName(hostel.hostel_name) || "hostel";
+  const adminName = String(payload.admin_name ?? "Hostel Admin").trim() || "Hostel Admin";
+  const adminEmail = String(hostel.email ?? `admin-${slug}@hostelhub.local`).trim().toLowerCase() || `admin-${slug}@hostelhub.local`;
   const adminPassword = String(payload.admin_password ?? payload.password ?? "Admin@12345");
-  if (!adminName || !adminEmail) {
-    const error = new Error("admin_name and admin_email are required");
-    error.statusCode = 400;
-    throw error;
-  }
   if (db.users.some((user) => user.email.toLowerCase() === adminEmail)) {
     const error = new Error("Admin email already exists");
     error.statusCode = 409;
@@ -1245,8 +1250,13 @@ function linkHostelAdmin(hostel, payload, actor) {
 function createHostelRecord(payload, actor) {
   const hostelName = String(payload.hostel_name ?? "").trim();
   const hostelEmail = String(payload.email ?? "").trim().toLowerCase();
-  if (!hostelName || !hostelEmail) {
-    const error = new Error("hostel_name and email are required");
+  if (!hostelName) {
+    const error = new Error("hostel_name is required");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!hostelEmail) {
+    const error = new Error("email is required");
     error.statusCode = 400;
     throw error;
   }
@@ -1258,11 +1268,12 @@ function createHostelRecord(payload, actor) {
   }
 
   const createdAt = nowIso();
+  const password = String(payload.password ?? payload.admin_password ?? "Hostel@12345");
   const hostel = {
     id: uuid("hostel"),
     hostel_name: hostelName,
     email: hostelEmail,
-    password_hash: hashPassword(String(payload.password ?? payload.admin_password ?? "Hostel@12345")),
+    password_hash: hashPassword(password),
     status: "ACTIVE",
     created_at: createdAt,
   };
@@ -1276,7 +1287,14 @@ function createHostelRecord(payload, actor) {
   });
 
   persist();
-  return { hostel, admin };
+  return {
+    hostel,
+    admin,
+    credentials: {
+      hostel_email: hostel.email,
+      password,
+    },
+  };
 }
 
 function loginHostelAdmin(identifier, payload) {
@@ -1527,6 +1545,7 @@ function handleCreateHostel(req, res, body) {
       data: {
         hostel: created.hostel,
         admin: serializeProfile(created.admin),
+        credentials: created.credentials,
       },
     });
   } catch (error) {

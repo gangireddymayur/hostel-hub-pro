@@ -145,8 +145,14 @@ export async function getSuperHostels() {
   return request<{ data: Array<Record<string, unknown> & { id: string; hostel_name: string; email: string; status: string; created_at: string; _count?: { students: number; parents: number; staff: number; leaveRequests: number } }> }>("/super-admin/hostels");
 }
 
-export async function createHostel(payload: { hostel_name: string; email: string; password?: string; admin_name: string; admin_email: string; admin_password?: string }) {
-  return request<{ data: unknown }>("/super-admin/hostels", {
+export async function createHostel(payload: { hostel_name: string; email: string; password?: string }) {
+  return request<{
+    data: {
+      hostel: { id: string; hostel_name: string; email: string; status: string; created_at: string };
+      admin: { id: string; role: string; hostelId: string | null; email: string | null };
+      credentials: { hostel_email: string; password: string };
+    };
+  }>("/super-admin/hostels", {
     method: "POST",
     body: payload,
   });

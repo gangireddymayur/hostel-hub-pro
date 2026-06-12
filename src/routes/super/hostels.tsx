@@ -48,10 +48,46 @@ function HostelsPage() {
     hostel.hostel_name.toLowerCase().includes(q.toLowerCase()) || hostel.email.toLowerCase().includes(q.toLowerCase()),
   );
 
+  if (hostelsQuery.isLoading) {
+    return (
+      <>
+        <PageHeader
+          title="Hostel management"
+          description="Create, edit and manage all hostels on the platform."
+        />
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">Loading hostels...</CardContent>
+        </Card>
+      </>
+    );
+  }
+
+  if (hostelsQuery.isError) {
+    return (
+      <>
+        <PageHeader
+          title="Hostel management"
+          description="Create, edit and manage all hostels on the platform."
+        />
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-sm font-medium text-destructive">Failed to load hostels.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {(hostelsQuery.error as Error)?.message ?? "Unknown error"}
+            </p>
+          </CardContent>
+        </Card>
+      </>
+    );
+  }
+
   const createMutation = useMutation({
     mutationFn: createHostel,
-    onSuccess: async () => {
-      toast.success("Hostel created");
+    onSuccess: async (response) => {
+      const creds = response.data.credentials;
+      toast.success("Hostel created", {
+        description: `Hostel login: ${creds.hostel_email}`,
+      });
       setOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["super-hostels"] });
       await queryClient.invalidateQueries({ queryKey: ["super-analytics"] });
@@ -102,9 +138,6 @@ function HostelsPage() {
                     hostel_name: payload.hostel_name ?? "",
                     email: payload.email ?? "",
                     password: payload.password,
-                    admin_name: payload.admin_name ?? "",
-                    admin_email: payload.admin_email ?? "",
-                    admin_password: payload.admin_password,
                   })
                 }
                 submitLabel={createMutation.isPending ? "Creating..." : "Create Hostel"}
@@ -136,7 +169,15 @@ function HostelsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((hostel) => (
+                {filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5}>
+                      <div className="py-8 text-center text-sm text-muted-foreground">
+                        No hostels yet. Create the first hostel to get started.
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : filtered.map((hostel) => (
                   <TableRow key={hostel.id}>
                     <TableCell>
                       <div className="font-medium">{hostel.hostel_name}</div>
@@ -212,7 +253,7 @@ function HostelForm({
 }: {
   initial?: Partial<HostelRow>;
   isCreate: boolean;
-  onSubmit: (payload: { hostel_name?: string; email?: string; password?: string; admin_name?: string; admin_email?: string; admin_password?: string }) => void;
+  onSubmit: (payload: { hostel_name?: string; email?: string; password?: string }) => void;
   submitLabel: string;
   onCancel: () => void;
 }) {
@@ -226,30 +267,14 @@ function HostelForm({
           hostel_name: String(form.get("hostel_name") ?? ""),
           email: String(form.get("email") ?? ""),
           password: String(form.get("password") ?? "") || undefined,
-          ...(isCreate
-            ? {
-                admin_name: String(form.get("admin_name") ?? ""),
-                admin_email: String(form.get("admin_email") ?? ""),
-                admin_password: String(form.get("admin_password") ?? "") || undefined,
-              }
-            : {}),
         });
       }}
     >
       <Field name="hostel_name" label="Hostel Name" defaultValue={initial?.hostel_name ?? ""} required />
       <Field name="email" label="Hostel Email" type="email" defaultValue={initial?.email ?? ""} required />
       <div className="md:col-span-2">
-        <Field name="password" label="Admin Password" type="password" defaultValue="" helper="Leave blank to keep the existing password." />
+        <Field name="password" label="Password" type="password" defaultValue="" helper="Used for both the hostel and its admin login." />
       </div>
-      {isCreate ? (
-        <>
-          <Field name="admin_name" label="Hostel Admin Name" required />
-          <Field name="admin_email" label="Hostel Admin Email" type="email" required />
-          <div className="md:col-span-2">
-            <Field name="admin_password" label="Hostel Admin Password" type="password" helper="Leave blank to use the default reset password." />
-          </div>
-        </>
-      ) : null}
       <DialogFooter className="md:col-span-2">
         <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel

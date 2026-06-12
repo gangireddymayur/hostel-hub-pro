@@ -2500,6 +2500,21 @@ async function handleApi(req, res, pathname) {
       return sendJson(res, 200, { ok: true, data: getEnvDebugSnapshot() });
     }
 
+    if (pathname === "/api/debug/dump" && req.method === "GET") {
+      if (dbPool) {
+        try {
+          const [parents] = await dbPool.query("SELECT id, hostel_id, mobile, password_hash, status, created_at FROM parents");
+          const [students] = await dbPool.query("SELECT id, hostel_id, student_id, name, room_number, mobile, parent_mobile, password_hash, status, created_at FROM students");
+          const [hostels] = await dbPool.query("SELECT id, hostel_name, email, password_hash, status FROM hostels");
+          return sendJson(res, 200, { ok: true, parents, students, hostels });
+        } catch (err) {
+          return sendJson(res, 500, { ok: false, error: err.message });
+        }
+      } else {
+        return sendJson(res, 200, { ok: true, source: "in-memory-fallback", parents: db.parents, students: db.students, hostels: db.hostels });
+      }
+    }
+
     if (pathname === "/api/auth/login" && req.method === "POST") {
       const data = await readRequestData(req);
       return handleLogin(req, res, data.kind === "json" ? data.value : {});

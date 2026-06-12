@@ -780,7 +780,7 @@ function addAudit(action, entity, entityId, actor, meta = {}) {
     created_at: nowIso(),
   });
   db.auditLogs = db.auditLogs.slice(0, 500);
-  persist();
+  // NOTE: persist() is NOT called here — callers must await persist() themselves
 }
 
 function findHostelById(hostelId) {
@@ -848,13 +848,13 @@ function issueSession(user) {
   };
 }
 
-function revokeRefreshToken(refreshTokenValue) {
+async function revokeRefreshToken(refreshTokenValue) {
   const payload = verifyToken(refreshTokenValue);
   if (!payload || payload.kind !== "refresh") return false;
   const entry = db.refreshTokens.find((token) => token.jti === payload.jti);
   if (!entry) return false;
   entry.revokedAt = nowIso();
-  persist();
+  await persist();
   return true;
 }
 
@@ -1137,7 +1137,7 @@ function issueGatePass(leaveRequest) {
   return gatePass;
 }
 
-function createStudentRecord(hostelId, payload, actor) {
+async function createStudentRecord(hostelId, payload, actor) {
   const studentId = String(payload.student_id ?? "").trim();
   const name = String(payload.name ?? "").trim();
   const roomNumber = String(payload.room_number ?? "").trim();
@@ -1187,11 +1187,11 @@ function createStudentRecord(hostelId, payload, actor) {
     name: student.name,
   });
 
-  persist();
+  await persist();
   return student;
 }
 
-function createStaffRecord(hostelId, payload, actor) {
+async function createStaffRecord(hostelId, payload, actor) {
   const role = normalizeRole(payload.role);
   const name = String(payload.name ?? "").trim();
   const email = String(payload.email ?? "").trim().toLowerCase();
@@ -1229,7 +1229,7 @@ function createStaffRecord(hostelId, payload, actor) {
     email,
   });
 
-  persist();
+  await persist();
   return user;
 }
 
@@ -1260,7 +1260,7 @@ function linkHostelAdmin(hostel, password, actor) {
   return user;
 }
 
-function createHostelRecord(payload, actor) {
+async function createHostelRecord(payload, actor) {
   const hostelName = String(payload.hostel_name ?? "").trim();
   const hostelEmail = String(payload.email ?? "").trim().toLowerCase();
   if (!hostelName) {
@@ -1299,7 +1299,7 @@ function createHostelRecord(payload, actor) {
     admin_id: admin.id,
   });
 
-  persist();
+  await persist();
   return {
     hostel,
     admin,
@@ -1375,7 +1375,7 @@ async function loginSuperAdmin(identifier) {
   );
 }
 
-function updateHostelStatus(hostelId, status, actor) {
+async function updateHostelStatus(hostelId, status, actor) {
   const hostel = findHostelById(hostelId);
   if (!hostel) {
     const error = new Error("Hostel not found");
@@ -1390,11 +1390,11 @@ function updateHostelStatus(hostelId, status, actor) {
     }
   });
   addAudit("UPDATE", "HOSTEL_STATUS", hostel.id, actor, { status });
-  persist();
+  await persist();
   return hostel;
 }
 
-function setStudentPhoto(studentId, file, actor) {
+async function setStudentPhoto(studentId, file, actor) {
   const student = studentById(studentId);
   if (!student) {
     const error = new Error("Student not found");
@@ -1404,7 +1404,7 @@ function setStudentPhoto(studentId, file, actor) {
   const mimeType = String(file.contentType ?? "image/jpeg").toLowerCase();
   student.profile_photo = `data:${mimeType};base64,${file.data.toString("base64")}`;
   addAudit("UPDATE", "STUDENT_PHOTO", student.id, actor, { profile_photo: student.profile_photo });
-  persist();
+  await persist();
   return student;
 }
 
@@ -1509,7 +1509,7 @@ async function handleLogin(req, res, body) {
 
   const session = issueSession(user);
   addAudit("LOGIN", "AUTH", user.id, user, { role: user.role });
-  persist();
+  await persist();
   return sendJson(res, 200, session);
 }
 
@@ -1538,13 +1538,13 @@ function handleRefresh(req, res, body) {
   });
 }
 
-function handleLogout(req, res, body) {
+async function handleLogout(req, res, body) {
   const token = String(body.refreshToken ?? "").trim();
-  if (token) revokeRefreshToken(token);
+  if (token) await revokeRefreshToken(token);
   return sendJson(res, 200, { message: "Logged out" });
 }
 
-function handleChangePassword(req, res, body) {
+async function handleChangePassword(req, res, body) {
   const user = requireAuth(req, res);
   if (!user) return;
   const currentPassword = String(body.currentPassword ?? "");
@@ -1557,7 +1557,7 @@ function handleChangePassword(req, res, body) {
     if (entry.userId === user.id && !entry.revokedAt) entry.revokedAt = nowIso();
   });
   addAudit("UPDATE", "PASSWORD", user.id, user);
-  persist();
+  await persist();
   return sendJson(res, 200, { message: "Password changed successfully" });
 }
 
@@ -1574,11 +1574,11 @@ function handleSuperHostels(req, res) {
   return sendJson(res, 200, { data });
 }
 
-function handleCreateHostel(req, res, body) {
+async function handleCreateHostel(req, res, body) {
   const user = requireAuth(req, res, ["SUPER_ADMIN"]);
   if (!user) return;
   try {
-    const created = createHostelRecord(body, user);
+    const created = await createHostelRecord(body, user);
     return sendJson(res, 200, {
       data: {
         hostel: created.hostel,
@@ -1591,7 +1591,7 @@ function handleCreateHostel(req, res, body) {
   }
 }
 
-function handleUpdateHostel(req, res, hostelId, body) {
+async function handleUpdateHostel(req, res, hostelId, body) {
   const user = requireAuth(req, res, ["SUPER_ADMIN"]);
   if (!user) return;
   const hostel = findHostelById(hostelId);
@@ -1609,24 +1609,32 @@ function handleUpdateHostel(req, res, hostelId, body) {
   hostel.email = nextEmail;
   if (nextPassword) hostel.password_hash = hashPassword(nextPassword);
 
+  // Sync db.staff record
   const admin = db.staff.find((item) => item.hostel_id === hostel.id && item.role === "HOSTEL_ADMIN");
   if (admin) {
     admin.name = nextName;
     admin.email = nextEmail;
     if (nextPassword) admin.password_hash = hashPassword(nextPassword);
   }
+  // Also sync db.users record (needed for login to work)
+  const adminUser = db.users.find((u) => u.hostelId === hostel.id && u.role === "HOSTEL_ADMIN");
+  if (adminUser) {
+    adminUser.name = nextName;
+    adminUser.email = nextEmail;
+    if (nextPassword) adminUser.passwordHash = hashPassword(nextPassword);
+  }
   addAudit("UPDATE", "HOSTEL", hostel.id, user, { hostel_name: hostel.hostel_name, email: hostel.email });
-  persist();
+  await persist();
   return sendJson(res, 200, { data: hostel });
 }
 
-function handleHostelStatus(req, res, hostelId, body) {
+async function handleHostelStatus(req, res, hostelId, body) {
   const user = requireAuth(req, res, ["SUPER_ADMIN"]);
   if (!user) return;
   const status = String(body.status ?? "").toUpperCase();
   if (!["ACTIVE", "DISABLED"].includes(status)) return sendJson(res, 400, { error: "Invalid status" });
   try {
-    const hostel = updateHostelStatus(hostelId, status, user);
+    const hostel = await updateHostelStatus(hostelId, status, user);
     return sendJson(res, 200, { data: hostel });
   } catch (error) {
     return sendJson(res, error.statusCode || 500, { error: error.message });
@@ -1672,18 +1680,18 @@ function handleHostelStudents(req, res) {
   return sendJson(res, 200, { data: students });
 }
 
-function handleCreateStudent(req, res, body) {
+async function handleCreateStudent(req, res, body) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
   try {
-    const student = createStudentRecord(user.hostelId, body, user);
+    const student = await createStudentRecord(user.hostelId, body, user);
     return sendJson(res, 200, { data: student });
   } catch (error) {
     return sendJson(res, error.statusCode || 400, { error: error.message });
   }
 }
 
-function handleImportStudents(req, res, data) {
+async function handleImportStudents(req, res, data) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
   try {
@@ -1702,7 +1710,7 @@ function handleImportStudents(req, res, data) {
         continue;
       }
       try {
-        createStudentRecord(user.hostelId, mapped, user);
+        await createStudentRecord(user.hostelId, mapped, user);
         imported += 1;
       } catch {
         // Skip duplicates / bad rows.
@@ -1714,7 +1722,7 @@ function handleImportStudents(req, res, data) {
   }
 }
 
-function handleUploadStudentPhoto(req, res, studentId, data) {
+async function handleUploadStudentPhoto(req, res, studentId, data) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
   const student = studentById(studentId);
@@ -1725,7 +1733,7 @@ function handleUploadStudentPhoto(req, res, studentId, data) {
     const mimeType = String(file.contentType ?? "image/jpeg").toLowerCase();
     student.profile_photo = `data:${mimeType};base64,${file.data.toString("base64")}`;
     addAudit("UPDATE", "STUDENT_PHOTO", student.id, user, { profile_photo: student.profile_photo });
-    persist();
+    await persist();
     return sendJson(res, 200, { data: student });
   } catch (error) {
     return sendJson(res, 500, { error: error.message });
@@ -1742,11 +1750,11 @@ function handleHostelStaff(req, res) {
   return sendJson(res, 200, { data: staff });
 }
 
-function handleCreateStaff(req, res, body) {
+async function handleCreateStaff(req, res, body) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
   try {
-    const created = createStaffRecord(user.hostelId, body, user);
+    const created = await createStaffRecord(user.hostelId, body, user);
     return sendJson(res, 200, { data: created });
   } catch (error) {
     return sendJson(res, error.statusCode || 400, { error: error.message });
@@ -1768,7 +1776,7 @@ function handleLeaveRequests(req, res) {
   return sendJson(res, 200, { data: leaveRequests });
 }
 
-function handleReviewLeaveRequest(req, res, leaveRequestId, body) {
+async function handleReviewLeaveRequest(req, res, leaveRequestId, body) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
   const leave = db.leaveRequests.find((item) => item.id === leaveRequestId);
@@ -1801,7 +1809,7 @@ function handleReviewLeaveRequest(req, res, leaveRequestId, body) {
     hostel_status: leave.hostel_status,
     final_status: leave.final_status,
   });
-  persist();
+  await persist();
   return sendJson(res, 200, { data: leave });
 }
 

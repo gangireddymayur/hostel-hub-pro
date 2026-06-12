@@ -1672,7 +1672,6 @@ function computeSuperAnalytics() {
 }
 
 async function handleLogin(req, res, body) {
-  const type = normalizeRole(body.type);
   const identifier = String(body.identifier ?? "").trim();
   const password = String(body.password ?? "");
 
@@ -1682,64 +1681,145 @@ async function handleLogin(req, res, body) {
 
   let user = null;
 
-  if (type === "AUTO" || !type) {
-    // Auto-detect: try Super Admin first, then Hostel Admin
-    user = await loginSuperAdmin(identifier);
-    if (!user || !verifyPassword(password, user.passwordHash)) {
-      user = await loginHostelAdmin(identifier);
-      if (user && !verifyPassword(password, user.passwordHash)) {
-        user = null;
-      }
-    }
-    if (!user) {
-      return sendJson(res, 401, { error: "Invalid email or password" });
-    }
-  } else if (type === "SUPER_ADMIN") {
-    user = await loginSuperAdmin(identifier);
-    if (!user || !verifyPassword(password, user.passwordHash)) {
-      return sendJson(res, 401, { error: "Invalid email or password" });
-    }
-  } else if (type === "HOSTEL_ADMIN") {
-    if (body.hostelEmail) {
-      user = await loginStaffDb(identifier, "HOSTEL_ADMIN", body.hostelEmail);
-    } else {
-      user = await loginHostelAdmin(identifier);
-    }
-    if (!user || !verifyPassword(password, user.passwordHash)) {
-      return sendJson(res, 401, { error: "Invalid email or password" });
-    }
-  } else if (type === "SECURITY_GUARD" || type === "HOSTEL_STAFF") {
-    if (!body.hostelEmail) {
-      return sendJson(res, 400, { error: "hostelEmail is required for staff login" });
-    }
-    user = await loginStaffDb(identifier, type, body.hostelEmail);
-    if (!user || !verifyPassword(password, user.passwordHash)) {
-      return sendJson(res, 401, { error: "Invalid email or password" });
-    }
-  } else if (type === "STUDENT") {
-    if (!body.hostelEmail) {
-      return sendJson(res, 400, { error: "hostelEmail is required for student login" });
-    }
-    user = await loginStudentDb(identifier, body.hostelEmail);
-    if (!user || !verifyPassword(password, user.passwordHash)) {
-      return sendJson(res, 401, { error: "Invalid email or password" });
-    }
-  } else if (type === "PARENT") {
-    if (!body.hostelEmail) {
-      return sendJson(res, 400, { error: "hostelEmail is required for parent login" });
-    }
-    user = await loginParentDb(identifier, body.hostelEmail);
-    if (!user || !verifyPassword(password, user.passwordHash)) {
-      return sendJson(res, 401, { error: "Invalid email or password" });
-    }
-  } else {
-    return sendJson(res, 400, { error: "Unsupported login type" });
+  // 1. Try Super Admin (by email)
+  user = await loginSuperAdmin(identifier);
+  if (user && verifyPassword(password, user.passwordHash)) {
+    const session = issueSession(user);
+    addAudit("LOGIN", "AUTH", user.id, user, { role: user.role });
+    await persist();
+    return sendJson(res, 200, session);
   }
 
-  const session = issueSession(user);
-  addAudit("LOGIN", "AUTH", user.id, user, { role: user.role });
-  await persist();
-  return sendJson(res, 200, session);
+  // 2. Try Staff (by email)
+  if (dbPool) {
+    const [rows] = await dbPool.query(
+      "SELECT id, hostel_id, role, name, email, password_hash, status FROM staff WHERE LOWER(email) = ? LIMIT 1",
+      [identifier.toLowerCase()]
+    );
+    if (rows[0] && verifyPassword(password, String(rows[0].password_hash))) {
+      user = {
+        id: String(rows[0].id),
+        hostelId: String(rows[0].hostel_id),
+        role: String(rows[0].role),
+        name: String(rows[0].name),
+        email: String(rows[0].email).toLowerCase(),
+        passwordHash: String(rows[0].password_hash),
+        status: String(rows[0].status ?? "ACTIVE"),
+        tokenVersion: 0,
+        created_at: nowIso(),
+      };
+    }
+  } else {
+    const staff = db.staff.find((s) => s.email.toLowerCase() === identifier.toLowerCase());
+    if (staff && verifyPassword(password, staff.password_hash)) {
+      user = {
+        id: staff.id,
+        hostelId: staff.hostel_id,
+        role: staff.role,
+        name: staff.name,
+        email: staff.email,
+        passwordHash: staff.password_hash,
+        status: "ACTIVE",
+        tokenVersion: 0,
+        created_at: staff.created_at,
+      };
+    }
+  }
+
+  if (user) {
+    const session = issueSession(user);
+    addAudit("LOGIN", "AUTH", user.id, user, { role: user.role });
+    await persist();
+    return sendJson(res, 200, session);
+  }
+
+  // 3. Try Student (by student_id or mobile)
+  if (dbPool) {
+    const [rows] = await dbPool.query(
+      "SELECT * FROM students WHERE student_id = ? OR mobile = ? LIMIT 1",
+      [identifier, identifier]
+    );
+    if (rows[0] && verifyPassword(password, String(rows[0].password_hash))) {
+      user = {
+        id: String(rows[0].id),
+        hostelId: String(rows[0].hostel_id),
+        role: "STUDENT",
+        name: String(rows[0].name),
+        email: String(rows[0].mobile),
+        passwordHash: String(rows[0].password_hash),
+        status: String(rows[0].status),
+        tokenVersion: 0,
+        created_at: nowIso(),
+      };
+    }
+  } else {
+    const student = db.students.find((s) => s.student_id === identifier || s.mobile === identifier);
+    if (student && verifyPassword(password, student.password_hash)) {
+      user = {
+        id: student.id,
+        hostelId: student.hostel_id,
+        role: "STUDENT",
+        name: student.name,
+        email: student.mobile,
+        passwordHash: student.password_hash,
+        status: student.status,
+        tokenVersion: 0,
+        created_at: student.created_at,
+      };
+    }
+  }
+
+  if (user) {
+    const session = issueSession(user);
+    addAudit("LOGIN", "AUTH", user.id, user, { role: user.role });
+    await persist();
+    return sendJson(res, 200, session);
+  }
+
+  // 4. Try Parent (by mobile)
+  if (dbPool) {
+    const [rows] = await dbPool.query(
+      "SELECT * FROM parents WHERE mobile = ? LIMIT 1",
+      [identifier]
+    );
+    if (rows[0] && verifyPassword(password, String(rows[0].password_hash))) {
+      user = {
+        id: String(rows[0].id),
+        hostelId: String(rows[0].hostel_id),
+        role: "PARENT",
+        name: `Parent of ${rows[0].mobile}`,
+        email: String(rows[0].mobile),
+        passwordHash: String(rows[0].password_hash),
+        status: String(rows[0].status),
+        tokenVersion: 0,
+        created_at: nowIso(),
+      };
+    }
+  } else {
+    const parent = db.parents.find((p) => p.mobile === identifier);
+    if (parent && verifyPassword(password, parent.password_hash)) {
+      user = {
+        id: parent.id,
+        hostelId: parent.hostel_id,
+        role: "PARENT",
+        name: `Parent of ${parent.mobile}`,
+        email: parent.mobile,
+        passwordHash: parent.password_hash,
+        status: parent.status,
+        tokenVersion: 0,
+        created_at: parent.created_at,
+      };
+    }
+  }
+
+  if (user) {
+    const session = issueSession(user);
+    addAudit("LOGIN", "AUTH", user.id, user, { role: user.role });
+    await persist();
+    return sendJson(res, 200, session);
+  }
+
+  return sendJson(res, 401, { error: "Invalid credentials or password" });
 }
 
 function handleRefresh(req, res, body) {

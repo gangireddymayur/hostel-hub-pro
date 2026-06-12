@@ -85,6 +85,7 @@ const dbPool =
         database: DB_NAME,
         waitForConnections: true,
         connectionLimit: 5,
+        dateStrings: true,
       })
     : null;
 
@@ -348,12 +349,13 @@ function defaultData() {
     leaveRequests: [
       {
         id: leave1Id,
+        hostel_id: hostelId,
         student_id: student1Id,
         reason: "Family function",
-        from_date: new Date().toISOString().slice(0, 10),
-        to_date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
-        out_time: "09:00",
-        return_time: "18:00",
+        from_date: nowIso(),
+        to_date: new Date(Date.now() + 86400000).toISOString(),
+        out_time: new Date(`${new Date().toISOString().slice(0, 10)}T09:00:00.000Z`).toISOString(),
+        return_time: new Date(`${new Date().toISOString().slice(0, 10)}T18:00:00.000Z`).toISOString(),
         parent_status: "APPROVED",
         hostel_status: "APPROVED",
         final_status: "APPROVED",
@@ -362,12 +364,13 @@ function defaultData() {
       },
       {
         id: leave2Id,
+        hostel_id: hostelId,
         student_id: student2Id,
         reason: "Medical appointment",
-        from_date: new Date().toISOString().slice(0, 10),
-        to_date: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10),
-        out_time: "10:00",
-        return_time: "17:00",
+        from_date: nowIso(),
+        to_date: new Date(Date.now() + 2 * 86400000).toISOString(),
+        out_time: new Date(`${new Date().toISOString().slice(0, 10)}T10:00:00.000Z`).toISOString(),
+        return_time: new Date(`${new Date().toISOString().slice(0, 10)}T17:00:00.000Z`).toISOString(),
         parent_status: "PENDING",
         hostel_status: "PENDING",
         final_status: "PENDING",
@@ -382,7 +385,7 @@ function defaultData() {
         qr_code: `GP-${crypto.randomBytes(4).toString("hex").toUpperCase()}`,
         out_time_actual: null,
         in_time_actual: null,
-        status: "ISSUED",
+        status: "APPROVED",
         created_at: nowIso(),
       },
     ],
@@ -408,13 +411,352 @@ function loadData() {
 
 let db = loadData();
 
-function persist() {
+function normalizeDateTime(value) {
+  if (!value) return nowIso();
+  if (value instanceof Date) return value.toISOString();
+  const text = String(value);
+  const normalized = text.includes("T") ? text : `${text.replace(" ", "T")}Z`;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? text : parsed.toISOString();
+}
+
+function normalizeDateOnly(value) {
+  if (!value) return new Date().toISOString().slice(0, 10);
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  const text = String(value);
+  return text.includes("T") ? text.slice(0, 10) : text.slice(0, 10);
+}
+
+function parseJsonMaybe(value) {
+  if (value == null || value === "") return null;
+  if (typeof value === "object") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+async function hydrateDataFromDatabase() {
+  if (!dbPool) {
+    db = loadData();
+    return db;
+  }
+
+  try {
+    const [
+      [hostels],
+      [superAdmins],
+      [staffRows],
+      [parents],
+      [students],
+      [leaveRequests],
+      [gatePasses],
+      [auditLogs],
+      [refreshTokens],
+    ] = await Promise.all([
+      dbPool.query("SELECT * FROM hostels ORDER BY created_at ASC"),
+      dbPool.query("SELECT * FROM super_admins ORDER BY created_at ASC"),
+      dbPool.query("SELECT * FROM staff ORDER BY created_at ASC"),
+      dbPool.query("SELECT * FROM parents ORDER BY created_at ASC"),
+      dbPool.query("SELECT * FROM students ORDER BY created_at ASC"),
+      dbPool.query("SELECT * FROM leave_requests ORDER BY created_at ASC"),
+      dbPool.query("SELECT * FROM gate_passes ORDER BY created_at ASC"),
+      dbPool.query("SELECT * FROM audit_logs ORDER BY created_at DESC"),
+      dbPool.query("SELECT * FROM refresh_tokens ORDER BY created_at ASC"),
+    ]);
+
+    const users = [
+      ...superAdmins.map((row) => ({
+        id: String(row.id),
+        hostelId: null,
+        role: "SUPER_ADMIN",
+        name: String(row.name ?? "Super Admin"),
+        email: String(row.email ?? "").toLowerCase(),
+        passwordHash: String(row.password_hash ?? ""),
+        status: "ACTIVE",
+        tokenVersion: 0,
+        created_at: normalizeDateTime(row.created_at),
+      })),
+      ...staffRows.map((row) => ({
+        id: String(row.id),
+        hostelId: String(row.hostel_id ?? ""),
+        role: String(row.role ?? "HOSTEL_STAFF"),
+        name: String(row.name ?? ""),
+        email: String(row.email ?? "").toLowerCase(),
+        passwordHash: String(row.password_hash ?? ""),
+        status: "ACTIVE",
+        tokenVersion: 0,
+        created_at: normalizeDateTime(row.created_at),
+      })),
+    ];
+
+    db = {
+      hostels: hostels.map((row) => ({
+        id: String(row.id),
+        hostel_name: String(row.hostel_name ?? ""),
+        email: String(row.email ?? "").toLowerCase(),
+        password_hash: String(row.password_hash ?? ""),
+        status: String(row.status ?? "ACTIVE"),
+        created_at: normalizeDateTime(row.created_at),
+      })),
+      users,
+      parents: parents.map((row) => ({
+        id: String(row.id),
+        hostel_id: String(row.hostel_id ?? ""),
+        mobile: String(row.mobile ?? ""),
+        password_hash: String(row.password_hash ?? ""),
+        created_at: normalizeDateTime(row.created_at),
+      })),
+      students: students.map((row) => ({
+        id: String(row.id),
+        hostel_id: String(row.hostel_id ?? ""),
+        student_id: String(row.student_id ?? ""),
+        name: String(row.name ?? ""),
+        room_number: String(row.room_number ?? ""),
+        mobile: String(row.mobile ?? ""),
+        parent_mobile: String(row.parent_mobile ?? ""),
+        profile_photo: row.profile_photo ?? null,
+        password_hash: String(row.password_hash ?? ""),
+        status: String(row.status ?? "ACTIVE"),
+        created_at: normalizeDateTime(row.created_at),
+      })),
+      staff: staffRows.map((row) => ({
+        id: String(row.id),
+        hostel_id: String(row.hostel_id ?? ""),
+        role: String(row.role ?? "HOSTEL_STAFF"),
+        name: String(row.name ?? ""),
+        email: String(row.email ?? "").toLowerCase(),
+        password_hash: String(row.password_hash ?? ""),
+        created_at: normalizeDateTime(row.created_at),
+      })),
+      leaveRequests: leaveRequests.map((row) => ({
+        id: String(row.id),
+        hostel_id: String(row.hostel_id ?? ""),
+        student_id: String(row.student_id ?? ""),
+        reason: String(row.reason ?? ""),
+        from_date: normalizeDateTime(row.from_date),
+        to_date: normalizeDateTime(row.to_date),
+        out_time: normalizeDateTime(row.out_time),
+        return_time: normalizeDateTime(row.return_time),
+        parent_status: String(row.parent_status ?? "PENDING"),
+        hostel_status: String(row.hostel_status ?? "PENDING"),
+        final_status: String(row.final_status ?? "PENDING"),
+        note: row.note ?? null,
+        created_at: normalizeDateTime(row.created_at),
+      })),
+      gatePasses: gatePasses.map((row) => ({
+        id: String(row.id),
+        leave_request_id: String(row.leave_request_id ?? ""),
+        qr_code: String(row.qr_code ?? ""),
+        out_time_actual: row.out_time_actual ? normalizeDateTime(row.out_time_actual) : null,
+        in_time_actual: row.in_time_actual ? normalizeDateTime(row.in_time_actual) : null,
+        status: String(row.status ?? "APPROVED"),
+        created_at: normalizeDateTime(row.created_at),
+      })),
+      auditLogs: auditLogs.map((row) => ({
+        id: String(row.id),
+        action: String(row.action ?? ""),
+        entity: String(row.entity ?? ""),
+        entity_id: row.entity_id ?? null,
+        actor_id: row.actor_id ?? null,
+        actor_role: String(row.actor_role ?? "SYSTEM"),
+        hostel_id: row.hostel_id ?? null,
+        meta: parseJsonMaybe(row.metadata),
+        created_at: normalizeDateTime(row.created_at),
+      })),
+      refreshTokens: refreshTokens.map((row) => ({
+        jti: String(row.id ?? ""),
+        userId: String(row.user_id ?? ""),
+        userRole: String(row.user_role ?? "HOSTEL_STAFF"),
+        tokenHash: String(row.token_hash ?? ""),
+        expiresAt: normalizeDateTime(row.expires_at),
+        revokedAt: row.revoked_at ? normalizeDateTime(row.revoked_at) : null,
+        createdAt: normalizeDateTime(row.created_at),
+      })),
+    };
+    return db;
+  } catch (error) {
+    console.warn("[db] hydrate failed, using local seed:", error.message);
+    db = loadData();
+    return db;
+  }
+}
+
+async function persist() {
+  if (!dbPool) return db;
+
+  const conn = await dbPool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    await conn.query("DELETE FROM refresh_tokens");
+    await conn.query("DELETE FROM audit_logs");
+    await conn.query("DELETE FROM gate_passes");
+    await conn.query("DELETE FROM leave_requests");
+    await conn.query("DELETE FROM students");
+    await conn.query("DELETE FROM parents");
+    await conn.query("DELETE FROM staff");
+    await conn.query("DELETE FROM super_admins");
+    await conn.query("DELETE FROM hostels");
+
+    for (const hostel of db.hostels) {
+      await conn.query(
+        "INSERT INTO hostels (id, hostel_name, email, password_hash, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+          hostel.id,
+          hostel.hostel_name,
+          hostel.email,
+          hostel.password_hash,
+          hostel.status ?? "ACTIVE",
+          normalizeDateTime(hostel.created_at),
+          normalizeDateTime(hostel.updated_at ?? hostel.created_at),
+        ],
+      );
+    }
+
+    for (const user of db.users.filter((item) => item.role === "SUPER_ADMIN")) {
+      await conn.query(
+        "INSERT INTO super_admins (id, email, password_hash, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+        [user.id, user.email, user.passwordHash, user.name, normalizeDateTime(user.created_at), normalizeDateTime(user.updated_at ?? user.created_at)],
+      );
+    }
+
+    for (const user of db.users.filter((item) => item.role !== "SUPER_ADMIN")) {
+      await conn.query(
+        "INSERT INTO staff (id, hostel_id, role, name, email, password_hash, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+          user.id,
+          user.hostelId,
+          user.role,
+          user.name,
+          user.email,
+          user.passwordHash,
+          user.status ?? "ACTIVE",
+          normalizeDateTime(user.created_at),
+          normalizeDateTime(user.updated_at ?? user.created_at),
+        ],
+      );
+    }
+
+    for (const parent of db.parents) {
+      await conn.query(
+        "INSERT INTO parents (id, hostel_id, mobile, password_hash, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+          parent.id,
+          parent.hostel_id,
+          parent.mobile,
+          parent.password_hash,
+          parent.status ?? "ACTIVE",
+          normalizeDateTime(parent.created_at),
+          normalizeDateTime(parent.updated_at ?? parent.created_at),
+        ],
+      );
+    }
+
+    for (const student of db.students) {
+      await conn.query(
+        "INSERT INTO students (id, hostel_id, student_id, name, room_number, mobile, parent_mobile, profile_photo, password_hash, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+          student.id,
+          student.hostel_id,
+          student.student_id,
+          student.name,
+          student.room_number,
+          student.mobile,
+          student.parent_mobile,
+          student.profile_photo,
+          student.password_hash,
+          student.status ?? "ACTIVE",
+          normalizeDateTime(student.created_at),
+          normalizeDateTime(student.updated_at ?? student.created_at),
+        ],
+      );
+    }
+
+    for (const leave of db.leaveRequests) {
+      await conn.query(
+        "INSERT INTO leave_requests (id, hostel_id, student_id, reason, from_date, to_date, out_time, return_time, parent_status, hostel_status, final_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+          leave.id,
+          leave.hostel_id ?? studentById(leave.student_id)?.hostel_id ?? null,
+          leave.student_id,
+          leave.reason,
+          normalizeDateTime(leave.from_date),
+          normalizeDateTime(leave.to_date),
+          normalizeDateTime(leave.out_time),
+          normalizeDateTime(leave.return_time),
+          leave.parent_status,
+          leave.hostel_status,
+          leave.final_status,
+          normalizeDateTime(leave.created_at),
+          normalizeDateTime(leave.updated_at ?? leave.created_at),
+        ],
+      );
+    }
+
+    for (const gatePass of db.gatePasses) {
+      await conn.query(
+        "INSERT INTO gate_passes (id, leave_request_id, qr_code, out_time_actual, in_time_actual, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+          gatePass.id,
+          gatePass.leave_request_id,
+          gatePass.qr_code,
+          gatePass.out_time_actual,
+          gatePass.in_time_actual,
+          gatePass.status ?? "APPROVED",
+          normalizeDateTime(gatePass.created_at),
+          normalizeDateTime(gatePass.updated_at ?? gatePass.created_at),
+        ],
+      );
+    }
+
+    for (const log of db.auditLogs) {
+      await conn.query(
+        "INSERT INTO audit_logs (id, hostel_id, actor_role, actor_id, action, entity, entity_id, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+          log.id,
+          log.hostel_id ?? null,
+          log.actor_role,
+          log.actor_id,
+          log.action,
+          log.entity,
+          log.entity_id,
+          log.meta != null ? JSON.stringify(log.meta) : null,
+          normalizeDateTime(log.created_at),
+        ],
+      );
+    }
+
+    for (const token of db.refreshTokens) {
+      await conn.query(
+        "INSERT INTO refresh_tokens (id, user_id, user_role, token_hash, expires_at, revoked_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+          token.jti,
+          token.userId,
+          token.userRole ?? "HOSTEL_STAFF",
+          token.tokenHash ?? "",
+          normalizeDateTime(token.expiresAt),
+          token.revokedAt ? normalizeDateTime(token.revokedAt) : null,
+          normalizeDateTime(token.createdAt),
+        ],
+      );
+    }
+
+    await conn.commit();
+  } catch (error) {
+    await conn.rollback();
+    console.warn("[db] persist failed:", error.message);
+  } finally {
+    conn.release();
+  }
   return db;
 }
 
 function addAudit(action, entity, entityId, actor, meta = {}) {
   db.auditLogs.unshift({
     id: uuid("audit"),
+    hostel_id: actor?.hostelId ?? null,
     action,
     entity,
     entity_id: entityId ?? null,
@@ -468,7 +810,9 @@ function issueSession(user) {
   db.refreshTokens.push({
     jti: refreshJti,
     userId: user.id,
-    expiresAt: Date.now() + REFRESH_TTL_SECONDS * 1000,
+    userRole: user.role,
+    tokenHash: refreshToken,
+    expiresAt: new Date(Date.now() + REFRESH_TTL_SECONDS * 1000).toISOString(),
     revokedAt: null,
     createdAt: nowIso(),
   });
@@ -763,7 +1107,7 @@ function issueGatePass(leaveRequest) {
     qr_code: `GP-${crypto.randomBytes(4).toString("hex").toUpperCase()}`,
     out_time_actual: null,
     in_time_actual: null,
-    status: "ISSUED",
+    status: "APPROVED",
     created_at: nowIso(),
   };
   db.gatePasses.push(gatePass);
@@ -1366,7 +1710,9 @@ function handleReviewLeaveRequest(req, res, leaveRequestId, body) {
   if (status === "REJECTED") {
     leave.final_status = "REJECTED";
     const gatePass = gatePassByLeaveId(leave.id);
-    if (gatePass) gatePass.status = "CANCELLED";
+    if (gatePass) {
+      db.gatePasses = db.gatePasses.filter((item) => item.id !== gatePass.id);
+    }
   } else {
     if (leave.parent_status === "APPROVED") {
       leave.final_status = "APPROVED";
@@ -1666,8 +2012,17 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-if (typeof LISTEN_TARGET === "number") {
-  server.listen(LISTEN_TARGET, HOST);
-} else {
-  server.listen(LISTEN_TARGET);
+async function bootstrap() {
+  await hydrateDataFromDatabase();
+
+  if (typeof LISTEN_TARGET === "number") {
+    server.listen(LISTEN_TARGET, HOST);
+  } else {
+    server.listen(LISTEN_TARGET);
+  }
 }
+
+bootstrap().catch((error) => {
+  console.error("[startup] failed to initialize app:", error);
+  process.exitCode = 1;
+});

@@ -1,108 +1,187 @@
--- Hostel Leave Management System schema
--- Safe to run on MySQL / MariaDB.
+-- Hostel Leave Management System live schema
+-- Matches the current phpMyAdmin database structure.
 
-CREATE TABLE IF NOT EXISTS hostels (
-  id VARCHAR(64) PRIMARY KEY,
+CREATE DATABASE IF NOT EXISTS mayur_hostelhub
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+USE mayur_hostelhub;
+
+SET FOREIGN_KEY_CHECKS = 0;
+
+DROP TABLE IF EXISTS refresh_tokens;
+DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS notifications;
+DROP TABLE IF EXISTS gate_passes;
+DROP TABLE IF EXISTS leave_requests;
+DROP TABLE IF EXISTS staff;
+DROP TABLE IF EXISTS parents;
+DROP TABLE IF EXISTS students;
+DROP TABLE IF EXISTS hostels;
+DROP TABLE IF EXISTS super_admins;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+CREATE TABLE super_admins (
+  id VARCHAR(64) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  name VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_super_admins_email (email)
+) ENGINE=InnoDB;
+
+CREATE TABLE hostels (
+  id VARCHAR(64) NOT NULL,
   hostel_name VARCHAR(255) NOT NULL,
-  email VARCHAR(255) NOT NULL UNIQUE,
+  email VARCHAR(255) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
-  status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS users (
-  id VARCHAR(64) PRIMARY KEY,
-  hostel_id VARCHAR(64) NULL,
-  role VARCHAR(32) NOT NULL,
-  name VARCHAR(255) NOT NULL,
-  email VARCHAR(255) NOT NULL UNIQUE,
-  password_hash VARCHAR(255) NOT NULL,
-  status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
-  token_version INT NOT NULL DEFAULT 0,
+  status ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_users_hostel FOREIGN KEY (hostel_id) REFERENCES hostels(id) ON DELETE SET NULL
-);
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_hostels_email (email)
+) ENGINE=InnoDB;
 
-CREATE TABLE IF NOT EXISTS parents (
-  id VARCHAR(64) PRIMARY KEY,
+CREATE TABLE students (
+  id VARCHAR(64) NOT NULL,
   hostel_id VARCHAR(64) NOT NULL,
-  mobile VARCHAR(32) NOT NULL,
+  student_id VARCHAR(100) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  room_number VARCHAR(100) NOT NULL,
+  mobile VARCHAR(30) NOT NULL,
+  parent_mobile VARCHAR(30) NOT NULL,
+  profile_photo LONGTEXT NULL,
   password_hash VARCHAR(255) NOT NULL,
+  status ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_parent_mobile (hostel_id, mobile),
-  CONSTRAINT fk_parents_hostel FOREIGN KEY (hostel_id) REFERENCES hostels(id) ON DELETE CASCADE
-);
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_students_hostel_student_id (hostel_id, student_id),
+  KEY idx_students_hostel_mobile (hostel_id, mobile),
+  CONSTRAINT fk_students_hostel
+    FOREIGN KEY (hostel_id) REFERENCES hostels(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB;
 
-CREATE TABLE IF NOT EXISTS students (
-  id VARCHAR(64) PRIMARY KEY,
+CREATE TABLE parents (
+  id VARCHAR(64) NOT NULL,
+  hostel_id VARCHAR(64) NOT NULL,
+  mobile VARCHAR(30) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  status ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_parents_hostel_mobile (hostel_id, mobile),
+  CONSTRAINT fk_parents_hostel
+    FOREIGN KEY (hostel_id) REFERENCES hostels(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE staff (
+  id VARCHAR(64) NOT NULL,
+  hostel_id VARCHAR(64) NOT NULL,
+  role ENUM('HOSTEL_ADMIN','SECURITY_GUARD','HOSTEL_STAFF') NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  status ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_staff_hostel_email (hostel_id, email),
+  KEY idx_staff_hostel_role (hostel_id, role),
+  CONSTRAINT fk_staff_hostel
+    FOREIGN KEY (hostel_id) REFERENCES hostels(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE leave_requests (
+  id VARCHAR(64) NOT NULL,
   hostel_id VARCHAR(64) NOT NULL,
   student_id VARCHAR(64) NOT NULL,
-  name VARCHAR(255) NOT NULL,
-  room_number VARCHAR(64) NOT NULL,
-  mobile VARCHAR(32) NOT NULL,
-  parent_mobile VARCHAR(32) NOT NULL,
-  profile_photo VARCHAR(512) NULL,
-  password_hash VARCHAR(255) NOT NULL,
-  status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+  reason VARCHAR(500) NOT NULL,
+  from_date DATETIME NOT NULL,
+  to_date DATETIME NOT NULL,
+  out_time DATETIME NOT NULL,
+  return_time DATETIME NOT NULL,
+  parent_status ENUM('PENDING','APPROVED','REJECTED') NOT NULL DEFAULT 'PENDING',
+  hostel_status ENUM('PENDING','APPROVED','REJECTED') NOT NULL DEFAULT 'PENDING',
+  final_status ENUM('PENDING','APPROVED','REJECTED','RETURNED','CANCELLED') NOT NULL DEFAULT 'PENDING',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_student_code (hostel_id, student_id),
-  CONSTRAINT fk_students_hostel FOREIGN KEY (hostel_id) REFERENCES hostels(id) ON DELETE CASCADE
-);
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_leave_requests_hostel_final (hostel_id, final_status),
+  KEY idx_leave_requests_student_created (student_id, created_at),
+  CONSTRAINT fk_leave_requests_hostel
+    FOREIGN KEY (hostel_id) REFERENCES hostels(id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_leave_requests_student
+    FOREIGN KEY (student_id) REFERENCES students(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB;
 
-CREATE TABLE IF NOT EXISTS staff (
-  id VARCHAR(64) PRIMARY KEY,
-  hostel_id VARCHAR(64) NOT NULL,
-  role VARCHAR(32) NOT NULL,
-  name VARCHAR(255) NOT NULL,
-  email VARCHAR(255) NOT NULL UNIQUE,
-  password_hash VARCHAR(255) NOT NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_staff_hostel FOREIGN KEY (hostel_id) REFERENCES hostels(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS leave_requests (
-  id VARCHAR(64) PRIMARY KEY,
-  student_id VARCHAR(64) NOT NULL,
-  reason TEXT NOT NULL,
-  from_date DATE NOT NULL,
-  to_date DATE NOT NULL,
-  out_time VARCHAR(16) NOT NULL,
-  return_time VARCHAR(16) NOT NULL,
-  parent_status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
-  hostel_status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
-  final_status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
-  note TEXT NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_leave_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS gate_passes (
-  id VARCHAR(64) PRIMARY KEY,
+CREATE TABLE gate_passes (
+  id VARCHAR(64) NOT NULL,
   leave_request_id VARCHAR(64) NOT NULL,
-  qr_code VARCHAR(128) NOT NULL UNIQUE,
+  qr_code VARCHAR(255) NOT NULL,
   out_time_actual DATETIME NULL,
   in_time_actual DATETIME NULL,
-  status VARCHAR(32) NOT NULL DEFAULT 'ISSUED',
+  status ENUM('APPROVED','OUT','RETURNED') NOT NULL DEFAULT 'APPROVED',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_gate_leave FOREIGN KEY (leave_request_id) REFERENCES leave_requests(id) ON DELETE CASCADE
-);
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_gate_passes_leave_request_id (leave_request_id),
+  UNIQUE KEY uq_gate_passes_qr_code (qr_code),
+  CONSTRAINT fk_gate_passes_leave_request
+    FOREIGN KEY (leave_request_id) REFERENCES leave_requests(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB;
 
-CREATE TABLE IF NOT EXISTS audit_logs (
-  id VARCHAR(64) PRIMARY KEY,
-  action VARCHAR(64) NOT NULL,
-  entity VARCHAR(64) NOT NULL,
-  entity_id VARCHAR(64) NULL,
+CREATE TABLE notifications (
+  id VARCHAR(64) NOT NULL,
+  hostel_id VARCHAR(64) NULL,
+  actor_role ENUM('SUPER_ADMIN','HOSTEL_ADMIN','STUDENT','PARENT','SECURITY_GUARD','HOSTEL_STAFF') NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  body TEXT NOT NULL,
+  channel ENUM('PUSH','EMAIL','SMS') NOT NULL DEFAULT 'PUSH',
+  recipient VARCHAR(255) NOT NULL,
+  meta_json JSON NULL,
+  sent_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_notifications_hostel_actor (hostel_id, actor_role)
+) ENGINE=InnoDB;
+
+CREATE TABLE audit_logs (
+  id VARCHAR(64) NOT NULL,
+  hostel_id VARCHAR(64) NULL,
+  actor_role ENUM('SUPER_ADMIN','HOSTEL_ADMIN','STUDENT','PARENT','SECURITY_GUARD','HOSTEL_STAFF') NOT NULL,
   actor_id VARCHAR(64) NULL,
-  actor_role VARCHAR(64) NOT NULL,
-  meta JSON NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+  action VARCHAR(100) NOT NULL,
+  entity VARCHAR(100) NOT NULL,
+  entity_id VARCHAR(64) NULL,
+  metadata JSON NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_audit_logs_hostel_created (hostel_id, created_at),
+  CONSTRAINT fk_audit_logs_hostel
+    FOREIGN KEY (hostel_id) REFERENCES hostels(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB;
 
-CREATE TABLE IF NOT EXISTS refresh_tokens (
-  jti VARCHAR(128) PRIMARY KEY,
+CREATE TABLE refresh_tokens (
+  id VARCHAR(64) NOT NULL,
   user_id VARCHAR(64) NOT NULL,
+  user_role ENUM('SUPER_ADMIN','HOSTEL_ADMIN','STUDENT','PARENT','SECURITY_GUARD','HOSTEL_STAFF') NOT NULL,
+  token_hash VARCHAR(255) NOT NULL,
   expires_at DATETIME NOT NULL,
   revoked_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_refresh_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
+  PRIMARY KEY (id),
+  KEY idx_refresh_tokens_user (user_id),
+  KEY idx_refresh_tokens_expires (expires_at)
+) ENGINE=InnoDB;

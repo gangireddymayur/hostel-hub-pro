@@ -795,7 +795,208 @@ function findUserByEmail(email, role) {
 }
 
 function findUserById(id) {
-  return db.users.find((user) => user.id === id) ?? null;
+  const staffOrAdmin = db.users.find((user) => user.id === id);
+  if (staffOrAdmin) return staffOrAdmin;
+
+  const student = db.students.find((s) => s.id === id);
+  if (student) {
+    return {
+      id: student.id,
+      hostelId: student.hostel_id,
+      role: "STUDENT",
+      name: student.name,
+      email: student.mobile,
+      passwordHash: student.password_hash,
+      status: student.status,
+      tokenVersion: 0,
+      created_at: student.created_at,
+    };
+  }
+
+  const parent = db.parents.find((p) => p.id === id);
+  if (parent) {
+    return {
+      id: parent.id,
+      hostelId: parent.hostel_id,
+      role: "PARENT",
+      name: `Parent of ${parent.mobile}`,
+      email: parent.mobile,
+      passwordHash: parent.password_hash,
+      status: parent.status,
+      tokenVersion: 0,
+      created_at: parent.created_at,
+    };
+  }
+
+  return null;
+}
+
+async function getStudentByIdDb(id) {
+  if (dbPool) {
+    const [rows] = await dbPool.query("SELECT * FROM students WHERE id = ? LIMIT 1", [id]);
+    return rows[0] ? {
+      id: String(rows[0].id),
+      hostel_id: String(rows[0].hostel_id),
+      student_id: String(rows[0].student_id),
+      name: String(rows[0].name),
+      room_number: String(rows[0].room_number),
+      mobile: String(rows[0].mobile),
+      parent_mobile: String(rows[0].parent_mobile),
+      profile_photo: rows[0].profile_photo ?? null,
+      password_hash: String(rows[0].password_hash),
+      status: String(rows[0].status),
+      created_at: normalizeDateTime(rows[0].created_at),
+    } : null;
+  }
+  return db.students.find((s) => s.id === id) ?? null;
+}
+
+async function loginStudentDb(identifier, hostelEmail) {
+  const normalizedIdentifier = String(identifier ?? "").trim();
+  const normalizedHostelEmail = String(hostelEmail ?? "").trim().toLowerCase();
+
+  if (dbPool) {
+    const [rows] = await dbPool.query(
+      `SELECT s.* FROM students s
+       JOIN hostels h ON s.hostel_id = h.id
+       WHERE (s.student_id = ? OR s.mobile = ?) AND LOWER(h.email) = ? LIMIT 1`,
+      [normalizedIdentifier, normalizedIdentifier, normalizedHostelEmail]
+    );
+    if (rows[0]) {
+      return {
+        id: String(rows[0].id),
+        hostelId: String(rows[0].hostel_id),
+        role: "STUDENT",
+        name: String(rows[0].name),
+        email: String(rows[0].mobile),
+        passwordHash: String(rows[0].password_hash),
+        status: String(rows[0].status),
+        tokenVersion: 0,
+        created_at: normalizeDateTime(rows[0].created_at),
+      };
+    }
+    return null;
+  }
+
+  const hostel = db.hostels.find((h) => h.email.toLowerCase() === normalizedHostelEmail);
+  if (!hostel) return null;
+  const student = db.students.find(
+    (s) =>
+      s.hostel_id === hostel.id &&
+      (s.student_id === normalizedIdentifier || s.mobile === normalizedIdentifier)
+  );
+  if (student) {
+    return {
+      id: student.id,
+      hostelId: student.hostel_id,
+      role: "STUDENT",
+      name: student.name,
+      email: student.mobile,
+      passwordHash: student.password_hash,
+      status: student.status,
+      tokenVersion: 0,
+      created_at: student.created_at,
+    };
+  }
+  return null;
+}
+
+async function loginParentDb(identifier, hostelEmail) {
+  const normalizedIdentifier = String(identifier ?? "").trim();
+  const normalizedHostelEmail = String(hostelEmail ?? "").trim().toLowerCase();
+
+  if (dbPool) {
+    const [rows] = await dbPool.query(
+      `SELECT p.* FROM parents p
+       JOIN hostels h ON p.hostel_id = h.id
+       WHERE p.mobile = ? AND LOWER(h.email) = ? LIMIT 1`,
+      [normalizedIdentifier, normalizedHostelEmail]
+    );
+    if (rows[0]) {
+      return {
+        id: String(rows[0].id),
+        hostelId: String(rows[0].hostel_id),
+        role: "PARENT",
+        name: `Parent of ${rows[0].mobile}`,
+        email: String(rows[0].mobile),
+        passwordHash: String(rows[0].password_hash),
+        status: String(rows[0].status),
+        tokenVersion: 0,
+        created_at: normalizeDateTime(rows[0].created_at),
+      };
+    }
+    return null;
+  }
+
+  const hostel = db.hostels.find((h) => h.email.toLowerCase() === normalizedHostelEmail);
+  if (!hostel) return null;
+  const parent = db.parents.find((p) => p.hostel_id === hostel.id && p.mobile === normalizedIdentifier);
+  if (parent) {
+    return {
+      id: parent.id,
+      hostelId: parent.hostel_id,
+      role: "PARENT",
+      name: `Parent of ${parent.mobile}`,
+      email: parent.mobile,
+      passwordHash: parent.password_hash,
+      status: parent.status,
+      tokenVersion: 0,
+      created_at: parent.created_at,
+    };
+  }
+  return null;
+}
+
+async function loginStaffDb(identifier, role, hostelEmail) {
+  const normalizedIdentifier = String(identifier ?? "").trim().toLowerCase();
+  const normalizedHostelEmail = String(hostelEmail ?? "").trim().toLowerCase();
+  const normalizedRole = normalizeRole(role);
+
+  if (dbPool) {
+    const [rows] = await dbPool.query(
+      `SELECT s.* FROM staff s
+       JOIN hostels h ON s.hostel_id = h.id
+       WHERE LOWER(s.email) = ? AND s.role = ? AND LOWER(h.email) = ? LIMIT 1`,
+      [normalizedIdentifier, normalizedRole, normalizedHostelEmail]
+    );
+    if (rows[0]) {
+      return {
+        id: String(rows[0].id),
+        hostelId: String(rows[0].hostel_id),
+        role: String(rows[0].role),
+        name: String(rows[0].name),
+        email: String(rows[0].email).toLowerCase(),
+        passwordHash: String(rows[0].password_hash),
+        status: String(rows[0].status ?? "ACTIVE"),
+        tokenVersion: 0,
+        created_at: normalizeDateTime(rows[0].created_at),
+      };
+    }
+    return null;
+  }
+
+  const hostel = db.hostels.find((h) => h.email.toLowerCase() === normalizedHostelEmail);
+  if (!hostel) return null;
+  const staff = db.staff.find(
+    (s) =>
+      s.hostel_id === hostel.id &&
+      s.email.toLowerCase() === normalizedIdentifier &&
+      normalizeRole(s.role) === normalizedRole
+  );
+  if (staff) {
+    return {
+      id: staff.id,
+      hostelId: staff.hostel_id,
+      role: staff.role,
+      name: staff.name,
+      email: staff.email,
+      passwordHash: staff.password_hash,
+      status: "ACTIVE",
+      tokenVersion: 0,
+      created_at: staff.created_at,
+    };
+  }
+  return null;
 }
 
 function serializeProfile(user) {
@@ -1499,7 +1700,35 @@ async function handleLogin(req, res, body) {
       return sendJson(res, 401, { error: "Invalid email or password" });
     }
   } else if (type === "HOSTEL_ADMIN") {
-    user = await loginHostelAdmin(identifier);
+    if (body.hostelEmail) {
+      user = await loginStaffDb(identifier, "HOSTEL_ADMIN", body.hostelEmail);
+    } else {
+      user = await loginHostelAdmin(identifier);
+    }
+    if (!user || !verifyPassword(password, user.passwordHash)) {
+      return sendJson(res, 401, { error: "Invalid email or password" });
+    }
+  } else if (type === "SECURITY_GUARD" || type === "HOSTEL_STAFF") {
+    if (!body.hostelEmail) {
+      return sendJson(res, 400, { error: "hostelEmail is required for staff login" });
+    }
+    user = await loginStaffDb(identifier, type, body.hostelEmail);
+    if (!user || !verifyPassword(password, user.passwordHash)) {
+      return sendJson(res, 401, { error: "Invalid email or password" });
+    }
+  } else if (type === "STUDENT") {
+    if (!body.hostelEmail) {
+      return sendJson(res, 400, { error: "hostelEmail is required for student login" });
+    }
+    user = await loginStudentDb(identifier, body.hostelEmail);
+    if (!user || !verifyPassword(password, user.passwordHash)) {
+      return sendJson(res, 401, { error: "Invalid email or password" });
+    }
+  } else if (type === "PARENT") {
+    if (!body.hostelEmail) {
+      return sendJson(res, 400, { error: "hostelEmail is required for parent login" });
+    }
+    user = await loginParentDb(identifier, body.hostelEmail);
     if (!user || !verifyPassword(password, user.passwordHash)) {
       return sendJson(res, 401, { error: "Invalid email or password" });
     }
@@ -1551,8 +1780,30 @@ async function handleChangePassword(req, res, body) {
   const newPassword = String(body.newPassword ?? "");
   if (!currentPassword || !newPassword) return sendJson(res, 400, { error: "currentPassword and newPassword are required" });
   if (!verifyPassword(currentPassword, user.passwordHash)) return sendJson(res, 401, { error: "Current password is incorrect" });
-  user.passwordHash = hashPassword(newPassword);
-  user.tokenVersion = (user.tokenVersion ?? 0) + 1;
+
+  const hash = hashPassword(newPassword);
+
+  const dbUser = db.users.find((u) => u.id === user.id);
+  if (dbUser) {
+    dbUser.passwordHash = hash;
+    dbUser.tokenVersion = (dbUser.tokenVersion ?? 0) + 1;
+  }
+  const dbStudent = db.students.find((s) => s.id === user.id);
+  if (dbStudent) {
+    dbStudent.password_hash = hash;
+  }
+  const dbParent = db.parents.find((p) => p.id === user.id);
+  if (dbParent) {
+    dbParent.password_hash = hash;
+  }
+
+  // Also sync db.staff record for staff members
+  const dbStaff = db.staff.find((s) => s.id === user.id);
+  if (dbStaff) {
+    dbStaff.password_hash = hash;
+  }
+
+  // Revoke refresh tokens
   db.refreshTokens.forEach((entry) => {
     if (entry.userId === user.id && !entry.revokedAt) entry.revokedAt = nowIso();
   });
@@ -1834,6 +2085,221 @@ function handleReports(req, res) {
   });
 }
 
+async function handleStudentUploadSelfPhoto(req, res, data) {
+  const user = requireAuth(req, res, ["STUDENT"]);
+  if (!user) return;
+  const student = db.students.find((s) => s.id === user.id);
+  if (!student) return sendJson(res, 404, { error: "Student not found" });
+  if (data.kind !== "multipart" || !data.value.files.photo) return sendJson(res, 400, { error: "photo file required" });
+  try {
+    const file = data.value.files.photo;
+    const mimeType = String(file.contentType ?? "image/jpeg").toLowerCase();
+    student.profile_photo = `data:${mimeType};base64,${file.data.toString("base64")}`;
+    addAudit("UPDATE", "STUDENT_PHOTO", student.id, user, { profile_photo: student.profile_photo });
+    await persist();
+    return sendJson(res, 200, { data: student });
+  } catch (error) {
+    return sendJson(res, 500, { error: error.message });
+  }
+}
+
+async function handleCreateLeaveRequest(req, res, body) {
+  const user = requireAuth(req, res, ["STUDENT"]);
+  if (!user) return;
+
+  const reason = String(body.reason ?? "").trim();
+  const from_date = String(body.from_date ?? "").trim();
+  const to_date = String(body.to_date ?? "").trim();
+  const out_time = String(body.out_time ?? "").trim();
+  const return_time = String(body.return_time ?? "").trim();
+
+  if (!reason || !from_date || !to_date || !out_time || !return_time) {
+    return sendJson(res, 400, { error: "reason, from_date, to_date, out_time, and return_time are required" });
+  }
+
+  const student = db.students.find((s) => s.id === user.id);
+  if (!student) return sendJson(res, 404, { error: "Student not found" });
+
+  const newLeave = {
+    id: uuid("leave"),
+    hostel_id: student.hostel_id,
+    student_id: student.id,
+    reason,
+    from_date: normalizeDateTime(from_date),
+    to_date: normalizeDateTime(to_date),
+    out_time: normalizeDateTime(out_time),
+    return_time: normalizeDateTime(return_time),
+    parent_status: "PENDING",
+    hostel_status: "PENDING",
+    final_status: "PENDING",
+    created_at: nowIso(),
+  };
+
+  db.leaveRequests.push(newLeave);
+  addAudit("CREATE", "LEAVE_REQUEST", newLeave.id, user, { reason });
+  await persist();
+
+  return sendJson(res, 200, {
+    data: {
+      ...newLeave,
+      student,
+      gatePass: null,
+    }
+  });
+}
+
+function handleGetStudentLeaveRequests(req, res) {
+  const user = requireAuth(req, res, ["STUDENT"]);
+  if (!user) return;
+
+  const student = db.students.find((s) => s.id === user.id);
+  if (!student) return sendJson(res, 404, { error: "Student not found" });
+
+  const leaves = db.leaveRequests
+    .filter((leave) => leave.student_id === student.id)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .map((leave) => ({
+      ...leave,
+      student,
+      gatePass: gatePassByLeaveId(leave.id) ?? null,
+    }));
+
+  return sendJson(res, 200, { data: leaves });
+}
+
+function handleGetParentRequests(req, res) {
+  const user = requireAuth(req, res, ["PARENT"]);
+  if (!user) return;
+
+  const studentIds = new Set(
+    db.students
+      .filter((s) => s.hostel_id === user.hostelId && s.parent_mobile === user.email)
+      .map((s) => s.id)
+  );
+
+  const leaves = db.leaveRequests
+    .filter((leave) => studentIds.has(leave.student_id))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .map((leave) => {
+      const student = db.students.find((s) => s.id === leave.student_id);
+      return {
+        ...leave,
+        student,
+        gatePass: gatePassByLeaveId(leave.id) ?? null,
+      };
+    });
+
+  return sendJson(res, 200, { data: leaves });
+}
+
+async function handleReviewParentRequest(req, res, leaveRequestId, body) {
+  const user = requireAuth(req, res, ["PARENT"]);
+  if (!user) return;
+
+  const leave = db.leaveRequests.find((item) => item.id === leaveRequestId);
+  if (!leave) return sendJson(res, 404, { error: "Leave request not found" });
+
+  const student = db.students.find((s) => s.id === leave.student_id);
+  if (!student || student.hostel_id !== user.hostelId || student.parent_mobile !== user.email) {
+    return sendJson(res, 403, { error: "Forbidden" });
+  }
+
+  const status = String(body.status ?? "").toUpperCase();
+  if (!["APPROVED", "REJECTED"].includes(status)) return sendJson(res, 400, { error: "Invalid status" });
+
+  leave.parent_status = status;
+  if (body.note) {
+    leave.note = String(body.note).trim();
+  }
+
+  if (status === "REJECTED") {
+    leave.final_status = "REJECTED";
+    const gatePass = gatePassByLeaveId(leave.id);
+    if (gatePass) {
+      db.gatePasses = db.gatePasses.filter((item) => item.id !== gatePass.id);
+    }
+  } else {
+    if (leave.hostel_status === "APPROVED") {
+      leave.final_status = "APPROVED";
+      issueGatePass(leave);
+    } else if (leave.hostel_status === "REJECTED") {
+      leave.final_status = "REJECTED";
+    } else {
+      leave.final_status = "PENDING";
+    }
+  }
+
+  addAudit("UPDATE", "LEAVE_REQUEST", leave.id, user, {
+    parent_status: leave.parent_status,
+    final_status: leave.final_status,
+  });
+  await persist();
+
+  return sendJson(res, 200, {
+    data: {
+      ...leave,
+      student,
+      gatePass: gatePassByLeaveId(leave.id) ?? null,
+    }
+  });
+}
+
+function handleGuardToday(req, res) {
+  const user = requireAuth(req, res, ["SECURITY_GUARD"]);
+  if (!user) return;
+
+  const studentIds = new Set(
+    db.students.filter((student) => student.hostel_id === user.hostelId).map((student) => student.id)
+  );
+
+  const leaves = db.leaveRequests
+    .filter((leave) => studentIds.has(leave.student_id))
+    .map((leave) => ({
+      ...leave,
+      student: db.students.find((s) => s.id === leave.student_id),
+      gatePass: gatePassByLeaveId(leave.id) ?? null,
+    }))
+    .filter((leave) => leave.gatePass !== null)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+
+  return sendJson(res, 200, { data: leaves });
+}
+
+async function handleGuardScan(req, res, body) {
+  const user = requireAuth(req, res, ["SECURITY_GUARD"]);
+  if (!user) return;
+
+  const qrCode = String(body.qr_code ?? "").trim();
+  if (!qrCode) return sendJson(res, 400, { error: "qr_code is required" });
+
+  const gatePass = db.gatePasses.find((gp) => gp.qr_code === qrCode);
+  if (!gatePass) return sendJson(res, 404, { error: "Gate pass not found" });
+
+  const leave = db.leaveRequests.find((l) => l.id === gatePass.leave_request_id);
+  if (!leave) return sendJson(res, 404, { error: "Associated leave request not found" });
+
+  const student = db.students.find((s) => s.id === leave.student_id);
+  if (!student || student.hostel_id !== user.hostelId) {
+    return sendJson(res, 403, { error: "Forbidden" });
+  }
+
+  if (gatePass.status === "APPROVED") {
+    gatePass.status = "OUT";
+    gatePass.out_time_actual = nowIso();
+    addAudit("SCAN_OUT", "GATE_PASS", gatePass.id, user, { qr_code: qrCode });
+  } else if (gatePass.status === "OUT") {
+    gatePass.status = "RETURNED";
+    gatePass.in_time_actual = nowIso();
+    leave.final_status = "RETURNED";
+    addAudit("SCAN_IN", "GATE_PASS", gatePass.id, user, { qr_code: qrCode });
+  } else if (gatePass.status === "RETURNED") {
+    return sendJson(res, 400, { error: "Gate pass already scanned and returned" });
+  }
+
+  await persist();
+  return sendJson(res, 200, { data: gatePass });
+}
+
 function serveStaticFile(res, filePath) {
   const stream = fs.createReadStream(filePath);
   const ext = path.extname(filePath).toLowerCase();
@@ -2048,6 +2514,74 @@ async function handleApi(req, res, pathname) {
 
     if (pathname === "/api/hostel-admin/reports" && req.method === "GET") {
       return handleReports(req, res);
+    }
+
+    if (pathname === "/api/students/me" && req.method === "GET") {
+      const user = requireAuth(req, res, ["STUDENT", "PARENT"]);
+      if (!user) return;
+      let student = null;
+      if (user.role === "STUDENT") {
+        student = await getStudentByIdDb(user.id);
+      } else if (user.role === "PARENT") {
+        if (dbPool) {
+          const [rows] = await dbPool.query(
+            "SELECT * FROM students WHERE hostel_id = ? AND parent_mobile = ? LIMIT 1",
+            [user.hostelId, user.email]
+          );
+          if (rows[0]) {
+            student = {
+              id: String(rows[0].id),
+              hostel_id: String(rows[0].hostel_id),
+              student_id: String(rows[0].student_id),
+              name: String(rows[0].name),
+              room_number: String(rows[0].room_number),
+              mobile: String(rows[0].mobile),
+              parent_mobile: String(rows[0].parent_mobile),
+              profile_photo: rows[0].profile_photo ?? null,
+              password_hash: String(rows[0].password_hash),
+              status: String(rows[0].status),
+              created_at: normalizeDateTime(rows[0].created_at),
+            };
+          }
+        } else {
+          student = db.students.find((s) => s.hostel_id === user.hostelId && s.parent_mobile === user.email);
+        }
+      }
+      if (!student) return sendJson(res, 404, { error: "Student not found" });
+      return sendJson(res, 200, { data: student });
+    }
+
+    if (pathname === "/api/students/me/photo" && req.method === "POST") {
+      const data = await readRequestData(req);
+      return handleStudentUploadSelfPhoto(req, res, data);
+    }
+
+    if (pathname === "/api/students/leave-requests" && req.method === "POST") {
+      const data = await readRequestData(req);
+      return handleCreateLeaveRequest(req, res, data.kind === "json" ? data.value : {});
+    }
+
+    if (pathname === "/api/students/leave-requests" && req.method === "GET") {
+      return handleGetStudentLeaveRequests(req, res);
+    }
+
+    if (pathname === "/api/parents/requests" && req.method === "GET") {
+      return handleGetParentRequests(req, res);
+    }
+
+    match = pathname.match(/^\/api\/parents\/requests\/([^/]+)\/review$/);
+    if (match && req.method === "PATCH") {
+      const data = await readRequestData(req);
+      return handleReviewParentRequest(req, res, decodeURIComponent(match[1]), data.kind === "json" ? data.value : {});
+    }
+
+    if (pathname === "/api/guards/today" && req.method === "GET") {
+      return handleGuardToday(req, res);
+    }
+
+    if (pathname === "/api/guards/scan" && req.method === "POST") {
+      const data = await readRequestData(req);
+      return handleGuardScan(req, res, data.kind === "json" ? data.value : {});
     }
 
     return sendJson(res, 404, { error: "Not Found" });

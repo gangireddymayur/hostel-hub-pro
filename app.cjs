@@ -1310,24 +1310,37 @@ function createHostelRecord(payload, actor) {
   };
 }
 
-function loginHostelAdmin(identifier, payload) {
-  const hostelEmail = String(payload.hostelEmail ?? "").trim().toLowerCase();
-  const hostelId = String(payload.hostelId ?? "").trim();
+async function loginHostelAdmin(identifier) {
   const normalized = String(identifier ?? "").trim().toLowerCase();
 
-  const candidates = db.users.filter((user) => user.role === "HOSTEL_ADMIN" && user.status === "ACTIVE");
-  const matched = candidates.find((user) => {
-    const hostel = user.hostelId ? findHostelById(user.hostelId) : null;
-    const byIdentifier =
-      user.email.toLowerCase() === normalized ||
-      user.name.toLowerCase() === normalized ||
-      (hostel && hostel.email.toLowerCase() === normalized) ||
-      (hostel && hostel.hostel_name.toLowerCase() === normalized);
-    const byHostelEmail = !hostelEmail || (hostel && hostel.email.toLowerCase() === hostelEmail);
-    const byHostelId = !hostelId || user.hostelId === hostelId;
-    return byIdentifier && byHostelEmail && byHostelId;
-  });
-  return matched ?? null;
+  if (dbPool) {
+    // Query MySQL directly (same as loginSuperAdmin) — ensures live data
+    const [rows] = await dbPool.query(
+      "SELECT id, hostel_id, role, name, email, password_hash FROM staff WHERE LOWER(email) = ? AND role = 'HOSTEL_ADMIN' LIMIT 1",
+      [normalized],
+    );
+    if (rows[0]) {
+      return {
+        id: String(rows[0].id),
+        hostelId: String(rows[0].hostel_id ?? ""),
+        role: "HOSTEL_ADMIN",
+        name: String(rows[0].name ?? ""),
+        email: String(rows[0].email ?? "").toLowerCase(),
+        passwordHash: String(rows[0].password_hash ?? ""),
+        status: "ACTIVE",
+        tokenVersion: 0,
+        created_at: nowIso(),
+      };
+    }
+    return null;
+  }
+
+  // Fallback: search in-memory db.users when no DB pool
+  return (
+    db.users.find(
+      (user) => user.role === "HOSTEL_ADMIN" && user.status === "ACTIVE" && user.email.toLowerCase() === normalized,
+    ) ?? null
+  );
 }
 
 function mapSuperAdminRow(row) {
@@ -1472,7 +1485,7 @@ async function handleLogin(req, res, body) {
     // Auto-detect: try Super Admin first, then Hostel Admin
     user = await loginSuperAdmin(identifier);
     if (!user || !verifyPassword(password, user.passwordHash)) {
-      user = loginHostelAdmin(identifier, body);
+      user = await loginHostelAdmin(identifier);
       if (user && !verifyPassword(password, user.passwordHash)) {
         user = null;
       }
@@ -1486,7 +1499,7 @@ async function handleLogin(req, res, body) {
       return sendJson(res, 401, { error: "Invalid email or password" });
     }
   } else if (type === "HOSTEL_ADMIN") {
-    user = loginHostelAdmin(identifier, body);
+    user = await loginHostelAdmin(identifier);
     if (!user || !verifyPassword(password, user.passwordHash)) {
       return sendJson(res, 401, { error: "Invalid email or password" });
     }

@@ -14,9 +14,15 @@ export type Session = {
 
 const KEY = "hlms_session";
 
+function emitSessionChange() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event("hlms-auth-change"));
+}
+
 export function setSession(session: Session) {
   if (typeof window !== "undefined") {
     localStorage.setItem(KEY, JSON.stringify(session));
+    emitSessionChange();
   }
 }
 
@@ -33,7 +39,10 @@ export function getSession(): Session | null {
 }
 
 export function clearSession() {
-  if (typeof window !== "undefined") localStorage.removeItem(KEY);
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(KEY);
+    emitSessionChange();
+  }
 }
 
 export function setRole(role: Role) {

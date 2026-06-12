@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Bell, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getRole, initTheme, type Role } from "@/lib/role";
+import { getSession, initTheme, type Role } from "@/lib/role";
 import { Toaster } from "@/components/ui/sonner";
 
 export function DashboardShell({ expectedRole, children }: { expectedRole: Role; children?: ReactNode }) {
@@ -16,8 +16,16 @@ export function DashboardShell({ expectedRole, children }: { expectedRole: Role;
 
   useEffect(() => {
     initTheme();
-    const r = getRole();
-    if (r !== expectedRole) { navigate({ to: "/" }); return; }
+    const session = getSession();
+    if (!session) {
+      navigate({ to: "/login" });
+      return;
+    }
+    const r = session.profile.role === "SUPER_ADMIN" ? "super" : "admin";
+    if (r !== expectedRole) {
+      navigate({ to: "/login" });
+      return;
+    }
     setReady(true);
   }, [expectedRole, navigate]);
 

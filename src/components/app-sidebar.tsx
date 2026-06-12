@@ -106,7 +106,7 @@ export function AppSidebar({ role }: { role: Role }) {
           onClick={async () => {
             await logout();
             clearSession();
-            navigate({ to: "/" });
+            navigate({ to: "/login" });
           }}
         >
           <LogOut className="h-4 w-4" />

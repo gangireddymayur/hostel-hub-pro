@@ -9,6 +9,8 @@ process.noDeprecation = true;
 const ROOT = __dirname;
 const CLIENT_DIR = path.join(ROOT, "dist", "client");
 const CLIENT_ASSETS_DIR = path.join(CLIENT_DIR, "assets");
+const VENDOR_NODE_MODULES = path.join(ROOT, "vendor", "node_modules");
+const MYSQL2_PROMISE_PATH = path.join(VENDOR_NODE_MODULES, "mysql2", "promise.js");
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -58,9 +60,13 @@ const REFRESH_TTL_SECONDS = 60 * 60 * 24 * 30;
 
 let mysqlPoolFactory = null;
 try {
-  ({ createPool: mysqlPoolFactory } = require("mysql2/promise"));
+  ({ createPool: mysqlPoolFactory } = require(MYSQL2_PROMISE_PATH));
 } catch {
-  mysqlPoolFactory = null;
+  try {
+    ({ createPool: mysqlPoolFactory } = require("mysql2/promise"));
+  } catch {
+    mysqlPoolFactory = null;
+  }
 }
 
 const dbPool =

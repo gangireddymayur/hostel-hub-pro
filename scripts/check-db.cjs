@@ -1,4 +1,11 @@
-const mysql = require("mysql2/promise");
+const path = require("path");
+
+let mysql;
+try {
+  mysql = require(path.join(__dirname, "..", "vendor", "node_modules", "mysql2", "promise.js"));
+} catch {
+  mysql = require("mysql2/promise");
+}
 
 async function main() {
   const {

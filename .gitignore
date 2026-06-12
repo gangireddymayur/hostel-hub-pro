@@ -8,6 +8,9 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+!vendor/
+!vendor/node_modules/
+!vendor/node_modules/**
 dist-ssr
 .output
 .vinxi

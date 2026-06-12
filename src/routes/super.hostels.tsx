@@ -97,7 +97,16 @@ function HostelsPage() {
               </DialogHeader>
               <HostelForm
                 isCreate
-                onSubmit={(payload) => createMutation.mutate(payload)}
+                onSubmit={(payload) =>
+                  createMutation.mutate({
+                    hostel_name: payload.hostel_name ?? "",
+                    email: payload.email ?? "",
+                    password: payload.password,
+                    admin_name: payload.admin_name ?? "",
+                    admin_email: payload.admin_email ?? "",
+                    admin_password: payload.admin_password,
+                  })
+                }
                 submitLabel={createMutation.isPending ? "Creating..." : "Create Hostel"}
                 onCancel={() => setOpen(false)}
               />

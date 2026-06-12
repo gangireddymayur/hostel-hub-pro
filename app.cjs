@@ -36,8 +36,14 @@ function loadEnvFile(filePath) {
   }
 }
 
-loadEnvFile(path.join(ROOT, ".env"));
-loadEnvFile(path.join(ROOT, ".env.local"));
+for (const candidate of [
+  path.join(ROOT, ".env"),
+  path.join(ROOT, ".env.local"),
+  path.join(process.cwd(), ".env"),
+  path.join(process.cwd(), ".env.local"),
+]) {
+  loadEnvFile(candidate);
+}
 
 const LISTEN_TARGET = getListenTarget();
 const HOST = process.env.HOST ?? "0.0.0.0";

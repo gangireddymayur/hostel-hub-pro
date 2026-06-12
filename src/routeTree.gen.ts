@@ -12,23 +12,23 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SuperRouteImport } from './routes/super'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SuperIndexRouteImport } from './routes/super.index'
-import { Route as AdminIndexRouteImport } from './routes/admin.index'
-import { Route as SuperSettingsRouteImport } from './routes/super.settings'
-import { Route as SuperHostelsRouteImport } from './routes/super.hostels'
-import { Route as SuperDashboardRouteImport } from './routes/super.dashboard'
-import { Route as SuperAnalyticsRouteImport } from './routes/super.analytics'
-import { Route as AdminStudentsRouteImport } from './routes/admin.students'
-import { Route as AdminStaffRouteImport } from './routes/admin.staff'
-import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
-import { Route as AdminRoomsRouteImport } from './routes/admin.rooms'
-import { Route as AdminReportsRouteImport } from './routes/admin.reports'
-import { Route as AdminLeavesRouteImport } from './routes/admin.leaves'
-import { Route as AdminGuardsRouteImport } from './routes/admin.guards'
-import { Route as AdminDashboardRouteImport } from './routes/admin.dashboard'
-import { Route as AdminTrackingReturnedRouteImport } from './routes/admin.tracking.returned'
-import { Route as AdminTrackingOutsideRouteImport } from './routes/admin.tracking.outside'
-import { Route as AdminStudentsImportRouteImport } from './routes/admin.students.import'
+import { Route as SuperIndexRouteImport } from './routes/super/index'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as SuperSettingsRouteImport } from './routes/super/settings'
+import { Route as SuperHostelsRouteImport } from './routes/super/hostels'
+import { Route as SuperDashboardRouteImport } from './routes/super/dashboard'
+import { Route as SuperAnalyticsRouteImport } from './routes/super/analytics'
+import { Route as AdminStaffRouteImport } from './routes/admin/staff'
+import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
+import { Route as AdminRoomsRouteImport } from './routes/admin/rooms'
+import { Route as AdminReportsRouteImport } from './routes/admin/reports'
+import { Route as AdminLeavesRouteImport } from './routes/admin/leaves'
+import { Route as AdminGuardsRouteImport } from './routes/admin/guards'
+import { Route as AdminDashboardRouteImport } from './routes/admin/dashboard'
+import { Route as AdminStudentsIndexRouteImport } from './routes/admin/students/index'
+import { Route as AdminTrackingReturnedRouteImport } from './routes/admin/tracking/returned'
+import { Route as AdminTrackingOutsideRouteImport } from './routes/admin/tracking/outside'
+import { Route as AdminStudentsImportRouteImport } from './routes/admin/students/import'
 
 const SuperRoute = SuperRouteImport.update({
   id: '/super',
@@ -46,89 +46,89 @@ const IndexRoute = IndexRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const SuperIndexRoute = SuperIndexRouteImport.update({
-  id: '/',
+  id: '/super/',
   path: '/',
   getParentRoute: () => SuperRoute,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
-  id: '/',
+  id: '/admin/',
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
 const SuperSettingsRoute = SuperSettingsRouteImport.update({
-  id: '/settings',
+  id: '/super/settings',
   path: '/settings',
   getParentRoute: () => SuperRoute,
 } as any)
 const SuperHostelsRoute = SuperHostelsRouteImport.update({
-  id: '/hostels',
+  id: '/super/hostels',
   path: '/hostels',
   getParentRoute: () => SuperRoute,
 } as any)
 const SuperDashboardRoute = SuperDashboardRouteImport.update({
-  id: '/dashboard',
+  id: '/super/dashboard',
   path: '/dashboard',
   getParentRoute: () => SuperRoute,
 } as any)
 const SuperAnalyticsRoute = SuperAnalyticsRouteImport.update({
-  id: '/analytics',
+  id: '/super/analytics',
   path: '/analytics',
   getParentRoute: () => SuperRoute,
 } as any)
-const AdminStudentsRoute = AdminStudentsRouteImport.update({
-  id: '/students',
-  path: '/students',
-  getParentRoute: () => AdminRoute,
-} as any)
 const AdminStaffRoute = AdminStaffRouteImport.update({
-  id: '/staff',
+  id: '/admin/staff',
   path: '/staff',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
-  id: '/settings',
+  id: '/admin/settings',
   path: '/settings',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminRoomsRoute = AdminRoomsRouteImport.update({
-  id: '/rooms',
+  id: '/admin/rooms',
   path: '/rooms',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminReportsRoute = AdminReportsRouteImport.update({
-  id: '/reports',
+  id: '/admin/reports',
   path: '/reports',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminLeavesRoute = AdminLeavesRouteImport.update({
-  id: '/leaves',
+  id: '/admin/leaves',
   path: '/leaves',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminGuardsRoute = AdminGuardsRouteImport.update({
-  id: '/guards',
+  id: '/admin/guards',
   path: '/guards',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminDashboardRoute = AdminDashboardRouteImport.update({
-  id: '/dashboard',
+  id: '/admin/dashboard',
   path: '/dashboard',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminStudentsIndexRoute = AdminStudentsIndexRouteImport.update({
+  id: '/admin/students/',
+  path: '/students/',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminTrackingReturnedRoute = AdminTrackingReturnedRouteImport.update({
-  id: '/tracking/returned',
+  id: '/admin/tracking/returned',
   path: '/tracking/returned',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminTrackingOutsideRoute = AdminTrackingOutsideRouteImport.update({
-  id: '/tracking/outside',
+  id: '/admin/tracking/outside',
   path: '/tracking/outside',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminStudentsImportRoute = AdminStudentsImportRouteImport.update({
-  id: '/import',
-  path: '/import',
-  getParentRoute: () => AdminStudentsRoute,
+  id: '/admin/students/import',
+  path: '/students/import',
+  getParentRoute: () => AdminRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -142,7 +142,6 @@ export interface FileRoutesByFullPath {
   '/admin/rooms': typeof AdminRoomsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff': typeof AdminStaffRoute
-  '/admin/students': typeof AdminStudentsRouteWithChildren
   '/super/analytics': typeof SuperAnalyticsRoute
   '/super/dashboard': typeof SuperDashboardRoute
   '/super/hostels': typeof SuperHostelsRoute
@@ -152,6 +151,7 @@ export interface FileRoutesByFullPath {
   '/admin/students/import': typeof AdminStudentsImportRoute
   '/admin/tracking/outside': typeof AdminTrackingOutsideRoute
   '/admin/tracking/returned': typeof AdminTrackingReturnedRoute
+  '/admin/students/': typeof AdminStudentsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -162,7 +162,6 @@ export interface FileRoutesByTo {
   '/admin/rooms': typeof AdminRoomsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff': typeof AdminStaffRoute
-  '/admin/students': typeof AdminStudentsRouteWithChildren
   '/super/analytics': typeof SuperAnalyticsRoute
   '/super/dashboard': typeof SuperDashboardRoute
   '/super/hostels': typeof SuperHostelsRoute
@@ -172,6 +171,7 @@ export interface FileRoutesByTo {
   '/admin/students/import': typeof AdminStudentsImportRoute
   '/admin/tracking/outside': typeof AdminTrackingOutsideRoute
   '/admin/tracking/returned': typeof AdminTrackingReturnedRoute
+  '/admin/students': typeof AdminStudentsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -185,7 +185,6 @@ export interface FileRoutesById {
   '/admin/rooms': typeof AdminRoomsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff': typeof AdminStaffRoute
-  '/admin/students': typeof AdminStudentsRouteWithChildren
   '/super/analytics': typeof SuperAnalyticsRoute
   '/super/dashboard': typeof SuperDashboardRoute
   '/super/hostels': typeof SuperHostelsRoute
@@ -195,6 +194,7 @@ export interface FileRoutesById {
   '/admin/students/import': typeof AdminStudentsImportRoute
   '/admin/tracking/outside': typeof AdminTrackingOutsideRoute
   '/admin/tracking/returned': typeof AdminTrackingReturnedRoute
+  '/admin/students/': typeof AdminStudentsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -209,7 +209,6 @@ export interface FileRouteTypes {
     | '/admin/rooms'
     | '/admin/settings'
     | '/admin/staff'
-    | '/admin/students'
     | '/super/analytics'
     | '/super/dashboard'
     | '/super/hostels'
@@ -219,6 +218,7 @@ export interface FileRouteTypes {
     | '/admin/students/import'
     | '/admin/tracking/outside'
     | '/admin/tracking/returned'
+    | '/admin/students/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -229,7 +229,6 @@ export interface FileRouteTypes {
     | '/admin/rooms'
     | '/admin/settings'
     | '/admin/staff'
-    | '/admin/students'
     | '/super/analytics'
     | '/super/dashboard'
     | '/super/hostels'
@@ -239,6 +238,7 @@ export interface FileRouteTypes {
     | '/admin/students/import'
     | '/admin/tracking/outside'
     | '/admin/tracking/returned'
+    | '/admin/students'
   id:
     | '__root__'
     | '/'
@@ -251,7 +251,6 @@ export interface FileRouteTypes {
     | '/admin/rooms'
     | '/admin/settings'
     | '/admin/staff'
-    | '/admin/students'
     | '/super/analytics'
     | '/super/dashboard'
     | '/super/hostels'
@@ -261,6 +260,7 @@ export interface FileRouteTypes {
     | '/admin/students/import'
     | '/admin/tracking/outside'
     | '/admin/tracking/returned'
+    | '/admin/students/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -334,13 +334,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SuperAnalyticsRouteImport
       parentRoute: typeof SuperRoute
     }
-    '/admin/students': {
-      id: '/admin/students'
-      path: '/students'
-      fullPath: '/admin/students'
-      preLoaderRoute: typeof AdminStudentsRouteImport
-      parentRoute: typeof AdminRoute
-    }
     '/admin/staff': {
       id: '/admin/staff'
       path: '/staff'
@@ -390,6 +383,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDashboardRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/students/': {
+      id: '/admin/students/'
+      path: '/students'
+      fullPath: '/admin/students/'
+      preLoaderRoute: typeof AdminStudentsIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/tracking/returned': {
       id: '/admin/tracking/returned'
       path: '/tracking/returned'
@@ -406,25 +406,13 @@ declare module '@tanstack/react-router' {
     }
     '/admin/students/import': {
       id: '/admin/students/import'
-      path: '/import'
+      path: '/students/import'
       fullPath: '/admin/students/import'
       preLoaderRoute: typeof AdminStudentsImportRouteImport
-      parentRoute: typeof AdminStudentsRoute
+      parentRoute: typeof AdminRoute
     }
   }
 }
-
-interface AdminStudentsRouteChildren {
-  AdminStudentsImportRoute: typeof AdminStudentsImportRoute
-}
-
-const AdminStudentsRouteChildren: AdminStudentsRouteChildren = {
-  AdminStudentsImportRoute: AdminStudentsImportRoute,
-}
-
-const AdminStudentsRouteWithChildren = AdminStudentsRoute._addFileChildren(
-  AdminStudentsRouteChildren,
-)
 
 interface AdminRouteChildren {
   AdminDashboardRoute: typeof AdminDashboardRoute
@@ -434,10 +422,11 @@ interface AdminRouteChildren {
   AdminRoomsRoute: typeof AdminRoomsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminStaffRoute: typeof AdminStaffRoute
-  AdminStudentsRoute: typeof AdminStudentsRouteWithChildren
   AdminIndexRoute: typeof AdminIndexRoute
+  AdminStudentsImportRoute: typeof AdminStudentsImportRoute
   AdminTrackingOutsideRoute: typeof AdminTrackingOutsideRoute
   AdminTrackingReturnedRoute: typeof AdminTrackingReturnedRoute
+  AdminStudentsIndexRoute: typeof AdminStudentsIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
@@ -448,10 +437,11 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminRoomsRoute: AdminRoomsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminStaffRoute: AdminStaffRoute,
-  AdminStudentsRoute: AdminStudentsRouteWithChildren,
   AdminIndexRoute: AdminIndexRoute,
+  AdminStudentsImportRoute: AdminStudentsImportRoute,
   AdminTrackingOutsideRoute: AdminTrackingOutsideRoute,
   AdminTrackingReturnedRoute: AdminTrackingReturnedRoute,
+  AdminStudentsIndexRoute: AdminStudentsIndexRoute,
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)

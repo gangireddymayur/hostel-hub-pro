@@ -6,6 +6,7 @@
     "node": ">=20.19.0"
   },
   "scripts": {
+    "prebuild": "node scripts/patch-router-generator.cjs",
     "dev": "vite dev",
     "build": "vite build",
     "build:dev": "vite build --mode development",

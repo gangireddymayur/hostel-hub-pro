@@ -2,6 +2,7 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { pathToFileURL } = require("node:url");
 
 process.noDeprecation = true;
 
@@ -39,6 +40,16 @@ const dbPool =
         connectionLimit: 5,
       })
     : null;
+
+let ssrServerPromise = null;
+
+async function getSsrServer() {
+  if (!ssrServerPromise) {
+    const ssrEntryPath = path.join(ROOT, "dist", "server", "server.mjs");
+    ssrServerPromise = import(pathToFileURL(ssrEntryPath).href).then((module) => module.default ?? module);
+  }
+  return ssrServerPromise;
+}
 
 function parsePort(value) {
   const parsed = Number.parseInt(String(value ?? "").trim(), 10);
@@ -1347,6 +1358,57 @@ function serveAppShell(res) {
   sendText(res, 500, "Build output not found. Run `npm run build` before deploying to Plesk.");
 }
 
+async function delegateToSsr(req, res) {
+  try {
+    const handler = await getSsrServer();
+    const headers = new Headers();
+    for (const [key, value] of Object.entries(req.headers)) {
+      if (value == null) continue;
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (item != null) headers.append(key, String(item));
+        }
+      } else {
+        headers.set(key, String(value));
+      }
+    }
+
+    const method = String(req.method ?? "GET").toUpperCase();
+    const init = {
+      method,
+      headers,
+    };
+
+    if (method !== "GET" && method !== "HEAD") {
+      const body = await readBody(req);
+      init.body = body.length ? body : undefined;
+    }
+
+    const request = new Request(`http://localhost${req.url ?? "/"}`, init);
+    const response = await handler.fetch(request, {}, {});
+    const responseHeaders = {};
+    response.headers.forEach((value, key) => {
+      responseHeaders[key] = value;
+    });
+
+    res.writeHead(response.status, responseHeaders);
+    if (method === "HEAD") {
+      res.end();
+      return;
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    res.end(buffer);
+  } catch (error) {
+    console.error("[ssr error]", error);
+    if (!res.headersSent) {
+      sendText(res, 500, "Internal Server Error");
+      return;
+    }
+    res.end();
+  }
+}
+
 async function handleApi(req, res, pathname) {
   try {
     if (pathname === "/api/health" && req.method === "GET") {
@@ -1474,6 +1536,11 @@ const server = http.createServer(async (req, res) => {
         serveStaticFile(res, filePath);
         return;
       }
+    }
+
+    if (fs.existsSync(path.join(ROOT, "dist", "server", "server.mjs"))) {
+      await delegateToSsr(req, res);
+      return;
     }
 
     if (fs.existsSync(path.join(CLIENT_DIR, "index.html"))) {

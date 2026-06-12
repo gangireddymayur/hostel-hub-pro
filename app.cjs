@@ -33,10 +33,6 @@ function ensureDir(dirPath) {
   }
 }
 
-ensureDir(APP_DATA_DIR);
-ensureDir(TMP_DIR);
-ensureDir(UPLOADS_STUDENTS_DIR);
-
 function nowIso() {
   return new Date().toISOString();
 }
@@ -99,6 +95,7 @@ function verifyPassword(password, hash) {
 
 function safeWriteJson(filePath, value) {
   try {
+    ensureDir(path.dirname(filePath));
     const tmpPath = `${filePath}.tmp`;
     fs.writeFileSync(tmpPath, JSON.stringify(value, null, 2), "utf8");
     fs.renameSync(tmpPath, filePath);
@@ -296,9 +293,7 @@ function defaultData() {
 function loadData() {
   try {
     if (!fs.existsSync(DATA_FILE)) {
-      const seeded = defaultData();
-      safeWriteJson(DATA_FILE, seeded);
-      return seeded;
+      return defaultData();
     }
     const raw = fs.readFileSync(DATA_FILE, "utf8");
     const parsed = JSON.parse(raw);
@@ -1203,6 +1198,7 @@ function handleUploadStudentPhoto(req, res, studentId, data) {
   if (!student || student.hostel_id !== user.hostelId) return sendJson(res, 404, { error: "Student not found" });
   if (data.kind !== "multipart" || !data.value.files.photo) return sendJson(res, 400, { error: "photo file required" });
   try {
+    ensureDir(UPLOADS_STUDENTS_DIR);
     const file = data.value.files.photo;
     const extMap = {
       "image/jpeg": ".jpg",

@@ -2,35 +2,41 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const mysql = require("mysql2/promise");
 
 process.noDeprecation = true;
 
 const ROOT = __dirname;
-const APP_DATA_DIR = path.join(ROOT, "App_Data");
-const TMP_DIR = path.join(APP_DATA_DIR, "tmp");
-const DATA_FILE = path.join(APP_DATA_DIR, "hlms-data.json");
 const CLIENT_DIR = path.join(ROOT, "dist", "client");
 const CLIENT_ASSETS_DIR = path.join(CLIENT_DIR, "assets");
-const UPLOADS_DIR = path.join(TMP_DIR, "uploads");
-const UPLOADS_STUDENTS_DIR = path.join(UPLOADS_DIR, "students");
 
 const PORT = parsePort(process.env.PORT) ?? parsePort(process.env.NODE_PORT) ?? parsePort(process.env.IISNODE_PORT) ?? 3000;
 const HOST = process.env.HOST ?? "0.0.0.0";
 const JWT_SECRET = process.env.JWT_SECRET ?? "change-me-in-plesk-env";
+const DB_HOST = process.env.DB_HOST ?? "";
+const DB_PORT = parsePort(process.env.DB_PORT) ?? 3306;
+const DB_USER = process.env.DB_USER ?? "";
+const DB_PASSWORD = process.env.DB_PASSWORD ?? "";
+const DB_NAME = process.env.DB_NAME ?? "";
 const ACCESS_TTL_SECONDS = 60 * 60 * 24 * 7;
 const REFRESH_TTL_SECONDS = 60 * 60 * 24 * 30;
+
+const dbPool =
+  DB_HOST && DB_USER && DB_PASSWORD && DB_NAME
+    ? mysql.createPool({
+        host: DB_HOST,
+        port: DB_PORT,
+        user: DB_USER,
+        password: DB_PASSWORD,
+        database: DB_NAME,
+        waitForConnections: true,
+        connectionLimit: 5,
+      })
+    : null;
 
 function parsePort(value) {
   const parsed = Number.parseInt(String(value ?? "").trim(), 10);
   return Number.isInteger(parsed) && parsed >= 0 && parsed < 65536 ? parsed : undefined;
-}
-
-function ensureDir(dirPath) {
-  try {
-    fs.mkdirSync(dirPath, { recursive: true });
-  } catch (error) {
-    console.warn(`[startup] could not create ${dirPath}:`, error.message);
-  }
 }
 
 function nowIso() {
@@ -93,15 +99,23 @@ function verifyPassword(password, hash) {
   return crypto.timingSafeEqual(Buffer.from(next, "hex"), Buffer.from(key, "hex"));
 }
 
-function safeWriteJson(filePath, value) {
-  try {
-    ensureDir(path.dirname(filePath));
-    const tmpPath = `${filePath}.tmp`;
-    fs.writeFileSync(tmpPath, JSON.stringify(value, null, 2), "utf8");
-    fs.renameSync(tmpPath, filePath);
-  } catch (error) {
-    console.warn("[startup] could not persist data:", error.message);
+async function pingDatabase() {
+  if (!dbPool) {
+    return { configured: false, healthy: false };
   }
+
+  try {
+    await dbPool.query("SELECT 1 AS ok");
+    return { configured: true, healthy: true };
+  } catch (error) {
+    console.warn("[health] database check failed:", error.message);
+    return { configured: true, healthy: false };
+  }
+}
+
+function safeWriteJson(filePath, value) {
+  void filePath;
+  void value;
 }
 
 function defaultData() {
@@ -291,35 +305,13 @@ function defaultData() {
 }
 
 function loadData() {
-  try {
-    if (!fs.existsSync(DATA_FILE)) {
-      return defaultData();
-    }
-    const raw = fs.readFileSync(DATA_FILE, "utf8");
-    const parsed = JSON.parse(raw);
-    return {
-      hostels: Array.isArray(parsed.hostels) ? parsed.hostels : [],
-      users: Array.isArray(parsed.users) ? parsed.users : [],
-      parents: Array.isArray(parsed.parents) ? parsed.parents : [],
-      students: Array.isArray(parsed.students) ? parsed.students : [],
-      staff: Array.isArray(parsed.staff) ? parsed.staff : [],
-      leaveRequests: Array.isArray(parsed.leaveRequests) ? parsed.leaveRequests : [],
-      gatePasses: Array.isArray(parsed.gatePasses) ? parsed.gatePasses : [],
-      auditLogs: Array.isArray(parsed.auditLogs) ? parsed.auditLogs : [],
-      refreshTokens: Array.isArray(parsed.refreshTokens) ? parsed.refreshTokens : [],
-    };
-  } catch (error) {
-    console.warn("[startup] could not load data file, reseeding:", error.message);
-    const seeded = defaultData();
-    safeWriteJson(DATA_FILE, seeded);
-    return seeded;
-  }
+  return defaultData();
 }
 
 let db = loadData();
 
 function persist() {
-  safeWriteJson(DATA_FILE, db);
+  return db;
 }
 
 function addAudit(action, entity, entityId, actor, meta = {}) {
@@ -898,17 +890,8 @@ function setStudentPhoto(studentId, file, actor) {
     error.statusCode = 404;
     throw error;
   }
-  const extMap = {
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
-    "image/gif": ".gif",
-  };
-  const ext = extMap[String(file.contentType ?? "").toLowerCase()] || path.extname(file.filename || "") || ".jpg";
-  const filename = `${student.id}${ext}`;
-  const savePath = path.join(UPLOADS_STUDENTS_DIR, filename);
-  fs.writeFileSync(savePath, file.data);
-  student.profile_photo = `/uploads/students/${filename}`;
+  const mimeType = String(file.contentType ?? "image/jpeg").toLowerCase();
+  student.profile_photo = `data:${mimeType};base64,${file.data.toString("base64")}`;
   addAudit("UPDATE", "STUDENT_PHOTO", student.id, actor, { profile_photo: student.profile_photo });
   persist();
   return student;
@@ -1198,19 +1181,9 @@ function handleUploadStudentPhoto(req, res, studentId, data) {
   if (!student || student.hostel_id !== user.hostelId) return sendJson(res, 404, { error: "Student not found" });
   if (data.kind !== "multipart" || !data.value.files.photo) return sendJson(res, 400, { error: "photo file required" });
   try {
-    ensureDir(UPLOADS_STUDENTS_DIR);
     const file = data.value.files.photo;
-    const extMap = {
-      "image/jpeg": ".jpg",
-      "image/png": ".png",
-      "image/webp": ".webp",
-      "image/gif": ".gif",
-    };
-    const ext = extMap[String(file.contentType ?? "").toLowerCase()] || path.extname(file.filename || "") || ".jpg";
-    const filename = `${student.id}${ext}`;
-    const savePath = path.join(UPLOADS_STUDENTS_DIR, filename);
-    fs.writeFileSync(savePath, file.data);
-    student.profile_photo = `/uploads/students/${filename}`;
+    const mimeType = String(file.contentType ?? "image/jpeg").toLowerCase();
+    student.profile_photo = `data:${mimeType};base64,${file.data.toString("base64")}`;
     addAudit("UPDATE", "STUDENT_PHOTO", student.id, user, { profile_photo: student.profile_photo });
     persist();
     return sendJson(res, 200, { data: student });
@@ -1365,7 +1338,8 @@ function serveAppShell(res) {
 async function handleApi(req, res, pathname) {
   try {
     if (pathname === "/api/health" && req.method === "GET") {
-      return sendJson(res, 200, { ok: true });
+      const dbState = await pingDatabase();
+      return sendJson(res, 200, { ok: true, dbConfigured: dbState.configured, dbHealthy: dbState.healthy });
     }
 
     if (pathname === "/api/auth/login" && req.method === "POST") {
@@ -1479,15 +1453,6 @@ const server = http.createServer(async (req, res) => {
     if (pathname.startsWith("/api/")) {
       await handleApi(req, res, pathname);
       return;
-    }
-
-    if (pathname.startsWith("/uploads/")) {
-      const relative = pathname.replace(/^\/uploads\//, "");
-      const filePath = path.resolve(UPLOADS_DIR, relative);
-      if (filePath.startsWith(UPLOADS_DIR) && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-        serveStaticFile(res, filePath);
-        return;
-      }
     }
 
     if (pathname.startsWith("/assets/")) {

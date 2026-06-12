@@ -76,6 +76,7 @@ password: Hostel@12345
 ## Troubleshooting
 
 - If the browser says build output is missing, upload `dist/` again.
-- If login fails, check `tmp/hlms-data.json` and the seeded credentials above.
+- If login fails before the database is configured, set the DB env vars above
+  or use the seeded local fallback data in `app.cjs`.
 - If iisnode shows a 500.1001 error, confirm `web.config` points to `server.js`
   and the Node startup file is `server.js` in Plesk.

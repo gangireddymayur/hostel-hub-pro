@@ -31,9 +31,15 @@ function Landing() {
   }, []);
 
   useEffect(() => {
-    const session = getSession();
-    if (!session) return;
-    navigate({ to: session.profile.role === "SUPER_ADMIN" ? "/super/dashboard" : "/admin/dashboard" });
+    const syncSession = () => {
+      const session = getSession();
+      if (!session) return;
+      navigate({ to: session.profile.role === "SUPER_ADMIN" ? "/super/dashboard" : "/admin/dashboard" });
+    };
+
+    syncSession();
+    window.addEventListener("hlms-auth-change", syncSession);
+    return () => window.removeEventListener("hlms-auth-change", syncSession);
   }, [navigate]);
 
   const defaults = useMemo(

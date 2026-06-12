@@ -16,17 +16,26 @@ export function DashboardShell({ expectedRole, children }: { expectedRole: Role;
 
   useEffect(() => {
     initTheme();
-    const session = getSession();
-    if (!session) {
-      navigate({ to: "/login" });
-      return;
-    }
-    const r = session.profile.role === "SUPER_ADMIN" ? "super" : "admin";
-    if (r !== expectedRole) {
-      navigate({ to: "/login" });
-      return;
-    }
-    setReady(true);
+
+    const syncSession = () => {
+      const session = getSession();
+      if (!session) {
+        setReady(false);
+        navigate({ to: "/login" });
+        return;
+      }
+      const r = session.profile.role === "SUPER_ADMIN" ? "super" : "admin";
+      if (r !== expectedRole) {
+        setReady(false);
+        navigate({ to: "/login" });
+        return;
+      }
+      setReady(true);
+    };
+
+    syncSession();
+    window.addEventListener("hlms-auth-change", syncSession);
+    return () => window.removeEventListener("hlms-auth-change", syncSession);
   }, [expectedRole, navigate]);
 
   if (!ready) return null;

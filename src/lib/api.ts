@@ -43,10 +43,10 @@ async function rawRequest(path: string, options: RequestOptions = {}): Promise<R
     headers.set("Content-Type", "application/json");
   }
 
-  const body =
+  const body: BodyInit | undefined =
     options.body && !isFormData && typeof options.body === "object" && !(options.body instanceof Blob)
       ? JSON.stringify(options.body)
-      : options.body ?? undefined;
+      : ((options.body ?? undefined) as BodyInit | undefined);
 
   return fetch(`${API_BASE_URL}${path}`, {
     ...options,

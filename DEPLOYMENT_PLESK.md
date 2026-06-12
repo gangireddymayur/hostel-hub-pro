@@ -13,6 +13,7 @@ dist/                built locally with `npm run build`
 server.js            Node startup file (loads `app.cjs`)
 plesk-package.json   rename to package.json on the server
 web.config           iisnode handler for Windows/IIS
+db/schema.sql        MySQL schema for the production database
 ```
 
 You do not need to upload `src/` or `node_modules/` for the site to run.
@@ -42,6 +43,17 @@ Optional environment variable:
 
 ```env
 JWT_SECRET=change-me-in-plesk-env
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=your-db-user
+DB_PASSWORD=your-db-password
+DB_NAME=your-db-name
+```
+
+If you want to check the DB from your machine:
+
+```powershell
+npm run db:check
 ```
 
 ## Install and start

@@ -1,0 +1,108 @@
+-- Hostel Leave Management System schema
+-- Safe to run on MySQL / MariaDB.
+
+CREATE TABLE IF NOT EXISTS hostels (
+  id VARCHAR(64) PRIMARY KEY,
+  hostel_name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  id VARCHAR(64) PRIMARY KEY,
+  hostel_id VARCHAR(64) NULL,
+  role VARCHAR(32) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+  token_version INT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_users_hostel FOREIGN KEY (hostel_id) REFERENCES hostels(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS parents (
+  id VARCHAR(64) PRIMARY KEY,
+  hostel_id VARCHAR(64) NOT NULL,
+  mobile VARCHAR(32) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_parent_mobile (hostel_id, mobile),
+  CONSTRAINT fk_parents_hostel FOREIGN KEY (hostel_id) REFERENCES hostels(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS students (
+  id VARCHAR(64) PRIMARY KEY,
+  hostel_id VARCHAR(64) NOT NULL,
+  student_id VARCHAR(64) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  room_number VARCHAR(64) NOT NULL,
+  mobile VARCHAR(32) NOT NULL,
+  parent_mobile VARCHAR(32) NOT NULL,
+  profile_photo VARCHAR(512) NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_student_code (hostel_id, student_id),
+  CONSTRAINT fk_students_hostel FOREIGN KEY (hostel_id) REFERENCES hostels(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS staff (
+  id VARCHAR(64) PRIMARY KEY,
+  hostel_id VARCHAR(64) NOT NULL,
+  role VARCHAR(32) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_staff_hostel FOREIGN KEY (hostel_id) REFERENCES hostels(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS leave_requests (
+  id VARCHAR(64) PRIMARY KEY,
+  student_id VARCHAR(64) NOT NULL,
+  reason TEXT NOT NULL,
+  from_date DATE NOT NULL,
+  to_date DATE NOT NULL,
+  out_time VARCHAR(16) NOT NULL,
+  return_time VARCHAR(16) NOT NULL,
+  parent_status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+  hostel_status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+  final_status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+  note TEXT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_leave_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS gate_passes (
+  id VARCHAR(64) PRIMARY KEY,
+  leave_request_id VARCHAR(64) NOT NULL,
+  qr_code VARCHAR(128) NOT NULL UNIQUE,
+  out_time_actual DATETIME NULL,
+  in_time_actual DATETIME NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'ISSUED',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_gate_leave FOREIGN KEY (leave_request_id) REFERENCES leave_requests(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id VARCHAR(64) PRIMARY KEY,
+  action VARCHAR(64) NOT NULL,
+  entity VARCHAR(64) NOT NULL,
+  entity_id VARCHAR(64) NULL,
+  actor_id VARCHAR(64) NULL,
+  actor_role VARCHAR(64) NOT NULL,
+  meta JSON NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+  jti VARCHAR(128) PRIMARY KEY,
+  user_id VARCHAR(64) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  revoked_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_refresh_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);

@@ -1,4 +1,6 @@
 const http = require("node:http");
+const fs = require("node:fs");
+const path = require("node:path");
 const { Readable } = require("node:stream");
 
 process.noDeprecation = true;
@@ -14,6 +16,28 @@ const PORT =
   parsePort(process.env.IISNODE_PORT) ??
   3000;
 const HOST = process.env.HOST ?? "0.0.0.0";
+const distServerDir = path.join(__dirname, "dist", "server");
+const distServerPackageJson = path.join(distServerDir, "package.json");
+
+function ensureDistServerIsEsm() {
+  if (!fs.existsSync(distServerDir)) {
+    return;
+  }
+
+  const desired = JSON.stringify({ type: "module" }, null, 2) + "\n";
+
+  try {
+    const current = fs.existsSync(distServerPackageJson)
+      ? fs.readFileSync(distServerPackageJson, "utf8")
+      : null;
+
+    if (current !== desired) {
+      fs.writeFileSync(distServerPackageJson, desired, "utf8");
+    }
+  } catch (error) {
+    console.error("Failed to prepare dist/server as an ES module scope:", error);
+  }
+}
 
 process.on("uncaughtException", (error) => {
   console.error("Uncaught exception:", error);
@@ -75,6 +99,7 @@ function copyHeaders(sourceHeaders) {
 }
 
 (async () => {
+  ensureDistServerIsEsm();
   const { default: server } = await import("./dist/server/server.js");
 
   const nodeServer = http.createServer(async (req, res) => {

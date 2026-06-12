@@ -44,11 +44,10 @@ function Landing() {
 
   const defaults = useMemo(
     () => ({
-      superEmail: "superadmin@platform.test",
-      superPassword: "ChangeMe123!",
+      superEmail: "admin@hostelhub.local",
+      superPassword: "Admin@12345",
       hostelEmail: "green-valley@hostel.test",
-      adminEmail: "admin@hostel.test",
-      adminPassword: "ChangeMe123!",
+      adminPassword: "Admin@12345",
     }),
     [],
   );
@@ -58,7 +57,6 @@ function Landing() {
     const form = new FormData(event.currentTarget);
     const identifier = String(form.get("identifier") ?? "");
     const password = String(form.get("password") ?? "");
-    const hostelEmail = String(form.get("hostelEmail") ?? "");
 
     setLoading(true);
     setError(null);
@@ -67,7 +65,6 @@ function Landing() {
         type: role === "super" ? "SUPER_ADMIN" : "HOSTEL_ADMIN",
         identifier,
         password,
-        hostelEmail: role === "admin" ? hostelEmail : undefined,
       });
       setSession(response);
       navigate({ to: response.profile.role === "SUPER_ADMIN" ? "/super/dashboard" : "/admin/dashboard" });
@@ -134,8 +131,7 @@ function Landing() {
                   </>
                 ) : (
                   <>
-                    <Field name="hostelEmail" label="Hostel Email" type="email" defaultValue={defaults.hostelEmail} />
-                    <Field name="identifier" label="Admin Email" type="email" defaultValue={defaults.adminEmail} />
+                    <Field name="identifier" label="Hostel Email" type="email" defaultValue={defaults.hostelEmail} />
                     <Field name="password" label="Password" type="password" defaultValue={defaults.adminPassword} />
                   </>
                 )}

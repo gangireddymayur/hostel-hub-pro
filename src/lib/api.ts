@@ -15,7 +15,6 @@ export type LoginPayload = {
   type: ApiRole;
   identifier: string;
   password: string;
-  hostelEmail?: string;
   hostelId?: string;
 };
 

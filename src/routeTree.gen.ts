@@ -21,7 +21,6 @@ import { Route as SuperDashboardRouteImport } from './routes/super/dashboard'
 import { Route as SuperAnalyticsRouteImport } from './routes/super/analytics'
 import { Route as AdminStaffRouteImport } from './routes/admin/staff'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
-import { Route as AdminRoomsRouteImport } from './routes/admin/rooms'
 import { Route as AdminReportsRouteImport } from './routes/admin/reports'
 import { Route as AdminLeavesRouteImport } from './routes/admin/leaves'
 import { Route as AdminGuardsRouteImport } from './routes/admin/guards'
@@ -91,11 +90,6 @@ const AdminSettingsRoute = AdminSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminRoomsRoute = AdminRoomsRouteImport.update({
-  id: '/admin/rooms',
-  path: '/rooms',
-  getParentRoute: () => AdminRoute,
-} as any)
 const AdminReportsRoute = AdminReportsRouteImport.update({
   id: '/admin/reports',
   path: '/reports',
@@ -146,7 +140,6 @@ export interface FileRoutesByFullPath {
   '/admin/guards': typeof AdminGuardsRoute
   '/admin/leaves': typeof AdminLeavesRoute
   '/admin/reports': typeof AdminReportsRoute
-  '/admin/rooms': typeof AdminRoomsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/super/analytics': typeof SuperAnalyticsRoute
@@ -167,7 +160,6 @@ export interface FileRoutesByTo {
   '/admin/guards': typeof AdminGuardsRoute
   '/admin/leaves': typeof AdminLeavesRoute
   '/admin/reports': typeof AdminReportsRoute
-  '/admin/rooms': typeof AdminRoomsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/super/analytics': typeof SuperAnalyticsRoute
@@ -191,7 +183,6 @@ export interface FileRoutesById {
   '/admin/guards': typeof AdminGuardsRoute
   '/admin/leaves': typeof AdminLeavesRoute
   '/admin/reports': typeof AdminReportsRoute
-  '/admin/rooms': typeof AdminRoomsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/staff': typeof AdminStaffRoute
   '/super/analytics': typeof SuperAnalyticsRoute
@@ -216,7 +207,6 @@ export interface FileRouteTypes {
     | '/admin/guards'
     | '/admin/leaves'
     | '/admin/reports'
-    | '/admin/rooms'
     | '/admin/settings'
     | '/admin/staff'
     | '/super/analytics'
@@ -237,7 +227,6 @@ export interface FileRouteTypes {
     | '/admin/guards'
     | '/admin/leaves'
     | '/admin/reports'
-    | '/admin/rooms'
     | '/admin/settings'
     | '/admin/staff'
     | '/super/analytics'
@@ -260,7 +249,6 @@ export interface FileRouteTypes {
     | '/admin/guards'
     | '/admin/leaves'
     | '/admin/reports'
-    | '/admin/rooms'
     | '/admin/settings'
     | '/admin/staff'
     | '/super/analytics'
@@ -368,13 +356,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/rooms': {
-      id: '/admin/rooms'
-      path: '/rooms'
-      fullPath: '/admin/rooms'
-      preLoaderRoute: typeof AdminRoomsRouteImport
-      parentRoute: typeof AdminRoute
-    }
     '/admin/reports': {
       id: '/admin/reports'
       path: '/reports'
@@ -439,7 +420,6 @@ interface AdminRouteChildren {
   AdminGuardsRoute: typeof AdminGuardsRoute
   AdminLeavesRoute: typeof AdminLeavesRoute
   AdminReportsRoute: typeof AdminReportsRoute
-  AdminRoomsRoute: typeof AdminRoomsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminStaffRoute: typeof AdminStaffRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -454,7 +434,6 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminGuardsRoute: AdminGuardsRoute,
   AdminLeavesRoute: AdminLeavesRoute,
   AdminReportsRoute: AdminReportsRoute,
-  AdminRoomsRoute: AdminRoomsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminStaffRoute: AdminStaffRoute,
   AdminIndexRoute: AdminIndexRoute,

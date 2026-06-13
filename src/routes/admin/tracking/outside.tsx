@@ -20,14 +20,18 @@ function Page() {
   const outsideStudents = useMemo(
     () =>
       leaves
-        .filter((leave) => leave.gatePass?.status === "OUT" || (leave.final_status === "APPROVED" && !leave.gatePass?.in_time_actual))
+        .filter((leave) => leave.gatePass?.status === "OUT")
         .map((leave) => ({
-          id: leave.student.id,
+          id: leave.id,
           name: leave.student.name,
           studentId: leave.student.student_id,
           room: leave.student.room_number,
           outTime: leave.gatePass?.out_time_actual ?? leave.out_time,
           expectedReturn: leave.return_time,
+          studentLat: leave.student_lat,
+          studentLng: leave.student_lng,
+          guardLat: leave.gatePass?.out_guard_lat,
+          guardLng: leave.gatePass?.out_guard_lng,
         })),
     [leaves],
   );
@@ -46,6 +50,8 @@ function Page() {
                   <TableHead>Room</TableHead>
                   <TableHead>Out Time</TableHead>
                   <TableHead>Expected Return</TableHead>
+                  <TableHead>Request Location</TableHead>
+                  <TableHead>Exit Location</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -68,8 +74,50 @@ function Page() {
                     </TableCell>
                     <TableCell>{student.studentId}</TableCell>
                     <TableCell>{student.room}</TableCell>
-                    <TableCell>{new Date(student.outTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</TableCell>
-                    <TableCell>{new Date(student.expectedReturn).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</TableCell>
+                    <TableCell>
+                      {new Date(student.outTime).toLocaleString([], {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </TableCell>
+                    <TableCell>
+                      {new Date(student.expectedReturn).toLocaleString([], {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </TableCell>
+                    <TableCell>
+                      {student.studentLat && student.studentLng ? (
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${student.studentLat},${student.studentLng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-primary hover:underline font-mono"
+                        >
+                          📍 {student.studentLat.toFixed(4)}, {student.studentLng.toFixed(4)}
+                        </a>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {student.guardLat && student.guardLng ? (
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${student.guardLat},${student.guardLng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-emerald-600 hover:underline font-mono"
+                        >
+                          📍 {student.guardLat.toFixed(4)}, {student.guardLng.toFixed(4)}
+                        </a>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
                     <TableCell><Badge className="bg-warning/20 text-warning-foreground dark:text-warning hover:bg-warning/20">Outside</Badge></TableCell>
                   </TableRow>
                 ))}

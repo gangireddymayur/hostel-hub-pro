@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Users, BedDouble, MapPin, ClipboardList, CheckCircle2, XCircle } from "lucide-react";
+import { Users, MapPin, ClipboardList, CheckCircle2, XCircle } from "lucide-react";
 import { PageHeader } from "@/components/dashboard-shell";
 import { StatCard } from "@/components/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,12 +32,8 @@ function AdminDashboard() {
   const students = studentsQuery.data?.data ?? [];
   const leaves = leaveQuery.data?.data ?? [];
 
-  const rooms = useMemo(() => {
-    return new Set(students.map((student) => student.room_number)).size;
-  }, [students]);
-
   const outsideStudents = useMemo(
-    () => leaves.filter((leave) => leave.gatePass?.status === "OUT" || leave.final_status === "APPROVED").length,
+    () => leaves.filter((leave) => leave.gatePass?.status === "OUT").length,
     [leaves],
   );
 
@@ -76,7 +72,6 @@ function AdminDashboard() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard label="Total Students" value={students.length} icon={Users} tone="primary" />
-        <StatCard label="Total Rooms" value={rooms} icon={BedDouble} tone="info" />
         <StatCard label="Students Outside" value={outsideStudents} icon={MapPin} tone="warning" />
         <StatCard label="Pending Leaves" value={pending} icon={ClipboardList} tone="warning" />
         <StatCard label="Approved Leaves" value={approved} icon={CheckCircle2} tone="success" />

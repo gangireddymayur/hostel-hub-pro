@@ -78,7 +78,7 @@ function StudentsPage() {
     <>
       <PageHeader
         title="Students"
-        description="Manage student records, profiles and rooms."
+        description="Manage student records and profiles."
         action={
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>

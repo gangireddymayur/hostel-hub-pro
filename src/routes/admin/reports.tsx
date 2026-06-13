@@ -47,6 +47,134 @@ function Reports() {
     });
   }, [leaves]);
 
+  const handleExport = (title: string) => {
+    const downloadCsv = (filename: string, headers: string[], rows: string[][]) => {
+      const content = [
+        headers.join(","),
+        ...rows.map((row) =>
+          row
+            .map((val) => {
+              const strVal = String(val ?? "");
+              return `"${strVal.replaceAll('"', '""')}"`;
+            })
+            .join(","),
+        ),
+      ].join("\n");
+
+      const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", filename);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    if (title === "Daily Leave Report") {
+      const dailyLeaves = leaves.filter(
+        (l) => l.created_at && l.created_at.slice(0, 10) === todayStr,
+      );
+      const headers = ["Student Name", "Student ID", "Room", "Reason", "From Date", "To Date", "Final Status", "Created At"];
+      const dataRows = dailyLeaves.map((l) => [
+        l.student?.name ?? "",
+        l.student?.student_id ?? "",
+        l.student?.room_number ?? "",
+        l.reason ?? "",
+        l.from_date ?? "",
+        l.to_date ?? "",
+        l.final_status ?? "",
+        l.created_at ?? "",
+      ]);
+      downloadCsv(`daily_leave_report_${todayStr}.csv`, headers, dataRows);
+      toast.success("Daily Leave Report exported");
+    } else if (title === "Monthly Leave Report") {
+      const currentMonthStr = new Date().toISOString().slice(0, 7);
+      const monthlyLeaves = leaves.filter(
+        (l) => l.created_at && l.created_at.slice(0, 7) === currentMonthStr,
+      );
+      const headers = ["Student Name", "Student ID", "Room", "Reason", "From Date", "To Date", "Final Status", "Created At"];
+      const dataRows = monthlyLeaves.map((l) => [
+        l.student?.name ?? "",
+        l.student?.student_id ?? "",
+        l.student?.room_number ?? "",
+        l.reason ?? "",
+        l.from_date ?? "",
+        l.to_date ?? "",
+        l.final_status ?? "",
+        l.created_at ?? "",
+      ]);
+      downloadCsv(`monthly_leave_report_${currentMonthStr}.csv`, headers, dataRows);
+      toast.success("Monthly Leave Report exported");
+    } else if (title === "Students Outside Report") {
+      const outsideLeaves = leaves.filter((l) => l.gatePass?.status === "OUT");
+      const headers = ["Student Name", "Student ID", "Room", "Out Time Actual", "Expected Return", "Student Lat", "Student Lng", "Exit Guard Lat", "Exit Guard Lng"];
+      const dataRows = outsideLeaves.map((l) => [
+        l.student?.name ?? "",
+        l.student?.student_id ?? "",
+        l.student?.room_number ?? "",
+        l.gatePass?.out_time_actual ?? "",
+        l.return_time ?? "",
+        String((l as any).student_lat ?? ""),
+        String((l as any).student_lng ?? ""),
+        String((l as any).gatePass?.out_guard_lat ?? ""),
+        String((l as any).gatePass?.out_guard_lng ?? ""),
+      ]);
+      downloadCsv("students_currently_outside.csv", headers, dataRows);
+      toast.success("Students Outside Report exported");
+    } else if (title === "Student Exit History") {
+      const exitLeaves = leaves.filter((l) => l.gatePass?.out_time_actual);
+      const headers = ["Student Name", "Student ID", "Room", "Out Time Actual", "Student Lat", "Student Lng", "Exit Guard Lat", "Exit Guard Lng"];
+      const dataRows = exitLeaves.map((l) => [
+        l.student?.name ?? "",
+        l.student?.student_id ?? "",
+        l.student?.room_number ?? "",
+        l.gatePass?.out_time_actual ?? "",
+        String((l as any).student_lat ?? ""),
+        String((l as any).student_lng ?? ""),
+        String((l as any).gatePass?.out_guard_lat ?? ""),
+        String((l as any).gatePass?.out_guard_lng ?? ""),
+      ]);
+      downloadCsv("student_exit_history.csv", headers, dataRows);
+      toast.success("Student Exit History exported");
+    } else if (title === "Student Return History") {
+      const returnLeaves = leaves.filter((l) => l.gatePass?.in_time_actual);
+      const headers = [
+        "Student Name",
+        "Student ID",
+        "Room",
+        "Out Time Actual",
+        "In Time Actual",
+        "Student Lat",
+        "Student Lng",
+        "Exit Guard Lat",
+        "Exit Guard Lng",
+        "Entry Guard Lat",
+        "Entry Guard Lng",
+      ];
+      const dataRows = returnLeaves.map((l) => [
+        l.student?.name ?? "",
+        l.student?.student_id ?? "",
+        l.student?.room_number ?? "",
+        l.gatePass?.out_time_actual ?? "",
+        l.gatePass?.in_time_actual ?? "",
+        String((l as any).student_lat ?? ""),
+        String((l as any).student_lng ?? ""),
+        String((l as any).gatePass?.out_guard_lat ?? ""),
+        String((l as any).gatePass?.out_guard_lng ?? ""),
+        String((l as any).gatePass?.in_guard_lat ?? ""),
+        String((l as any).gatePass?.in_guard_lng ?? ""),
+      ]);
+      downloadCsv("student_return_history.csv", headers, dataRows);
+      toast.success("Student Return History exported");
+    } else {
+      toast.error("Unknown report type");
+    }
+  };
+
   return (
     <>
       <PageHeader title="Reports" description="Download operational reports for compliance and reviews." />
@@ -79,7 +207,7 @@ function Reports() {
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary"><FileBarChart className="h-5 w-5" /></div>
               <h3 className="mt-3 text-base font-semibold">{item.title}</h3>
               <p className="mt-1 text-sm text-muted-foreground">{item.desc}</p>
-              <Button variant="outline" size="sm" className="mt-4" onClick={() => toast.success(`${item.title} exported`)}>
+              <Button variant="outline" size="sm" className="mt-4" onClick={() => handleExport(item.title)}>
                 <Download className="h-4 w-4" /> Export CSV
               </Button>
             </CardContent>

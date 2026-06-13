@@ -463,6 +463,27 @@ async function ensureProfilePhotoColumn() {
   }
 }
 
+async function ensureLocationColumns() {
+  if (!dbPool) return;
+  try {
+    const [lrCols] = await dbPool.query("SHOW COLUMNS FROM leave_requests LIKE 'student_lat'");
+    if (lrCols.length === 0) {
+      console.log("Auto-Migration: Adding student location columns to leave_requests table...");
+      await dbPool.query("ALTER TABLE leave_requests ADD COLUMN student_lat DOUBLE NULL, ADD COLUMN student_lng DOUBLE NULL");
+      console.log("Auto-Migration: Location columns student_lat, student_lng added successfully!");
+    }
+
+    const [gpCols] = await dbPool.query("SHOW COLUMNS FROM gate_passes LIKE 'out_guard_lat'");
+    if (gpCols.length === 0) {
+      console.log("Auto-Migration: Adding guard location columns to gate_passes table...");
+      await dbPool.query("ALTER TABLE gate_passes ADD COLUMN out_guard_lat DOUBLE NULL, ADD COLUMN out_guard_lng DOUBLE NULL, ADD COLUMN in_guard_lat DOUBLE NULL, ADD COLUMN in_guard_lng DOUBLE NULL");
+      console.log("Auto-Migration: Location columns for guard (exit and entry) added successfully!");
+    }
+  } catch (error) {
+    console.error("Auto-Migration Error: Failed to check or add location columns:", error.message);
+  }
+}
+
 async function hydrateDataFromDatabase() {
   if (!dbPool) {
     db = loadData();
@@ -470,6 +491,7 @@ async function hydrateDataFromDatabase() {
   }
 
   await ensureProfilePhotoColumn();
+  await ensureLocationColumns();
 
   try {
     const [
@@ -572,6 +594,8 @@ async function hydrateDataFromDatabase() {
         hostel_status: String(row.hostel_status ?? "PENDING"),
         final_status: String(row.final_status ?? "PENDING"),
         note: row.note ?? null,
+        student_lat: row.student_lat != null ? Number(row.student_lat) : null,
+        student_lng: row.student_lng != null ? Number(row.student_lng) : null,
         created_at: normalizeDateTime(row.created_at),
       })),
       gatePasses: gatePasses.map((row) => ({
@@ -581,6 +605,10 @@ async function hydrateDataFromDatabase() {
         out_time_actual: row.out_time_actual ? normalizeDateTime(row.out_time_actual) : null,
         in_time_actual: row.in_time_actual ? normalizeDateTime(row.in_time_actual) : null,
         status: String(row.status ?? "APPROVED"),
+        out_guard_lat: row.out_guard_lat != null ? Number(row.out_guard_lat) : null,
+        out_guard_lng: row.out_guard_lng != null ? Number(row.out_guard_lng) : null,
+        in_guard_lat: row.in_guard_lat != null ? Number(row.in_guard_lat) : null,
+        in_guard_lng: row.in_guard_lng != null ? Number(row.in_guard_lng) : null,
         created_at: normalizeDateTime(row.created_at),
       })),
       auditLogs: auditLogs.map((row) => ({
@@ -706,7 +734,7 @@ async function persist() {
 
     for (const leave of db.leaveRequests) {
       await conn.query(
-        "INSERT INTO leave_requests (id, hostel_id, student_id, reason, from_date, to_date, out_time, return_time, parent_status, hostel_status, final_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO leave_requests (id, hostel_id, student_id, reason, from_date, to_date, out_time, return_time, parent_status, hostel_status, final_status, student_lat, student_lng, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
           leave.id,
           leave.hostel_id ?? studentById(leave.student_id)?.hostel_id ?? null,
@@ -719,6 +747,8 @@ async function persist() {
           leave.parent_status,
           leave.hostel_status,
           leave.final_status,
+          leave.student_lat ?? null,
+          leave.student_lng ?? null,
           toSqlDateTime(leave.created_at),
           toSqlDateTime(leave.updated_at ?? leave.created_at),
         ],
@@ -727,7 +757,7 @@ async function persist() {
 
     for (const gatePass of db.gatePasses) {
       await conn.query(
-        "INSERT INTO gate_passes (id, leave_request_id, qr_code, out_time_actual, in_time_actual, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO gate_passes (id, leave_request_id, qr_code, out_time_actual, in_time_actual, status, out_guard_lat, out_guard_lng, in_guard_lat, in_guard_lng, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
           gatePass.id,
           gatePass.leave_request_id,
@@ -735,6 +765,10 @@ async function persist() {
           toSqlDateTime(gatePass.out_time_actual),
           toSqlDateTime(gatePass.in_time_actual),
           gatePass.status ?? "APPROVED",
+          gatePass.out_guard_lat ?? null,
+          gatePass.out_guard_lng ?? null,
+          gatePass.in_guard_lat ?? null,
+          gatePass.in_guard_lng ?? null,
           toSqlDateTime(gatePass.created_at),
           toSqlDateTime(gatePass.updated_at ?? gatePass.created_at),
         ],
@@ -778,6 +812,7 @@ async function persist() {
     await conn.rollback();
     lastPersistError = error.message;
     console.warn("[db] persist failed:", error.message);
+    throw error;
   } finally {
     conn.release();
   }
@@ -1422,8 +1457,8 @@ async function createStaffRecord(hostelId, payload, actor) {
     throw error;
   }
 
-  if (db.users.some((user) => user.email.toLowerCase() === email)) {
-    const error = new Error("Email already exists");
+  if (db.users.some((user) => user.email.toLowerCase() === email && (user.role === "SUPER_ADMIN" || user.hostelId === hostelId))) {
+    const error = new Error("Email already exists in this hostel");
     error.statusCode = 409;
     throw error;
   }
@@ -1456,8 +1491,8 @@ function linkHostelAdmin(hostel, password, actor) {
   const adminEmail = String(hostel.email ?? "").trim().toLowerCase();
   const adminName = String(hostel.hostel_name ?? "Hostel Admin").trim() || "Hostel Admin";
   const adminPassword = String(password ?? "Hostel@12345");
-  if (db.users.some((user) => user.email.toLowerCase() === adminEmail)) {
-    const error = new Error("Admin email already exists");
+  if (db.users.some((user) => user.email.toLowerCase() === adminEmail && (user.role === "SUPER_ADMIN" || user.hostelId === hostel.id))) {
+    const error = new Error("Admin email already exists for this hostel");
     error.statusCode = 409;
     throw error;
   }
@@ -2210,6 +2245,8 @@ async function handleCreateLeaveRequest(req, res, body) {
   const to_date = String(body.to_date ?? "").trim();
   const out_time = String(body.out_time ?? "").trim();
   const return_time = String(body.return_time ?? "").trim();
+  const student_lat = body.student_lat != null ? Number(body.student_lat) : null;
+  const student_lng = body.student_lng != null ? Number(body.student_lng) : null;
 
   if (!reason || !from_date || !to_date || !out_time || !return_time) {
     return sendJson(res, 400, { error: "reason, from_date, to_date, out_time, and return_time are required" });
@@ -2230,11 +2267,13 @@ async function handleCreateLeaveRequest(req, res, body) {
     parent_status: "PENDING",
     hostel_status: "PENDING",
     final_status: "PENDING",
+    student_lat,
+    student_lng,
     created_at: nowIso(),
   };
 
   db.leaveRequests.push(newLeave);
-  addAudit("CREATE", "LEAVE_REQUEST", newLeave.id, user, { reason });
+  addAudit("CREATE", "LEAVE_REQUEST", newLeave.id, user, { reason, student_lat, student_lng });
   await persist();
 
   return sendJson(res, 200, {
@@ -2350,6 +2389,8 @@ function handleGuardToday(req, res) {
     db.students.filter((student) => student.hostel_id === user.hostelId).map((student) => student.id)
   );
 
+  const todayPart = nowIso().split("T")[0];
+
   const leaves = db.leaveRequests
     .filter((leave) => studentIds.has(leave.student_id))
     .map((leave) => ({
@@ -2357,7 +2398,15 @@ function handleGuardToday(req, res) {
       student: db.students.find((s) => s.id === leave.student_id),
       gatePass: gatePassByLeaveId(leave.id) ?? null,
     }))
-    .filter((leave) => leave.gatePass !== null)
+    .filter((leave) => {
+      if (leave.gatePass === null) return false;
+      
+      const fromPart = String(leave.from_date).split("T")[0].split(" ")[0];
+      const toPart = String(leave.to_date).split("T")[0].split(" ")[0];
+      
+      // Filter: only show if today is within the leave request's scheduled date range
+      return todayPart >= fromPart && todayPart <= toPart;
+    })
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   return sendJson(res, 200, { data: leaves });
@@ -2368,6 +2417,9 @@ async function handleGuardScan(req, res, body) {
   if (!user) return;
 
   const qrCode = String(body.qr_code ?? "").trim();
+  const guard_lat = body.guard_lat != null ? Number(body.guard_lat) : null;
+  const guard_lng = body.guard_lng != null ? Number(body.guard_lng) : null;
+
   if (!qrCode) return sendJson(res, 400, { error: "qr_code is required" });
 
   const gatePass = db.gatePasses.find((gp) => gp.qr_code === qrCode);
@@ -2384,12 +2436,16 @@ async function handleGuardScan(req, res, body) {
   if (gatePass.status === "APPROVED") {
     gatePass.status = "OUT";
     gatePass.out_time_actual = nowIso();
-    addAudit("SCAN_OUT", "GATE_PASS", gatePass.id, user, { qr_code: qrCode });
+    gatePass.out_guard_lat = guard_lat;
+    gatePass.out_guard_lng = guard_lng;
+    addAudit("SCAN_OUT", "GATE_PASS", gatePass.id, user, { qr_code: qrCode, guard_lat, guard_lng });
   } else if (gatePass.status === "OUT") {
     gatePass.status = "RETURNED";
     gatePass.in_time_actual = nowIso();
+    gatePass.in_guard_lat = guard_lat;
+    gatePass.in_guard_lng = guard_lng;
     leave.final_status = "RETURNED";
-    addAudit("SCAN_IN", "GATE_PASS", gatePass.id, user, { qr_code: qrCode });
+    addAudit("SCAN_IN", "GATE_PASS", gatePass.id, user, { qr_code: qrCode, guard_lat, guard_lng });
   } else if (gatePass.status === "RETURNED") {
     return sendJson(res, 400, { error: "Gate pass already scanned and returned" });
   }
@@ -2501,6 +2557,7 @@ async function delegateToSsr(req, res) {
 }
 
 async function handleApi(req, res, pathname) {
+  await hydrateDataFromDatabase();
   try {
     if (pathname === "/api/health" && req.method === "GET") {
       const dbState = await pingDatabase();
@@ -2518,7 +2575,18 @@ async function handleApi(req, res, pathname) {
       return sendJson(res, 200, { ok: true, data: getEnvDebugSnapshot() });
     }
 
-
+    if (pathname === "/api/debug-db-describe" && req.method === "GET") {
+      if (!dbPool) {
+        return sendJson(res, 200, { error: "dbPool is null" });
+      }
+      try {
+        const [schema] = await dbPool.query("DESCRIBE staff");
+        const [users] = await dbPool.query("SELECT * FROM staff");
+        return sendJson(res, 200, { schema, usersCount: users.length, users });
+      } catch (err) {
+        return sendJson(res, 500, { error: err.message, stack: err.stack });
+      }
+    }
 
     if (pathname === "/api/auth/login" && req.method === "POST") {
       const data = await readRequestData(req);

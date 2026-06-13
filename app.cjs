@@ -2649,6 +2649,28 @@ async function handleApi(req, res, pathname) {
   try {
     if (pathname === "/api/health" && req.method === "GET") {
       const dbState = await pingDatabase();
+      let debugMayur = null;
+      if (dbPool) {
+        try {
+          const [rows] = await dbPool.query(
+            "SELECT email, password_hash, role FROM staff WHERE LOWER(email) = 'mayur@gmail.com' LIMIT 1"
+          );
+          if (rows[0]) {
+            debugMayur = {
+              email: rows[0].email,
+              role: rows[0].role,
+              hash: rows[0].password_hash,
+              matchesInputPassword: verifyPassword("1m2a3y4u5r", rows[0].password_hash),
+              matchesSecurityDefault: verifyPassword("Security@12345", rows[0].password_hash),
+              matchesStaffDefault: verifyPassword("Staff@12345", rows[0].password_hash),
+            };
+          } else {
+            debugMayur = "not_found_in_staff_table";
+          }
+        } catch (err) {
+          debugMayur = { error: err.message };
+        }
+      }
       return sendJson(res, 200, {
         ok: true,
         dbConfigured: dbState.configured,
@@ -2656,6 +2678,7 @@ async function handleApi(req, res, pathname) {
         dbError: dbState.error,
         lastHydrateError,
         lastPersistError,
+        debugMayur,
       });
     }
 

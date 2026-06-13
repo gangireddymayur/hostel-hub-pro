@@ -1407,6 +1407,11 @@ async function createStudentRecord(hostelId, payload, actor) {
     error.statusCode = 409;
     throw error;
   }
+  if (db.students.some((student) => student.hostel_id === hostelId && student.mobile === mobile)) {
+    const error = new Error("Student mobile number already exists in this hostel");
+    error.statusCode = 409;
+    throw error;
+  }
 
   const createdAt = nowIso();
   const student = {
@@ -1449,7 +1454,8 @@ async function createStaffRecord(hostelId, payload, actor) {
   const role = normalizeRole(payload.role);
   const name = String(payload.name ?? "").trim();
   const email = String(payload.email ?? "").trim().toLowerCase();
-  const password = String(payload.password ?? "Staff@12345");
+  const defaultPassword = role === "SECURITY_GUARD" ? "Security@12345" : "Staff@12345";
+  const password = String(payload.password ?? defaultPassword);
 
   if (!role || !name || !email) {
     const error = new Error("role, name and email are required");

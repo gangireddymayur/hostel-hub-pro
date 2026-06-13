@@ -501,6 +501,23 @@ async function ensureStatusColumns() {
   }
 }
 
+async function ensureRefreshTokenColumnLength() {
+  if (!dbPool) return;
+  try {
+    const [columns] = await dbPool.query("SHOW COLUMNS FROM refresh_tokens LIKE 'token_hash'");
+    if (columns[0]) {
+      const type = String(columns[0].Type).toLowerCase();
+      if (type.includes("varchar(255)")) {
+        console.log("Auto-Migration: Altering 'token_hash' column to TEXT...");
+        await dbPool.query("ALTER TABLE refresh_tokens MODIFY COLUMN token_hash TEXT NOT NULL");
+        console.log("Auto-Migration: Column 'token_hash' altered to TEXT successfully!");
+      }
+    }
+  } catch (error) {
+    console.error("Auto-Migration Error: Failed to check or alter 'token_hash' column:", error.message);
+  }
+}
+
 async function hydrateDataFromDatabase() {
   if (!dbPool) {
     db = loadData();
@@ -510,6 +527,7 @@ async function hydrateDataFromDatabase() {
   await ensureProfilePhotoColumn();
   await ensureLocationColumns();
   await ensureStatusColumns();
+  await ensureRefreshTokenColumnLength();
 
   try {
     const [

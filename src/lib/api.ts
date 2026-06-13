@@ -231,6 +231,13 @@ export async function createStaff(payload: { role: "HOSTEL_ADMIN" | "SECURITY_GU
   });
 }
 
+export async function updateStaff(id: string, payload: { role?: "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF"; name?: string; email?: string; password?: string }) {
+  return request<{ data: unknown }>(`/hostel-admin/staff/${id}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
 export async function getLeaveRequests() {
   return request<{ data: Array<Record<string, unknown> & { id: string; reason: string; from_date: string; to_date: string; out_time: string; return_time: string; parent_status: string; hostel_status: string; final_status: string; created_at: string; student: { id: string; student_id: string; name: string; room_number: string; mobile: string; parent_mobile: string; status: string }; gatePass?: { id: string; status: string; out_time_actual: string | null; in_time_actual: string | null } | null }> }>("/hostel-admin/leave-requests");
 }

@@ -484,6 +484,20 @@ async function ensureLocationColumns() {
   }
 }
 
+async function ensureStaffStatusColumn() {
+  if (!dbPool) return;
+  try {
+    const [columns] = await dbPool.query("SHOW COLUMNS FROM staff LIKE 'status'");
+    if (columns.length === 0) {
+      console.log("Auto-Migration: Adding 'status' column to 'staff' table...");
+      await dbPool.query("ALTER TABLE staff ADD COLUMN status ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE'");
+      console.log("Auto-Migration: Column 'status' added to 'staff' successfully!");
+    }
+  } catch (error) {
+    console.error("Auto-Migration Error: Failed to check or add 'status' column to 'staff' table:", error.message);
+  }
+}
+
 async function hydrateDataFromDatabase() {
   if (!dbPool) {
     db = loadData();
@@ -492,6 +506,7 @@ async function hydrateDataFromDatabase() {
 
   await ensureProfilePhotoColumn();
   await ensureLocationColumns();
+  await ensureStaffStatusColumn();
 
   try {
     const [
@@ -2151,6 +2166,52 @@ async function handleCreateStaff(req, res, body) {
   }
 }
 
+async function handleUpdateStaff(req, res, staffId, body) {
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
+  if (!user) return;
+  try {
+    const staffRow = db.staff.find((item) => item.id === staffId && item.hostel_id === user.hostelId);
+    if (!staffRow) return sendJson(res, 404, { error: "Staff member not found" });
+
+    const role = body.role ? normalizeRole(body.role) : staffRow.role;
+    const name = body.name ? String(body.name).trim() : staffRow.name;
+    const email = body.email ? String(body.email).trim().toLowerCase() : staffRow.email;
+
+    if (!role || !name || !email) {
+      return sendJson(res, 400, { error: "role, name and email cannot be empty" });
+    }
+
+    if (email !== staffRow.email) {
+      if (db.users.some((u) => u.email.toLowerCase() === email && (u.role === "SUPER_ADMIN" || u.hostelId === user.hostelId))) {
+        return sendJson(res, 409, { error: "Email already exists in this hostel" });
+      }
+    }
+
+    staffRow.role = role;
+    staffRow.name = name;
+    staffRow.email = email;
+    if (body.password) {
+      staffRow.password_hash = hashPassword(body.password);
+    }
+
+    const userRow = db.users.find((u) => u.id === staffId);
+    if (userRow) {
+      userRow.role = role;
+      userRow.name = name;
+      userRow.email = email;
+      if (body.password) {
+        userRow.passwordHash = staffRow.password_hash;
+      }
+    }
+
+    addAudit("UPDATE", "STAFF", staffRow.id, user, { role, email });
+    await persist();
+    return sendJson(res, 200, { data: staffRow });
+  } catch (error) {
+    return sendJson(res, 500, { error: error.message });
+  }
+}
+
 function handleLeaveRequests(req, res) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
@@ -2674,6 +2735,12 @@ async function handleApi(req, res, pathname) {
     if (pathname === "/api/hostel-admin/staff" && req.method === "POST") {
       const data = await readRequestData(req);
       return handleCreateStaff(req, res, data.kind === "json" ? data.value : {});
+    }
+
+    match = pathname.match(/^\/api\/hostel-admin\/staff\/([^/]+)$/);
+    if (match && req.method === "PATCH") {
+      const data = await readRequestData(req);
+      return handleUpdateStaff(req, res, decodeURIComponent(match[1]), data.kind === "json" ? data.value : {});
     }
 
     if (pathname === "/api/hostel-admin/leave-requests" && req.method === "GET") {

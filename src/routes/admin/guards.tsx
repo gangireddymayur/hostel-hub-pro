@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { createStaff, getHostelStaff } from "@/lib/api";
+import { createStaff, getHostelStaff, updateStaff } from "@/lib/api";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/guards")({
@@ -21,6 +21,8 @@ export const Route = createFileRoute("/admin/guards")({
 function GuardsPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [editingGuard, setEditingGuard] = useState<any | null>(null);
+
   const staffQuery = useQuery({ queryKey: ["hostel-staff"], queryFn: getHostelStaff });
   const list = useMemo(
     () => (staffQuery.data?.data ?? []).filter((staff) => staff.role === "SECURITY_GUARD"),
@@ -37,33 +39,57 @@ function GuardsPage() {
     onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to add guard"),
   });
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, ...payload }: { id: string; role: "SECURITY_GUARD"; name: string; email: string; password?: string }) =>
+      updateStaff(id, payload),
+    onSuccess: async () => {
+      toast.success("Guard updated");
+      setOpen(false);
+      setEditingGuard(null);
+      await queryClient.invalidateQueries({ queryKey: ["hostel-staff"] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to update guard"),
+  });
+
   return (
     <>
       <PageHeader
         title="Security guards"
         description="Manage security guards with Android app access."
         action={
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog
+            open={open}
+            onOpenChange={(val) => {
+              setOpen(val);
+              if (!val) setEditingGuard(null);
+            }}
+          >
             <DialogTrigger asChild><Button><Plus className="h-4 w-4" /> Add Guard</Button></DialogTrigger>
             <DialogContent>
-              <DialogHeader><DialogTitle>Add guard</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{editingGuard ? "Edit guard" : "Add guard"}</DialogTitle></DialogHeader>
               <form
+                key={editingGuard ? editingGuard.id : "new"}
                 className="grid gap-4"
                 onSubmit={(event) => {
                   event.preventDefault();
                   const form = new FormData(event.currentTarget);
-                  createMutation.mutate({
-                    role: "SECURITY_GUARD",
+                  const payload = {
+                    role: "SECURITY_GUARD" as const,
                     name: String(form.get("name")),
                     email: String(form.get("email")),
                     password: String(form.get("password") ?? "") || undefined,
-                  });
+                  };
+                  if (editingGuard) {
+                    updateMutation.mutate({ id: editingGuard.id, ...payload });
+                  } else {
+                    createMutation.mutate(payload);
+                  }
                 }}
               >
-                <Field name="name" label="Name" required />
-                <Field name="email" label="Email" type="email" required />
-                <Field name="password" label="Password" type="password" helper="Leave blank to use the default reset password." />
-                <DialogFooter><Button type="submit">Save</Button></DialogFooter>
+                <Field name="name" label="Name" defaultValue={editingGuard?.name} required />
+                <Field name="email" label="Email" type="email" defaultValue={editingGuard?.email} required />
+                <Field name="password" label="Password" type="password" helper={editingGuard ? "Leave blank to keep current password." : "Leave blank to use the default reset password."} />
+                <DialogFooter><Button type="submit">{editingGuard ? "Save changes" : "Save"}</Button></DialogFooter>
               </form>
             </DialogContent>
           </Dialog>
@@ -102,7 +128,14 @@ function GuardsPage() {
                     </TableCell>
                     <TableCell className="text-xs">{guard.email}</TableCell>
                     <TableCell className="text-right">
-                      <Button size="icon" variant="ghost" onClick={() => toast.info("Edit guard is handled through the admin API.")}>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => {
+                          setEditingGuard(guard);
+                          setOpen(true);
+                        }}
+                      >
                         <Pencil className="h-4 w-4" />
                       </Button>
                     </TableCell>
@@ -123,17 +156,19 @@ function Field({
   type = "text",
   required,
   helper,
+  defaultValue,
 }: {
   name: string;
   label: string;
   type?: string;
   required?: boolean;
   helper?: string;
+  defaultValue?: string;
 }) {
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={name}>{label}</Label>
-      <Input id={name} name={name} type={type} required={required} />
+      <Input id={name} name={name} type={type} required={required} defaultValue={defaultValue} />
       {helper ? <p className="text-xs text-muted-foreground">{helper}</p> : null}
     </div>
   );

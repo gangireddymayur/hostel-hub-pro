@@ -484,17 +484,20 @@ async function ensureLocationColumns() {
   }
 }
 
-async function ensureStaffStatusColumn() {
+async function ensureStatusColumns() {
   if (!dbPool) return;
-  try {
-    const [columns] = await dbPool.query("SHOW COLUMNS FROM staff LIKE 'status'");
-    if (columns.length === 0) {
-      console.log("Auto-Migration: Adding 'status' column to 'staff' table...");
-      await dbPool.query("ALTER TABLE staff ADD COLUMN status ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE'");
-      console.log("Auto-Migration: Column 'status' added to 'staff' successfully!");
+  const tables = ["hostels", "students", "parents", "staff"];
+  for (const table of tables) {
+    try {
+      const [columns] = await dbPool.query(`SHOW COLUMNS FROM ${table} LIKE 'status'`);
+      if (columns.length === 0) {
+        console.log(`Auto-Migration: Adding 'status' column to '${table}' table...`);
+        await dbPool.query(`ALTER TABLE ${table} ADD COLUMN status ENUM('ACTIVE','DISABLED') NOT NULL DEFAULT 'ACTIVE'`);
+        console.log(`Auto-Migration: Column 'status' added to '${table}' successfully!`);
+      }
+    } catch (error) {
+      console.error(`Auto-Migration Error: Failed to check or add 'status' column to '${table}' table:`, error.message);
     }
-  } catch (error) {
-    console.error("Auto-Migration Error: Failed to check or add 'status' column to 'staff' table:", error.message);
   }
 }
 
@@ -506,7 +509,7 @@ async function hydrateDataFromDatabase() {
 
   await ensureProfilePhotoColumn();
   await ensureLocationColumns();
-  await ensureStaffStatusColumn();
+  await ensureStatusColumns();
 
   try {
     const [

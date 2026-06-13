@@ -2649,13 +2649,17 @@ async function handleApi(req, res, pathname) {
       if (!dbPool) {
         return sendJson(res, 200, { error: "dbPool is null" });
       }
-      try {
-        const [schema] = await dbPool.query("DESCRIBE staff");
-        const [users] = await dbPool.query("SELECT * FROM staff");
-        return sendJson(res, 200, { schema, usersCount: users.length, users });
-      } catch (err) {
-        return sendJson(res, 500, { error: err.message, stack: err.stack });
+      const results = {};
+      for (const table of ["hostels", "students", "parents", "staff"]) {
+        try {
+          const [schema] = await dbPool.query(`DESCRIBE ${table}`);
+          const [rows] = await dbPool.query(`SELECT * FROM ${table} LIMIT 1`);
+          results[table] = { ok: true, schema, rowsCount: rows.length };
+        } catch (err) {
+          results[table] = { ok: false, error: err.message, stack: err.stack };
+        }
       }
+      return sendJson(res, 200, results);
     }
 
     if (pathname === "/api/auth/login" && req.method === "POST") {

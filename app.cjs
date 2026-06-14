@@ -2234,7 +2234,7 @@ async function handleUpdateStaff(req, res, staffId, body) {
 }
 
 function handleLeaveRequests(req, res) {
-  const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN", "SECURITY_GUARD"]);
   if (!user) return;
   const leaveRequests = leaveRequestsForHostel(user.hostelId)
     .slice()

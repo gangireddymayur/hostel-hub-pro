@@ -43,6 +43,41 @@ function HostelsPage() {
 
   const hostelsQuery = useQuery({ queryKey: ["super-hostels"], queryFn: getSuperHostels });
 
+  const createMutation = useMutation({
+    mutationFn: createHostel,
+    onSuccess: async (response) => {
+      const creds = response.data.credentials;
+      toast.success("Hostel created", {
+        description: `Login Email: ${creds.hostel_email} | Password: ${creds.password}`,
+      });
+      setOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ["super-hostels"] });
+      await queryClient.invalidateQueries({ queryKey: ["super-analytics"] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to create hostel"),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: { hostel_name?: string; email?: string; password?: string } }) => updateHostel(id, payload),
+    onSuccess: async () => {
+      toast.success("Hostel updated");
+      setEditing(null);
+      await queryClient.invalidateQueries({ queryKey: ["super-hostels"] });
+      await queryClient.invalidateQueries({ queryKey: ["super-analytics"] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to update hostel"),
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "ACTIVE" | "DISABLED" }) => setHostelStatus(id, status),
+    onSuccess: async (_, variables) => {
+      toast.success(`Hostel ${variables.status === "ACTIVE" ? "enabled" : "disabled"}`);
+      await queryClient.invalidateQueries({ queryKey: ["super-hostels"] });
+      await queryClient.invalidateQueries({ queryKey: ["super-analytics"] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to update status"),
+  });
+
   const list = useMemo(() => hostelsQuery.data?.data ?? [], [hostelsQuery.data]);
   const filtered = list.filter((hostel) =>
     (hostel.hostel_name?.toLowerCase() ?? "").includes(q.toLowerCase()) ||
@@ -81,41 +116,6 @@ function HostelsPage() {
       </>
     );
   }
-
-  const createMutation = useMutation({
-    mutationFn: createHostel,
-    onSuccess: async (response) => {
-      const creds = response.data.credentials;
-      toast.success("Hostel created", {
-        description: `Login Email: ${creds.hostel_email} | Password: ${creds.password}`,
-      });
-      setOpen(false);
-      await queryClient.invalidateQueries({ queryKey: ["super-hostels"] });
-      await queryClient.invalidateQueries({ queryKey: ["super-analytics"] });
-    },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to create hostel"),
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: { hostel_name?: string; email?: string; password?: string } }) => updateHostel(id, payload),
-    onSuccess: async () => {
-      toast.success("Hostel updated");
-      setEditing(null);
-      await queryClient.invalidateQueries({ queryKey: ["super-hostels"] });
-      await queryClient.invalidateQueries({ queryKey: ["super-analytics"] });
-    },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to update hostel"),
-  });
-
-  const statusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: "ACTIVE" | "DISABLED" }) => setHostelStatus(id, status),
-    onSuccess: async (_, variables) => {
-      toast.success(`Hostel ${variables.status === "ACTIVE" ? "enabled" : "disabled"}`);
-      await queryClient.invalidateQueries({ queryKey: ["super-hostels"] });
-      await queryClient.invalidateQueries({ queryKey: ["super-analytics"] });
-    },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to update status"),
-  });
 
   return (
     <>

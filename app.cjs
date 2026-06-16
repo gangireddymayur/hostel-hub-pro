@@ -1428,6 +1428,7 @@ function issueGatePass(leaveRequest) {
 }
 
 async function createStudentRecord(hostelId, payload, actor) {
+  const targetHostelId = payload.hostel_id || hostelId;
   const studentId = String(payload.student_id ?? "").trim();
   const name = String(payload.name ?? "").trim();
   const roomNumber = String(payload.room_number ?? "").trim();
@@ -1438,12 +1439,12 @@ async function createStudentRecord(hostelId, payload, actor) {
   if (!studentId || !name || !roomNumber || !mobile || !parentMobile) {
     throw new Error("student_id, name, room_number, mobile and parent_mobile are required");
   }
-  if (db.students.some((student) => student.hostel_id === hostelId && student.student_id === studentId)) {
+  if (db.students.some((student) => student.hostel_id === targetHostelId && student.student_id === studentId)) {
     const error = new Error("Student ID already exists");
     error.statusCode = 409;
     throw error;
   }
-  if (db.students.some((student) => student.hostel_id === hostelId && student.mobile === mobile)) {
+  if (db.students.some((student) => student.hostel_id === targetHostelId && student.mobile === mobile)) {
     const error = new Error("Student mobile number already exists in this hostel");
     error.statusCode = 409;
     throw error;
@@ -1452,7 +1453,7 @@ async function createStudentRecord(hostelId, payload, actor) {
   const createdAt = nowIso();
   const student = {
     id: uuid("student"),
-    hostel_id: hostelId,
+    hostel_id: targetHostelId,
     student_id: studentId,
     name,
     room_number: roomNumber,
@@ -1465,11 +1466,11 @@ async function createStudentRecord(hostelId, payload, actor) {
   };
   db.students.push(student);
 
-  let parent = db.parents.find((item) => item.hostel_id === hostelId && item.mobile === parentMobile);
+  let parent = db.parents.find((item) => item.hostel_id === targetHostelId && item.mobile === parentMobile);
   if (!parent) {
     parent = {
       id: uuid("parent"),
-      hostel_id: hostelId,
+      hostel_id: targetHostelId,
       mobile: parentMobile,
       password_hash: hashPassword(password),
       created_at: createdAt,
@@ -1487,6 +1488,7 @@ async function createStudentRecord(hostelId, payload, actor) {
 }
 
 async function createStaffRecord(hostelId, payload, actor) {
+  const targetHostelId = payload.hostel_id || hostelId;
   const role = normalizeRole(payload.role);
   const name = String(payload.name ?? "").trim();
   const email = String(payload.email ?? "").trim().toLowerCase();
@@ -1499,7 +1501,7 @@ async function createStaffRecord(hostelId, payload, actor) {
     throw error;
   }
 
-  if (db.users.some((user) => user.email.toLowerCase() === email && (user.role === "SUPER_ADMIN" || user.hostelId === hostelId))) {
+  if (db.users.some((user) => user.email.toLowerCase() === email && (user.role === "SUPER_ADMIN" || user.hostelId === targetHostelId))) {
     const error = new Error("Email already exists in this hostel");
     error.statusCode = 409;
     throw error;
@@ -1508,7 +1510,7 @@ async function createStaffRecord(hostelId, payload, actor) {
   const createdAt = nowIso();
   const user = {
     id: uuid("user"),
-    hostelId,
+    hostelId: targetHostelId,
     role,
     name,
     email,
@@ -2124,6 +2126,19 @@ async function handleImportStudents(req, res, data) {
     const rows = data.kind === "multipart" ? parseStudentImportRows(data.value, Buffer.alloc(0)) : [];
     let imported = 0;
     for (const row of rows) {
+      let resolvedHostelId = user.hostelId;
+      const hostelNameVal = String(row.hostel || row.hostel_name || row.hostel_id || "").trim();
+      if (hostelNameVal) {
+        const matchedHostel = db.hostels.find(h => 
+          h.hostel_name.toLowerCase() === hostelNameVal.toLowerCase() || 
+          h.id === hostelNameVal || 
+          h.email.toLowerCase() === hostelNameVal.toLowerCase()
+        );
+        if (matchedHostel) {
+          resolvedHostelId = matchedHostel.id;
+        }
+      }
+
       const mapped = {
         student_id: row.student_id || row.studentid || row.id || row.student || row.admission_no,
         name: row.name || row.student_name,
@@ -2131,12 +2146,13 @@ async function handleImportStudents(req, res, data) {
         mobile: row.mobile || row.student_mobile || row.phone || "",
         parent_mobile: row.parent_mobile || row.parentmobile || row.parent_phone || "",
         password: row.password || row.password_hash || "Student@12345",
+        hostel_id: resolvedHostelId,
       };
       if (!mapped.student_id || !mapped.name || !mapped.room_number || !mapped.mobile || !mapped.parent_mobile) {
         continue;
       }
       try {
-        await createStudentRecord(user.hostelId, mapped, user);
+        await createStudentRecord(resolvedHostelId, mapped, user);
         imported += 1;
       } catch {
         // Skip duplicates / bad rows.
@@ -2234,17 +2250,35 @@ async function handleUpdateStaff(req, res, staffId, body) {
 }
 
 function handleLeaveRequests(req, res) {
-  const user = requireAuth(req, res, ["HOSTEL_ADMIN", "SECURITY_GUARD"]);
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN", "HOSTEL_STAFF", "SECURITY_GUARD"]);
   if (!user) return;
-  const leaveRequests = leaveRequestsForHostel(user.hostelId)
+  
+  let baseRequests;
+  if (user.role === "HOSTEL_ADMIN" || user.role === "SUPER_ADMIN") {
+    baseRequests = db.leaveRequests;
+  } else {
+    baseRequests = leaveRequestsForHostel(user.hostelId);
+  }
+  
+  const leaveRequests = baseRequests
     .slice()
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .map((leave) => ({
-      ...leave,
-      student:
-        db.students.find((student) => student.id === leave.student_id) ?? null,
-      gatePass: gatePassByLeaveId(leave.id) ?? null,
-    }));
+    .map((leave) => {
+      const student = db.students.find((student) => student.id === leave.student_id) ?? null;
+      let studentWithHostel = null;
+      if (student) {
+        const hostel = findHostelById(student.hostel_id);
+        studentWithHostel = {
+          ...student,
+          hostel_name: hostel ? hostel.hostel_name : "",
+        };
+      }
+      return {
+        ...leave,
+        student: studentWithHostel,
+        gatePass: gatePassByLeaveId(leave.id) ?? null,
+      };
+    });
   return sendJson(res, 200, { data: leaveRequests });
 }
 
@@ -2285,6 +2319,58 @@ async function handleReviewLeaveRequest(req, res, leaveRequestId, body) {
   return sendJson(res, 200, { data: leave });
 }
 
+async function handleBulkReviewLeaveRequests(req, res, body) {
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN", "HOSTEL_STAFF"]);
+  if (!user) return;
+  const ids = body.ids;
+  const status = String(body.status ?? "").toUpperCase();
+  if (!Array.isArray(ids)) {
+    return sendJson(res, 400, { error: "ids must be an array of strings" });
+  }
+  if (!["APPROVED", "REJECTED"].includes(status)) {
+    return sendJson(res, 400, { error: "Invalid status" });
+  }
+
+  let updatedCount = 0;
+  for (const leaveId of ids) {
+    const leave = db.leaveRequests.find((item) => item.id === leaveId);
+    if (!leave) continue;
+
+    const student = studentById(leave.student_id);
+    if (!student) continue;
+    if (user.role !== "HOSTEL_ADMIN" && student.hostel_id !== user.hostelId) {
+      continue;
+    }
+
+    leave.hostel_status = status;
+    if (status === "REJECTED") {
+      leave.final_status = "REJECTED";
+      const gatePass = gatePassByLeaveId(leave.id);
+      if (gatePass) {
+        db.gatePasses = db.gatePasses.filter((item) => item.id !== gatePass.id);
+      }
+    } else {
+      if (leave.parent_status === "APPROVED") {
+        leave.final_status = "APPROVED";
+        issueGatePass(leave);
+      } else if (leave.parent_status === "REJECTED") {
+        leave.final_status = "REJECTED";
+      } else {
+        leave.final_status = "PENDING";
+      }
+    }
+
+    addAudit("UPDATE", "LEAVE_REQUEST", leave.id, user, {
+      hostel_status: leave.hostel_status,
+      final_status: leave.final_status,
+    });
+    updatedCount++;
+  }
+
+  await persist();
+  return sendJson(res, 200, { message: `Successfully updated ${updatedCount} request(s)` });
+}
+
 function handleReports(req, res) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
@@ -2307,21 +2393,7 @@ function handleReports(req, res) {
 }
 
 async function handleStudentUploadSelfPhoto(req, res, data) {
-  const user = requireAuth(req, res, ["STUDENT"]);
-  if (!user) return;
-  const student = db.students.find((s) => s.id === user.id);
-  if (!student) return sendJson(res, 404, { error: "Student not found" });
-  if (data.kind !== "multipart" || !data.value.files.photo) return sendJson(res, 400, { error: "photo file required" });
-  try {
-    const file = data.value.files.photo;
-    const mimeType = String(file.contentType ?? "image/jpeg").toLowerCase();
-    student.profile_photo = `data:${mimeType};base64,${file.data.toString("base64")}`;
-    addAudit("UPDATE", "STUDENT_PHOTO", student.id, user, { profile_photo: student.profile_photo });
-    await persist();
-    return sendJson(res, 200, { data: student });
-  } catch (error) {
-    return sendJson(res, 500, { error: error.message });
-  }
+  return sendJson(res, 403, { error: "Forbidden: Students are not allowed to update their own photo. Please contact the hostel admin." });
 }
 
 async function handleCreateLeaveRequest(req, res, body) {
@@ -2780,6 +2852,20 @@ async function handleApi(req, res, pathname) {
 
     if (pathname === "/api/hostel-admin/reports" && req.method === "GET") {
       return handleReports(req, res);
+    }
+
+    if (pathname === "/api/hostels" && req.method === "GET") {
+      const user = requireAuth(req, res, ["SUPER_ADMIN", "HOSTEL_ADMIN", "HOSTEL_STAFF", "SECURITY_GUARD"]);
+      if (!user) return;
+      const data = db.hostels
+        .filter(h => h.status === "ACTIVE")
+        .map(h => ({ id: h.id, hostel_name: h.hostel_name }));
+      return sendJson(res, 200, { data });
+    }
+
+    if (pathname === "/api/hostel-admin/leave-requests/bulk-review" && req.method === "POST") {
+      const data = await readRequestData(req);
+      return handleBulkReviewLeaveRequests(req, res, data.kind === "json" ? data.value : {});
     }
 
     if (pathname === "/api/students/me" && req.method === "GET") {

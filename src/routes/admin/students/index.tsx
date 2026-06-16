@@ -19,7 +19,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { createStudent, getHostelStudents, uploadStudentPhoto } from "@/lib/api";
+import { createStudent, getHostelStudents, uploadStudentPhoto, getHostels } from "@/lib/api";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
 type StudentRow = {
@@ -45,8 +46,12 @@ function StudentsPage() {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<StudentRow | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [selectedHostel, setSelectedHostel] = useState("");
 
   const studentsQuery = useQuery({ queryKey: ["hostel-students"], queryFn: getHostelStudents });
+  const hostelsQuery = useQuery({ queryKey: ["active-hostels"], queryFn: getHostels });
+  const hostels = hostelsQuery.data?.data ?? [];
+
   const list = useMemo(() => studentsQuery.data?.data ?? [], [studentsQuery.data]);
   const filtered = list.filter((student) =>
     student.name.toLowerCase().includes(q.toLowerCase()) ||
@@ -59,6 +64,7 @@ function StudentsPage() {
     onSuccess: async () => {
       toast.success("Student added");
       setOpen(false);
+      setSelectedHostel("");
       await queryClient.invalidateQueries({ queryKey: ["hostel-students"] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to add student"),
@@ -74,13 +80,20 @@ function StudentsPage() {
     onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to upload photo"),
   });
 
+  const handleOpenChange = (isOpen: boolean) => {
+    setOpen(isOpen);
+    if (!isOpen) {
+      setSelectedHostel("");
+    }
+  };
+
   return (
     <>
       <PageHeader
         title="Students"
         description="Manage student records and profiles."
         action={
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
               <Button><Plus className="h-4 w-4" /> Add Student</Button>
             </DialogTrigger>
@@ -100,6 +113,7 @@ function StudentsPage() {
                     mobile: String(form.get("mobile") ?? ""),
                     parent_mobile: String(form.get("parent_mobile") ?? ""),
                     password: String(form.get("password") ?? "") || undefined,
+                    hostel_id: selectedHostel || undefined,
                   });
                 }}
                 className="grid gap-4 md:grid-cols-2"
@@ -112,10 +126,27 @@ function StudentsPage() {
                   <Field name="parent_mobile" label="Parent Mobile" required />
                 </div>
                 <div className="md:col-span-2">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="hostel_id">Hostel (Optional)</Label>
+                    <Select value={selectedHostel} onValueChange={setSelectedHostel}>
+                      <SelectTrigger id="hostel_id">
+                        <SelectValue placeholder="Select a hostel" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {hostels.map((hostel) => (
+                          <SelectItem key={hostel.id} value={hostel.id}>
+                            {hostel.hostel_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="md:col-span-2">
                   <Field name="password" label="Password" type="password" helper="Leave blank to use the default reset password." />
                 </div>
                 <DialogFooter className="md:col-span-2">
-                  <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+                  <Button type="button" variant="ghost" onClick={() => handleOpenChange(false)}>Cancel</Button>
                   <Button type="submit">Save Student</Button>
                 </DialogFooter>
               </form>

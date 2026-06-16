@@ -195,7 +195,7 @@ export async function getHostelStudents() {
   return request<{ data: Array<Record<string, unknown> & { id: string; student_id: string; name: string; room_number: string; mobile: string; parent_mobile: string; profile_photo: string | null; status: string; created_at: string }> }>("/hostel-admin/students");
 }
 
-export async function createStudent(payload: { student_id: string; name: string; room_number: string; mobile: string; parent_mobile: string; password?: string }) {
+export async function createStudent(payload: { student_id: string; name: string; room_number: string; mobile: string; parent_mobile: string; password?: string; hostel_id?: string }) {
   return request<{ data: unknown }>("/hostel-admin/students", {
     method: "POST",
     body: payload,
@@ -224,7 +224,7 @@ export async function getHostelStaff() {
   return request<{ data: Array<Record<string, unknown> & { id: string; role: string; name: string; email: string; created_at: string }> }>("/hostel-admin/staff");
 }
 
-export async function createStaff(payload: { role: "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF"; name: string; email: string; password?: string }) {
+export async function createStaff(payload: { role: "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF"; name: string; email: string; password?: string; hostel_id?: string }) {
   return request<{ data: unknown }>("/hostel-admin/staff", {
     method: "POST",
     body: payload,
@@ -239,7 +239,44 @@ export async function updateStaff(id: string, payload: { role?: "HOSTEL_ADMIN" |
 }
 
 export async function getLeaveRequests() {
-  return request<{ data: Array<Record<string, unknown> & { id: string; reason: string; from_date: string; to_date: string; out_time: string; return_time: string; parent_status: string; hostel_status: string; final_status: string; created_at: string; student: { id: string; student_id: string; name: string; room_number: string; mobile: string; parent_mobile: string; status: string }; gatePass?: { id: string; status: string; out_time_actual: string | null; in_time_actual: string | null } | null }> }>("/hostel-admin/leave-requests");
+  return request<{
+    data: Array<
+      Record<string, unknown> & {
+        id: string;
+        reason: string;
+        from_date: string;
+        to_date: string;
+        out_time: string;
+        return_time: string;
+        parent_status: string;
+        hostel_status: string;
+        final_status: string;
+        created_at: string;
+        student_lat?: number | null;
+        student_lng?: number | null;
+        student: {
+          id: string;
+          student_id: string;
+          name: string;
+          room_number: string;
+          mobile: string;
+          parent_mobile: string;
+          status: string;
+          hostel_name?: string;
+        };
+        gatePass?: {
+          id: string;
+          status: string;
+          out_time_actual: string | null;
+          in_time_actual: string | null;
+          out_guard_lat?: number | null;
+          out_guard_lng?: number | null;
+          in_guard_lat?: number | null;
+          in_guard_lng?: number | null;
+        } | null;
+      }
+    >;
+  }>("/hostel-admin/leave-requests");
 }
 
 export async function reviewLeaveRequest(leaveRequestId: string, payload: { status: "APPROVED" | "REJECTED"; note?: string }) {
@@ -247,6 +284,17 @@ export async function reviewLeaveRequest(leaveRequestId: string, payload: { stat
     method: "PATCH",
     body: payload,
   });
+}
+
+export async function bulkReviewLeaveRequests(payload: { ids: string[]; status: "APPROVED" | "REJECTED" }) {
+  return request<{ message: string }>("/hostel-admin/leave-requests/bulk-review", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function getHostels() {
+  return request<{ data: Array<{ id: string; hostel_name: string }> }>("/hostels");
 }
 
 export async function getHostelReports() {

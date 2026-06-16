@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { createStaff, getHostelStaff, updateStaff } from "@/lib/api";
+import { createStaff, getHostelStaff, updateStaff, getHostels } from "@/lib/api";
 import { toast } from "sonner";
 
 type StaffRow = {
@@ -30,15 +30,19 @@ function StaffPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffRow | null>(null);
+  const [selectedHostel, setSelectedHostel] = useState("");
 
   const staffQuery = useQuery({ queryKey: ["hostel-staff"], queryFn: getHostelStaff });
+  const hostelsQuery = useQuery({ queryKey: ["active-hostels"], queryFn: getHostels });
   const list = useMemo(() => staffQuery.data?.data ?? [], [staffQuery.data]);
+  const hostels = hostelsQuery.data?.data ?? [];
 
   const createMutation = useMutation({
     mutationFn: createStaff,
     onSuccess: async () => {
       toast.success("Staff added");
       setOpen(false);
+      setSelectedHostel("");
       await queryClient.invalidateQueries({ queryKey: ["hostel-staff"] });
       await queryClient.invalidateQueries({ queryKey: ["hostel-dashboard"] });
     },
@@ -52,6 +56,7 @@ function StaffPage() {
       toast.success("Staff updated");
       setOpen(false);
       setEditingStaff(null);
+      setSelectedHostel("");
       await queryClient.invalidateQueries({ queryKey: ["hostel-staff"] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to update staff"),
@@ -67,7 +72,10 @@ function StaffPage() {
             open={open}
             onOpenChange={(val) => {
               setOpen(val);
-              if (!val) setEditingStaff(null);
+              if (!val) {
+                setEditingStaff(null);
+                setSelectedHostel("");
+              }
             }}
           >
             <DialogTrigger asChild>
@@ -86,6 +94,7 @@ function StaffPage() {
                     name: String(form.get("name")),
                     email: String(form.get("email")),
                     password: String(form.get("password") ?? "") || undefined,
+                    hostel_id: selectedHostel || undefined,
                   };
                   if (editingStaff) {
                     updateMutation.mutate({ id: editingStaff.id, ...payload });
@@ -96,6 +105,26 @@ function StaffPage() {
               >
                 <Field name="name" label="Name" defaultValue={editingStaff?.name} required />
                 <Field name="role" label="Role" asSelect defaultValue={editingStaff?.role} helper="Choose hostel admin, guard or hostel staff." />
+                
+                {!editingStaff && (
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="hostel_select">Hostel (Optional)</Label>
+                    <select
+                      id="hostel_select"
+                      value={selectedHostel}
+                      onChange={(e) => setSelectedHostel(e.target.value)}
+                      className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="">Select a hostel</option>
+                      {hostels.map((hostel) => (
+                        <option key={hostel.id} value={hostel.id}>
+                          {hostel.hostel_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                
                 <Field name="email" label="Email" type="email" defaultValue={editingStaff?.email} required />
                 <Field name="password" label="Password" type="password" helper={editingStaff ? "Leave blank to keep current password." : "Leave blank to use the default reset password."} />
                 <DialogFooter><Button type="submit">{editingStaff ? "Save changes" : "Save"}</Button></DialogFooter>

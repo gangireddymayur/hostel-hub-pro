@@ -164,6 +164,12 @@ export async function updateHostel(hostelId: string, payload: { hostel_name?: st
   });
 }
 
+export async function deleteHostel(hostelId: string) {
+  return request<{ message: string }>(`/super-admin/hostels/${hostelId}`, {
+    method: "DELETE",
+  });
+}
+
 export async function setHostelStatus(hostelId: string, status: "ACTIVE" | "DISABLED") {
   return request<{ data: unknown }>(`/super-admin/hostels/${hostelId}/status`, {
     method: "PATCH",
@@ -240,7 +246,16 @@ export async function uploadStudentPhoto(studentId: string, file: File) {
 }
 
 export async function getHostelStaff() {
-  return request<{ data: Array<Record<string, unknown> & { id: string; role: string; name: string; email: string; created_at: string }> }>("/hostel-admin/staff");
+  return request<{ data: Array<Record<string, unknown> & { id: string; role: string; name: string; email: string; created_at: string; profile_photo?: string | null }> }>("/hostel-admin/staff");
+}
+
+export async function uploadStaffPhoto(id: string, file: File) {
+  const formData = new FormData();
+  formData.append("photo", file);
+  return request<{ data: unknown }>(`/hostel-admin/staff/${id}/photo`, {
+    method: "POST",
+    body: formData,
+  });
 }
 
 export async function createStaff(payload: { role: "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF"; name: string; email: string; password?: string; hostel_id?: string }) {

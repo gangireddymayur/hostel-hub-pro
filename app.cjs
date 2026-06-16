@@ -532,6 +532,20 @@ async function ensureParentHostelIdColumn() {
   }
 }
 
+async function ensureStaffProfilePhotoColumn() {
+  if (!dbPool) return;
+  try {
+    const [columns] = await dbPool.query("SHOW COLUMNS FROM staff LIKE 'profile_photo'");
+    if (columns.length === 0) {
+      console.log("Auto-Migration: Adding 'profile_photo' column to 'staff' table...");
+      await dbPool.query("ALTER TABLE staff ADD COLUMN profile_photo LONGTEXT NULL");
+      console.log("Auto-Migration: Column 'profile_photo' added successfully!");
+    }
+  } catch (error) {
+    console.error("Auto-Migration Error: Failed to check or add 'profile_photo' column to staff:", error.message);
+  }
+}
+
 async function hydrateDataFromDatabase() {
   if (!dbPool) {
     db = loadData();
@@ -539,6 +553,7 @@ async function hydrateDataFromDatabase() {
   }
 
   await ensureProfilePhotoColumn();
+  await ensureStaffProfilePhotoColumn();
   await ensureLocationColumns();
   await ensureStatusColumns();
   await ensureRefreshTokenColumnLength();
@@ -587,6 +602,7 @@ async function hydrateDataFromDatabase() {
         email: String(row.email ?? "").toLowerCase(),
         passwordHash: String(row.password_hash ?? ""),
         status: "ACTIVE",
+        profile_photo: row.profile_photo ?? null,
         tokenVersion: 0,
         created_at: normalizeDateTime(row.created_at),
       })),
@@ -631,6 +647,7 @@ async function hydrateDataFromDatabase() {
         name: String(row.name ?? ""),
         email: String(row.email ?? "").toLowerCase(),
         password_hash: String(row.password_hash ?? ""),
+        profile_photo: row.profile_photo ?? null,
         created_at: normalizeDateTime(row.created_at),
       })),
       leaveRequests: leaveRequests.map((row) => ({
@@ -735,7 +752,7 @@ async function persist() {
 
     for (const user of db.users.filter((item) => item.role !== "SUPER_ADMIN")) {
       await conn.query(
-        "INSERT INTO staff (id, hostel_id, role, name, email, password_hash, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO staff (id, hostel_id, role, name, email, password_hash, status, profile_photo, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
           user.id,
           user.hostelId,
@@ -744,6 +761,7 @@ async function persist() {
           user.email,
           user.passwordHash,
           user.status ?? "ACTIVE",
+          user.profile_photo ?? null,
           toSqlDateTime(user.created_at),
           toSqlDateTime(user.updated_at ?? user.created_at),
         ],
@@ -1105,12 +1123,15 @@ async function loginStaffDb(identifier, role, hostelEmail) {
 }
 
 function serializeProfile(user) {
+  const hostel = user.hostelId ? findHostelById(user.hostelId) : null;
   return {
     id: user.id,
     role: user.role,
     hostelId: user.hostelId ?? null,
     email: user.email ?? null,
     name: user.name ?? null,
+    hostelName: hostel ? hostel.hostel_name : null,
+    profilePhoto: user.profile_photo ?? null,
   };
 }
 
@@ -1362,6 +1383,7 @@ function userToStaffRecord(user) {
     name: user.name,
     email: user.email,
     password_hash: user.passwordHash,
+    profile_photo: user.profile_photo ?? null,
     created_at: user.created_at,
   };
 }
@@ -2055,6 +2077,55 @@ async function handleCreateHostel(req, res, body) {
   }
 }
 
+async function handleDeleteHostel(req, res, hostelId) {
+  const user = requireAuth(req, res, ["SUPER_ADMIN", "HOSTEL_ADMIN"]);
+  if (!user) return;
+  try {
+    const hostel = findHostelById(hostelId);
+    if (!hostel) return sendJson(res, 404, { error: "Hostel not found" });
+
+    if (user.role === "HOSTEL_ADMIN" && hostel.parent_hostel_id !== user.hostelId) {
+      return sendJson(res, 403, { error: "Forbidden: You can only delete your own branches" });
+    }
+
+    const parentId = hostel.parent_hostel_id || user.hostelId;
+
+    db.students.forEach((student) => {
+      if (student.hostel_id === hostelId) {
+        student.hostel_id = parentId;
+      }
+    });
+
+    db.users.forEach((u) => {
+      if (u.hostelId === hostelId) {
+        u.hostelId = parentId;
+      }
+    });
+    db.staff.forEach((s) => {
+      if (s.hostel_id === hostelId) {
+        s.hostel_id = parentId;
+      }
+    });
+
+    db.parents.forEach((p) => {
+      if (p.hostel_id === hostelId) {
+        p.hostel_id = parentId;
+      }
+    });
+
+    db.hostels = db.hostels.filter((h) => h.id !== hostelId);
+
+    addAudit("DELETE", "HOSTEL", hostelId, user, {
+      hostel_name: hostel.hostel_name,
+    });
+
+    await persist();
+    return sendJson(res, 200, { message: "Branch deleted successfully" });
+  } catch (error) {
+    return sendJson(res, error.statusCode || 400, { error: error.message });
+  }
+}
+
 async function handleUpdateHostel(req, res, hostelId, body) {
   const user = requireAuth(req, res, ["SUPER_ADMIN", "HOSTEL_ADMIN"]);
   if (!user) return;
@@ -2288,6 +2359,29 @@ async function handleUploadStudentPhoto(req, res, studentId, data) {
     addAudit("UPDATE", "STUDENT_PHOTO", student.id, user, { profile_photo: student.profile_photo });
     await persist();
     return sendJson(res, 200, { data: student });
+  } catch (error) {
+    return sendJson(res, 500, { error: error.message });
+  }
+}
+
+async function handleUploadStaffPhoto(req, res, staffId, data) {
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
+  if (!user) return;
+  const staffRow = db.staff.find((item) => item.id === staffId);
+  if (!staffRow || staffRow.hostel_id !== user.hostelId) return sendJson(res, 404, { error: "Staff member not found" });
+  if (data.kind !== "multipart" || !data.value.files.photo) return sendJson(res, 400, { error: "photo file required" });
+  try {
+    const file = data.value.files.photo;
+    const mimeType = String(file.contentType ?? "image/jpeg").toLowerCase();
+    const photoBase64 = `data:${mimeType};base64,${file.data.toString("base64")}`;
+    staffRow.profile_photo = photoBase64;
+    const userRow = db.users.find((u) => u.id === staffId);
+    if (userRow) {
+      userRow.profile_photo = photoBase64;
+    }
+    addAudit("UPDATE", "STAFF_PHOTO", staffRow.id, user, { profile_photo: photoBase64 });
+    await persist();
+    return sendJson(res, 200, { data: staffRow });
   } catch (error) {
     return sendJson(res, 500, { error: error.message });
   }
@@ -2907,6 +3001,10 @@ async function handleApi(req, res, pathname) {
       return handleUpdateHostel(req, res, decodeURIComponent(match[1]), data.kind === "json" ? data.value : {});
     }
 
+    if (match && req.method === "DELETE") {
+      return handleDeleteHostel(req, res, decodeURIComponent(match[1]));
+    }
+
     match = pathname.match(/^\/api\/super-admin\/hostels\/([^/]+)\/status$/);
     if (match && req.method === "PATCH") {
       const data = await readRequestData(req);
@@ -2964,6 +3062,12 @@ async function handleApi(req, res, pathname) {
     if (match && req.method === "PATCH") {
       const data = await readRequestData(req);
       return handleUpdateStaff(req, res, decodeURIComponent(match[1]), data.kind === "json" ? data.value : {});
+    }
+
+    match = pathname.match(/^\/api\/hostel-admin\/staff\/([^/]+)\/photo$/);
+    if (match && req.method === "POST") {
+      const data = await readRequestData(req);
+      return handleUploadStaffPhoto(req, res, decodeURIComponent(match[1]), data);
     }
 
     if (pathname === "/api/hostel-admin/leave-requests" && req.method === "GET") {

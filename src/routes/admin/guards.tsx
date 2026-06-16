@@ -9,8 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { createStaff, getHostelStaff, updateStaff } from "@/lib/api";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { createStaff, getHostelStaff, updateStaff, uploadStaffPhoto } from "@/lib/api";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/guards")({
@@ -22,6 +22,17 @@ function GuardsPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editingGuard, setEditingGuard] = useState<any | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+
+  const photoMutation = useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) => uploadStaffPhoto(id, file),
+    onSuccess: async () => {
+      toast.success("Profile photo uploaded");
+      setPhotoFile(null);
+      await queryClient.invalidateQueries({ queryKey: ["hostel-staff"] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to upload photo"),
+  });
 
   const staffQuery = useQuery({ queryKey: ["hostel-staff"], queryFn: getHostelStaff });
   const list = useMemo(
@@ -88,6 +99,46 @@ function GuardsPage() {
               >
                 <Field name="name" label="Name" defaultValue={editingGuard?.name} required />
                 <Field name="email" label="Email" type="email" defaultValue={editingGuard?.email} required />
+                
+                {editingGuard && (
+                  <div className="grid gap-2 rounded-xl border border-border/60 p-4">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-12 w-12">
+                        {editingGuard.profile_photo && <AvatarImage src={editingGuard.profile_photo} alt={editingGuard.name} className="object-cover" />}
+                        <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+                          {editingGuard.name
+                            .split(" ")
+                            .map((part) => part[0])
+                            .slice(0, 2)
+                            .join("")}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <Label htmlFor="photo" className="text-xs font-medium">Upload profile photo</Label>
+                        <Input
+                          id="photo"
+                          type="file"
+                          accept="image/*"
+                          className="mt-1 h-9 text-xs"
+                          onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)}
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="w-fit"
+                      disabled={!photoFile || photoMutation.isPending}
+                      onClick={() => {
+                        if (!editingGuard || !photoFile) return;
+                        photoMutation.mutate({ id: editingGuard.id, file: photoFile });
+                      }}
+                    >
+                      Upload photo
+                    </Button>
+                  </div>
+                )}
+
                 <Field name="password" label="Password" type="password" helper={editingGuard ? "Leave blank to keep current password." : "Leave blank to use the default reset password."} />
                 <DialogFooter><Button type="submit">{editingGuard ? "Save changes" : "Save"}</Button></DialogFooter>
               </form>
@@ -114,6 +165,7 @@ function GuardsPage() {
                         <ShieldCheck className="h-4 w-4 text-primary" />
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8">
+                            {guard.profile_photo && <AvatarImage src={guard.profile_photo} alt={guard.name} className="object-cover" />}
                             <AvatarFallback className="bg-accent text-accent-foreground text-xs">
                               {guard.name
                                 .split(" ")

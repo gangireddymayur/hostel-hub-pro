@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Pencil, Ban, CheckCircle2 } from "lucide-react";
+import { Plus, Search, Pencil, Ban, CheckCircle2, Trash } from "lucide-react";
 import { PageHeader } from "@/components/dashboard-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { createHostel, getSuperHostels, setHostelStatus, updateHostel } from "@/lib/api";
+import { createHostel, deleteHostel, getSuperHostels, setHostelStatus, updateHostel } from "@/lib/api";
 import { toast } from "sonner";
 
 type HostelRow = {
@@ -40,6 +40,7 @@ function HostelsPage() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<HostelRow | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<HostelRow | null>(null);
 
   const hostelsQuery = useQuery({ queryKey: ["super-hostels"], queryFn: getSuperHostels });
 
@@ -80,6 +81,17 @@ function HostelsPage() {
       await queryClient.invalidateQueries({ queryKey: ["active-hostels"] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to update status"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteHostel,
+    onSuccess: async () => {
+      toast.success("Branch deleted successfully");
+      setConfirmDelete(null);
+      await queryClient.invalidateQueries({ queryKey: ["super-hostels"] });
+      await queryClient.invalidateQueries({ queryKey: ["active-hostels"] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to delete branch"),
   });
 
   const list = useMemo(() => hostelsQuery.data?.data ?? [], [hostelsQuery.data]);
@@ -184,7 +196,6 @@ function HostelsPage() {
                   <TableRow key={hostel.id}>
                     <TableCell>
                       <div className="font-medium">{hostel.hostel_name}</div>
-                      <div className="text-xs text-muted-foreground">{hostel.email}</div>
                     </TableCell>
                     <TableCell>{hostel._count?.students ?? 0}</TableCell>
                     <TableCell>{hostel._count?.staff ?? 0}</TableCell>
@@ -216,6 +227,14 @@ function HostelsPage() {
                         >
                           {hostel.status === "ACTIVE" ? <Ban className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
                         </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setConfirmDelete(hostel)}
+                          className="text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash className="h-4 w-4" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -241,6 +260,46 @@ function HostelsPage() {
               onCancel={() => setEditing(null)}
             />
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!confirmDelete} onOpenChange={(open) => !open && setConfirmDelete(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete branch</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <strong>{confirmDelete?.hostel_name}</strong>?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-3 text-sm">
+            <p className="text-muted-foreground">
+              This branch currently has:
+            </p>
+            <ul className="list-disc pl-5 font-medium space-y-1">
+              <li>{confirmDelete?._count?.students ?? 0} students</li>
+              <li>{confirmDelete?._count?.staff ?? 0} staff members</li>
+            </ul>
+            <p className="text-destructive font-medium bg-destructive/10 p-3 rounded-lg text-xs border border-destructive/20">
+              Warning: Deleting this branch will NOT delete any students or staff. Instead, they will be unassigned from this branch and reassigned back to the main hostel.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setConfirmDelete(null)}>
+              Cancel
+            </Button>
+            <Button 
+              type="button" 
+              variant="destructive"
+              onClick={() => {
+                if (confirmDelete) {
+                  deleteMutation.mutate(confirmDelete.id);
+                }
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Confirm Delete"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

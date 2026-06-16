@@ -518,6 +518,20 @@ async function ensureRefreshTokenColumnLength() {
   }
 }
 
+async function ensureParentHostelIdColumn() {
+  if (!dbPool) return;
+  try {
+    const [columns] = await dbPool.query("SHOW COLUMNS FROM hostels LIKE 'parent_hostel_id'");
+    if (columns.length === 0) {
+      console.log("Auto-Migration: Adding 'parent_hostel_id' column to 'hostels' table...");
+      await dbPool.query("ALTER TABLE hostels ADD COLUMN parent_hostel_id VARCHAR(64) NULL");
+      console.log("Auto-Migration: Column 'parent_hostel_id' added successfully!");
+    }
+  } catch (error) {
+    console.error("Auto-Migration Error: Failed to check or add 'parent_hostel_id' column:", error.message);
+  }
+}
+
 async function hydrateDataFromDatabase() {
   if (!dbPool) {
     db = loadData();
@@ -528,6 +542,7 @@ async function hydrateDataFromDatabase() {
   await ensureLocationColumns();
   await ensureStatusColumns();
   await ensureRefreshTokenColumnLength();
+  await ensureParentHostelIdColumn();
 
   try {
     const [
@@ -584,6 +599,7 @@ async function hydrateDataFromDatabase() {
         email: String(row.email ?? "").toLowerCase(),
         password_hash: String(row.password_hash ?? ""),
         status: String(row.status ?? "ACTIVE"),
+        parent_hostel_id: row.parent_hostel_id ? String(row.parent_hostel_id) : null,
         created_at: normalizeDateTime(row.created_at),
       })),
       users,
@@ -696,13 +712,14 @@ async function persist() {
 
     for (const hostel of db.hostels) {
       await conn.query(
-        "INSERT INTO hostels (id, hostel_name, email, password_hash, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO hostels (id, hostel_name, email, password_hash, status, parent_hostel_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         [
           hostel.id,
           hostel.hostel_name,
           hostel.email,
           hostel.password_hash,
           hostel.status ?? "ACTIVE",
+          hostel.parent_hostel_id ?? null,
           toSqlDateTime(hostel.created_at),
           toSqlDateTime(hostel.updated_at ?? hostel.created_at),
         ],
@@ -1592,15 +1609,20 @@ async function createHostelRecord(payload, actor) {
     email: hostelEmail,
     password_hash: hashPassword(password),
     status: "ACTIVE",
+    parent_hostel_id: actor.role === "HOSTEL_ADMIN" ? actor.hostelId : null,
     created_at: createdAt,
   };
   db.hostels.push(hostel);
-  const admin = linkHostelAdmin(hostel, password, actor);
+
+  let admin = null;
+  if (actor.role === "SUPER_ADMIN") {
+    admin = linkHostelAdmin(hostel, password, actor);
+  }
 
   addAudit("CREATE", "HOSTEL", hostel.id, actor, {
     hostel_name: hostel.hostel_name,
     email: hostel.email,
-    admin_id: admin.id,
+    admin_id: admin ? admin.id : null,
   });
 
   await persist();
@@ -1998,7 +2020,15 @@ async function handleChangePassword(req, res, body) {
 function handleSuperHostels(req, res) {
   const user = requireAuth(req, res, ["SUPER_ADMIN", "HOSTEL_ADMIN"]);
   if (!user) return;
-  const data = db.hostels.map((hostel) => {
+
+  let list = db.hostels;
+  if (user.role === "HOSTEL_ADMIN") {
+    list = db.hostels.filter(
+      (h) => h.id === user.hostelId || h.parent_hostel_id === user.hostelId
+    );
+  }
+
+  const data = list.map((hostel) => {
     const counts = computeHostelCounts(hostel.id);
     return {
       ...hostel,
@@ -2016,8 +2046,8 @@ async function handleCreateHostel(req, res, body) {
     return sendJson(res, 200, {
       data: {
         hostel: created.hostel,
-        admin: serializeProfile(created.admin),
-        credentials: created.credentials,
+        admin: created.admin ? serializeProfile(created.admin) : null,
+        credentials: created.admin ? created.credentials : null,
       },
     });
   } catch (error) {

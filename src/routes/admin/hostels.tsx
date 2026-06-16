@@ -47,14 +47,18 @@ function HostelsPage() {
     mutationFn: createHostel,
     onSuccess: async (response) => {
       const creds = response.data.credentials;
-      toast.success("Hostel created", {
-        description: `Login Email: ${creds.hostel_email} | Password: ${creds.password}`,
-      });
+      if (creds) {
+        toast.success("Hostel created", {
+          description: `Login Email: ${creds.hostel_email} | Password: ${creds.password}`,
+        });
+      } else {
+        toast.success("Branch created successfully");
+      }
       setOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["super-hostels"] });
       await queryClient.invalidateQueries({ queryKey: ["active-hostels"] });
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to create hostel"),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to create branch"),
   });
 
   const updateMutation = useMutation({
@@ -88,8 +92,8 @@ function HostelsPage() {
     return (
       <>
         <PageHeader
-          title="Hostel management"
-          description="Create, edit and manage all hostels on the platform."
+          title="Branch management"
+          description="Create, edit and manage sub-hostel branches under this hostel."
         />
         <Card>
           <CardContent className="p-6 text-sm text-muted-foreground">Loading hostels...</CardContent>
@@ -102,8 +106,8 @@ function HostelsPage() {
     return (
       <>
         <PageHeader
-          title="Hostel management"
-          description="Create, edit and manage all hostels on the platform."
+          title="Branch management"
+          description="Create, edit and manage sub-hostel branches under this hostel."
         />
         <Card>
           <CardContent className="p-6">
@@ -120,17 +124,17 @@ function HostelsPage() {
   return (
     <>
       <PageHeader
-        title="Hostel management"
-        description="Create, edit and manage all hostels on the platform."
+        title="Branch management"
+        description="Create, edit and manage sub-hostel branches under this hostel."
         action={
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4" /> Create Hostel</Button>
+              <Button><Plus className="h-4 w-4" /> Create Branch</Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
-                <DialogTitle>Create new hostel</DialogTitle>
-                <DialogDescription>Provision a new hostel workspace. The admin login details will be auto-generated.</DialogDescription>
+                <DialogTitle>Create new branch</DialogTitle>
+                <DialogDescription>Add a sub-hostel branch to organize students.</DialogDescription>
               </DialogHeader>
               <HostelForm
                 isCreate
@@ -139,7 +143,7 @@ function HostelsPage() {
                     hostel_name: payload.hostel_name ?? "",
                   })
                 }
-                submitLabel={createMutation.isPending ? "Creating..." : "Create Hostel"}
+                submitLabel={createMutation.isPending ? "Creating..." : "Create Branch"}
                 onCancel={() => setOpen(false)}
               />
             </DialogContent>
@@ -160,7 +164,7 @@ function HostelsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Hostel</TableHead>
+                  <TableHead>Branch</TableHead>
                   <TableHead>Students</TableHead>
                   <TableHead>Staff</TableHead>
                   <TableHead>Status</TableHead>
@@ -172,7 +176,7 @@ function HostelsPage() {
                   <TableRow>
                     <TableCell colSpan={5}>
                       <div className="py-8 text-center text-sm text-muted-foreground">
-                        No hostels yet. Create the first hostel to get started.
+                        No branches yet. Add the first branch to get started.
                       </div>
                     </TableCell>
                   </TableRow>
@@ -225,8 +229,8 @@ function HostelsPage() {
       <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Edit hostel</DialogTitle>
-            <DialogDescription>Update hostel details and admin login settings.</DialogDescription>
+            <DialogTitle>Edit branch</DialogTitle>
+            <DialogDescription>Update branch details.</DialogDescription>
           </DialogHeader>
           {editing ? (
             <HostelForm
@@ -267,7 +271,7 @@ function HostelForm({
         });
       }}
     >
-      <Field name="hostel_name" label="Hostel Name" defaultValue={initial?.hostel_name ?? ""} required />
+      <Field name="hostel_name" label="Branch Name" defaultValue={initial?.hostel_name ?? ""} required />
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel

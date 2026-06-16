@@ -73,14 +73,14 @@ function AdminDashboard() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard label="Total Students" value={students.length} icon={Users} tone="primary" />
         <StatCard label="Students Outside" value={outsideStudents} icon={MapPin} tone="warning" />
-        <StatCard label="Pending Leaves" value={pending} icon={ClipboardList} tone="warning" />
-        <StatCard label="Approved Leaves" value={approved} icon={CheckCircle2} tone="success" />
-        <StatCard label="Rejected Leaves" value={rejected} icon={XCircle} tone="destructive" />
+        <StatCard label="Pending Permissions" value={pending} icon={ClipboardList} tone="warning" />
+        <StatCard label="Approved Permissions" value={approved} icon={CheckCircle2} tone="success" />
+        <StatCard label="Rejected Permissions" value={rejected} icon={XCircle} tone="destructive" />
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader><CardTitle>This week's leave activity</CardTitle></CardHeader>
+          <CardHeader><CardTitle>This week's permission activity</CardTitle></CardHeader>
           <CardContent className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={weeklyLeaves}>
@@ -97,7 +97,7 @@ function AdminDashboard() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Recent leave requests</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Recent permission requests</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {recent.map((leave) => (
               <div key={leave.id} className="flex items-center gap-3">

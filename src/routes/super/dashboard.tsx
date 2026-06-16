@@ -52,13 +52,13 @@ function SuperDashboard() {
 
   return (
     <>
-      <PageHeader title="Platform overview" description="Real-time view of hostels, students and leave activity across the network." />
+      <PageHeader title="Platform overview" description="Real-time view of hostels, students and permission activity across the network." />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total Hostels" value={totalHostels} icon={Building2} tone="primary" trend="+ live" />
         <StatCard label="Active Hostels" value={activeHostels} icon={CheckCircle2} tone="success" hint={`${totalHostels - activeHostels} disabled`} />
         <StatCard label="Total Students" value={totalStudents.toLocaleString()} icon={GraduationCap} tone="info" />
-        <StatCard label="Leave Requests" value={totalLeaves.toLocaleString()} icon={ClipboardList} tone="warning" hint="Across all hostels" />
+        <StatCard label="Permission Requests" value={totalLeaves.toLocaleString()} icon={ClipboardList} tone="warning" hint="Across all hostels" />
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
@@ -84,7 +84,7 @@ function SuperDashboard() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Leave activity</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Permission activity</CardTitle></CardHeader>
           <CardContent className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={weeklyLeaves}>

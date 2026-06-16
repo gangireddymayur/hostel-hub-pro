@@ -23,8 +23,8 @@ export const Route = createFileRoute("/admin/reports")({
 });
 
 const items = [
-  { title: "Daily Leave Report", desc: "Leaves approved/rejected today." },
-  { title: "Monthly Leave Report", desc: "Aggregated leave activity for the month." },
+  { title: "Daily Permission Report", desc: "Permissions approved/rejected today." },
+  { title: "Monthly Permission Report", desc: "Aggregated permission activity for the month." },
   { title: "Students Outside Report", desc: "Students currently outside the hostel." },
   { title: "Student Exit History", desc: "Historical exit events with timestamps." },
   { title: "Student Return History", desc: "Historical return events with timestamps." },
@@ -74,7 +74,7 @@ function Reports() {
 
     const todayStr = new Date().toISOString().slice(0, 10);
 
-    if (title === "Daily Leave Report") {
+    if (title === "Daily Permission Report") {
       const dailyLeaves = leaves.filter(
         (l) => l.created_at && l.created_at.slice(0, 10) === todayStr,
       );
@@ -89,9 +89,9 @@ function Reports() {
         l.final_status ?? "",
         l.created_at ?? "",
       ]);
-      downloadCsv(`daily_leave_report_${todayStr}.csv`, headers, dataRows);
-      toast.success("Daily Leave Report exported");
-    } else if (title === "Monthly Leave Report") {
+      downloadCsv(`daily_permission_report_${todayStr}.csv`, headers, dataRows);
+      toast.success("Daily Permission Report exported");
+    } else if (title === "Monthly Permission Report") {
       const currentMonthStr = new Date().toISOString().slice(0, 7);
       const monthlyLeaves = leaves.filter(
         (l) => l.created_at && l.created_at.slice(0, 7) === currentMonthStr,
@@ -107,8 +107,8 @@ function Reports() {
         l.final_status ?? "",
         l.created_at ?? "",
       ]);
-      downloadCsv(`monthly_leave_report_${currentMonthStr}.csv`, headers, dataRows);
-      toast.success("Monthly Leave Report exported");
+      downloadCsv(`monthly_permission_report_${currentMonthStr}.csv`, headers, dataRows);
+      toast.success("Monthly Permission Report exported");
     } else if (title === "Students Outside Report") {
       const outsideLeaves = leaves.filter((l) => l.gatePass?.status === "OUT");
       const headers = ["Student Name", "Student ID", "Room", "Out Time Actual", "Expected Return", "Student Lat", "Student Lng", "Exit Guard Lat", "Exit Guard Lng"];
@@ -180,7 +180,7 @@ function Reports() {
       <PageHeader title="Reports" description="Download operational reports for compliance and reviews." />
 
       <Card className="mb-6">
-        <CardHeader><CardTitle>Leave volume - last 7 days</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Permission volume - last 7 days</CardTitle></CardHeader>
         <CardContent className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData}>

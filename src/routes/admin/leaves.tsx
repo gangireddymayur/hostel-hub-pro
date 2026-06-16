@@ -14,7 +14,7 @@ import { getLeaveRequests, reviewLeaveRequest, bulkReviewLeaveRequests } from "@
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/leaves")({
-  head: () => ({ meta: [{ title: "Leave Requests · HostelOS" }] }),
+  head: () => ({ meta: [{ title: "Permission Requests · HostelOS" }] }),
   component: LeavesPage,
 });
 
@@ -32,25 +32,25 @@ function LeavesPage() {
   const reviewMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: "APPROVED" | "REJECTED" }) => reviewLeaveRequest(id, { status }),
     onSuccess: async (_, variables) => {
-      toast.success(`Leave ${variables.status.toLowerCase()}`);
+      toast.success(`Permission ${variables.status.toLowerCase()}`);
       setSelectedIds((prev) => prev.filter((id) => id !== variables.id));
       await queryClient.invalidateQueries({ queryKey: ["hostel-leaves"] });
       await queryClient.invalidateQueries({ queryKey: ["hostel-dashboard"] });
       await queryClient.invalidateQueries({ queryKey: ["hostel-reports"] });
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to update leave"),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to update permission"),
   });
 
   const bulkReviewMutation = useMutation({
     mutationFn: (status: "APPROVED" | "REJECTED") => bulkReviewLeaveRequests({ ids: selectedIds, status }),
     onSuccess: async (_, status) => {
-      toast.success(`Bulk leaves ${status.toLowerCase()} successfully`);
+      toast.success(`Bulk permissions ${status.toLowerCase()} successfully`);
       setSelectedIds([]);
       await queryClient.invalidateQueries({ queryKey: ["hostel-leaves"] });
       await queryClient.invalidateQueries({ queryKey: ["hostel-dashboard"] });
       await queryClient.invalidateQueries({ queryKey: ["hostel-reports"] });
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to bulk update leaves"),
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to bulk update permissions"),
   });
 
   const filter = (status?: string) =>
@@ -70,7 +70,7 @@ function LeavesPage() {
 
   return (
     <>
-      <PageHeader title="Leave requests" description="Review parent-approved leave requests from students." />
+      <PageHeader title="Permission requests" description="Review parent-approved permission requests from students." />
 
       <Card>
         <CardContent className="p-4">

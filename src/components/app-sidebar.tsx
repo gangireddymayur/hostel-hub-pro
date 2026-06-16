@@ -29,8 +29,8 @@ const adminNav = [
     { to: "/admin/hostels", label: "Hostels", icon: Building2 },
     { to: "/admin/staff", label: "Staff", icon: UserCog },
   ]},
-  { group: "Leaves", items: [
-    { to: "/admin/leaves", label: "Leave Requests", icon: ClipboardList },
+  { group: "Permissions", items: [
+    { to: "/admin/leaves", label: "Permission Requests", icon: ClipboardList },
     { to: "/admin/tracking/outside", label: "Students Outside", icon: MapPin },
     { to: "/admin/tracking/returned", label: "Students Returned", icon: CheckCircle2 },
   ]},

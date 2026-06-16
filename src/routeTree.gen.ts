@@ -23,6 +23,7 @@ import { Route as AdminStaffRouteImport } from './routes/admin/staff'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminReportsRouteImport } from './routes/admin/reports'
 import { Route as AdminLeavesRouteImport } from './routes/admin/leaves'
+import { Route as AdminHostelsRouteImport } from './routes/admin/hostels'
 import { Route as AdminGuardsRouteImport } from './routes/admin/guards'
 import { Route as AdminDashboardRouteImport } from './routes/admin/dashboard'
 import { Route as AdminStudentsIndexRouteImport } from './routes/admin/students/index'
@@ -100,6 +101,11 @@ const AdminLeavesRoute = AdminLeavesRouteImport.update({
   path: '/leaves',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminHostelsRoute = AdminHostelsRouteImport.update({
+  id: '/admin/hostels',
+  path: '/hostels',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminGuardsRoute = AdminGuardsRouteImport.update({
   id: '/admin/guards',
   path: '/guards',
@@ -138,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/super': typeof SuperRouteWithChildren
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/guards': typeof AdminGuardsRoute
+  '/admin/hostels': typeof AdminHostelsRoute
   '/admin/leaves': typeof AdminLeavesRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -158,6 +165,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/guards': typeof AdminGuardsRoute
+  '/admin/hostels': typeof AdminHostelsRoute
   '/admin/leaves': typeof AdminLeavesRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -181,6 +189,7 @@ export interface FileRoutesById {
   '/super': typeof SuperRouteWithChildren
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/guards': typeof AdminGuardsRoute
+  '/admin/hostels': typeof AdminHostelsRoute
   '/admin/leaves': typeof AdminLeavesRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -205,6 +214,7 @@ export interface FileRouteTypes {
     | '/super'
     | '/admin/dashboard'
     | '/admin/guards'
+    | '/admin/hostels'
     | '/admin/leaves'
     | '/admin/reports'
     | '/admin/settings'
@@ -225,6 +235,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin/dashboard'
     | '/admin/guards'
+    | '/admin/hostels'
     | '/admin/leaves'
     | '/admin/reports'
     | '/admin/settings'
@@ -247,6 +258,7 @@ export interface FileRouteTypes {
     | '/super'
     | '/admin/dashboard'
     | '/admin/guards'
+    | '/admin/hostels'
     | '/admin/leaves'
     | '/admin/reports'
     | '/admin/settings'
@@ -370,6 +382,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminLeavesRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/hostels': {
+      id: '/admin/hostels'
+      path: '/hostels'
+      fullPath: '/admin/hostels'
+      preLoaderRoute: typeof AdminHostelsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/guards': {
       id: '/admin/guards'
       path: '/guards'
@@ -418,6 +437,7 @@ declare module '@tanstack/react-router' {
 interface AdminRouteChildren {
   AdminDashboardRoute: typeof AdminDashboardRoute
   AdminGuardsRoute: typeof AdminGuardsRoute
+  AdminHostelsRoute: typeof AdminHostelsRoute
   AdminLeavesRoute: typeof AdminLeavesRoute
   AdminReportsRoute: typeof AdminReportsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
@@ -432,6 +452,7 @@ interface AdminRouteChildren {
 const AdminRouteChildren: AdminRouteChildren = {
   AdminDashboardRoute: AdminDashboardRoute,
   AdminGuardsRoute: AdminGuardsRoute,
+  AdminHostelsRoute: AdminHostelsRoute,
   AdminLeavesRoute: AdminLeavesRoute,
   AdminReportsRoute: AdminReportsRoute,
   AdminSettingsRoute: AdminSettingsRoute,

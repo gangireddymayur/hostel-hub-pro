@@ -1990,7 +1990,7 @@ async function handleChangePassword(req, res, body) {
 }
 
 function handleSuperHostels(req, res) {
-  const user = requireAuth(req, res, ["SUPER_ADMIN"]);
+  const user = requireAuth(req, res, ["SUPER_ADMIN", "HOSTEL_ADMIN"]);
   if (!user) return;
   const data = db.hostels.map((hostel) => {
     const counts = computeHostelCounts(hostel.id);
@@ -2003,7 +2003,7 @@ function handleSuperHostels(req, res) {
 }
 
 async function handleCreateHostel(req, res, body) {
-  const user = requireAuth(req, res, ["SUPER_ADMIN"]);
+  const user = requireAuth(req, res, ["SUPER_ADMIN", "HOSTEL_ADMIN"]);
   if (!user) return;
   try {
     const created = await createHostelRecord(body, user);
@@ -2020,7 +2020,7 @@ async function handleCreateHostel(req, res, body) {
 }
 
 async function handleUpdateHostel(req, res, hostelId, body) {
-  const user = requireAuth(req, res, ["SUPER_ADMIN"]);
+  const user = requireAuth(req, res, ["SUPER_ADMIN", "HOSTEL_ADMIN"]);
   if (!user) return;
   const hostel = findHostelById(hostelId);
   if (!hostel) return sendJson(res, 404, { error: "Hostel not found" });
@@ -2057,7 +2057,7 @@ async function handleUpdateHostel(req, res, hostelId, body) {
 }
 
 async function handleHostelStatus(req, res, hostelId, body) {
-  const user = requireAuth(req, res, ["SUPER_ADMIN"]);
+  const user = requireAuth(req, res, ["SUPER_ADMIN", "HOSTEL_ADMIN"]);
   if (!user) return;
   const status = String(body.status ?? "").toUpperCase();
   if (!["ACTIVE", "DISABLED"].includes(status)) return sendJson(res, 400, { error: "Invalid status" });

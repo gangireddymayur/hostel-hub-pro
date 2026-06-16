@@ -207,7 +207,7 @@ function LeavesPage() {
                           <TableCell><ApprovalDot s={leave.hostel_status.toLowerCase() as "pending" | "approved" | "rejected"} /></TableCell>
                           <TableCell><StatusBadge s={leave.final_status.toLowerCase()} /></TableCell>
                           <TableCell className="text-right">
-                            {leave.final_status === "PENDING" ? (
+                            {!leave.gatePass || (leave.gatePass.status !== "OUT" && leave.gatePass.status !== "RETURNED") ? (
                               <div className="flex justify-end gap-1">
                                 <Button
                                   size="sm"

@@ -26,6 +26,7 @@ const adminNav = [
   { group: "Management", items: [
     { to: "/admin/students", label: "Students", icon: Users },
     { to: "/admin/students/import", label: "Import Students", icon: FileSpreadsheet },
+    { to: "/admin/hostels", label: "Hostels", icon: Building2 },
     { to: "/admin/staff", label: "Staff", icon: UserCog },
     { to: "/admin/guards", label: "Security Guards", icon: ShieldCheck },
   ]},

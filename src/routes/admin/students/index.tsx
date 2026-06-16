@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Dialog,
@@ -19,7 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { createStudent, getHostelStudents, uploadStudentPhoto, getHostels } from "@/lib/api";
+import { createStudent, getHostelStudents, uploadStudentPhoto, getHostels, updateStudent } from "@/lib/api";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
@@ -33,6 +33,8 @@ type StudentRow = {
   profile_photo: string | null;
   status: string;
   created_at: string;
+  hostel_id?: string;
+  hostel_name?: string;
 };
 
 export const Route = createFileRoute("/admin/students/")({
@@ -45,6 +47,7 @@ function StudentsPage() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<StudentRow | null>(null);
+  const [editingStudent, setEditingStudent] = useState<StudentRow | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [selectedHostel, setSelectedHostel] = useState("");
 
@@ -52,7 +55,7 @@ function StudentsPage() {
   const hostelsQuery = useQuery({ queryKey: ["active-hostels"], queryFn: getHostels });
   const hostels = hostelsQuery.data?.data ?? [];
 
-  const list = useMemo(() => studentsQuery.data?.data ?? [], [studentsQuery.data]);
+  const list = useMemo(() => (studentsQuery.data?.data ?? []) as StudentRow[], [studentsQuery.data]);
   const filtered = list.filter((student) =>
     student.name.toLowerCase().includes(q.toLowerCase()) ||
     student.student_id.toLowerCase().includes(q.toLowerCase()) ||
@@ -68,6 +71,18 @@ function StudentsPage() {
       await queryClient.invalidateQueries({ queryKey: ["hostel-students"] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to add student"),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ studentId, payload }: { studentId: string; payload: Parameters<typeof updateStudent>[1] }) =>
+      updateStudent(studentId, payload),
+    onSuccess: async () => {
+      toast.success("Student updated");
+      setEditingStudent(null);
+      setSelectedHostel("");
+      await queryClient.invalidateQueries({ queryKey: ["hostel-students"] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to update student"),
   });
 
   const photoMutation = useMutation({
@@ -167,6 +182,7 @@ function StudentsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Student</TableHead>
+                  <TableHead>Hostel</TableHead>
                   <TableHead>Room</TableHead>
                   <TableHead>Parent Mobile</TableHead>
                   <TableHead>Mobile</TableHead>
@@ -180,6 +196,7 @@ function StudentsPage() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9">
+                          {student.profile_photo && <AvatarImage src={student.profile_photo} alt={student.name} className="object-cover" />}
                           <AvatarFallback className="bg-accent text-accent-foreground text-xs">
                             {student.name
                               .split(" ")
@@ -194,6 +211,7 @@ function StudentsPage() {
                         </div>
                       </div>
                     </TableCell>
+                    <TableCell>{student.hostel_name || "N/A"}</TableCell>
                     <TableCell>{student.room_number}</TableCell>
                     <TableCell className="font-mono text-xs">{student.parent_mobile}</TableCell>
                     <TableCell className="font-mono text-xs">{student.mobile}</TableCell>
@@ -207,7 +225,14 @@ function StudentsPage() {
                         <Button size="icon" variant="ghost" onClick={() => setView(student)}>
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button size="icon" variant="ghost" onClick={() => setView(student)}>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => {
+                            setEditingStudent(student);
+                            setSelectedHostel(student.hostel_id ?? "");
+                          }}
+                        >
                           <Pencil className="h-4 w-4" />
                         </Button>
                       </div>
@@ -229,6 +254,7 @@ function StudentsPage() {
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <Avatar className="h-16 w-16">
+                  {view.profile_photo && <AvatarImage src={view.profile_photo} alt={view.name} className="object-cover" />}
                   <AvatarFallback className="bg-primary text-primary-foreground">
                     {view.name
                       .split(" ")
@@ -244,6 +270,7 @@ function StudentsPage() {
               </div>
 
               <dl className="grid grid-cols-2 gap-3 text-sm">
+                <Info k="Hostel" v={view.hostel_name || "N/A"} />
                 <Info k="Room" v={view.room_number} />
                 <Info k="Mobile" v={view.mobile} />
                 <Info k="Parent" v={view.parent_mobile} />
@@ -275,6 +302,78 @@ function StudentsPage() {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!editingStudent} onOpenChange={(open) => !open && setEditingStudent(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit student</DialogTitle>
+            <DialogDescription>Update student profile and details.</DialogDescription>
+          </DialogHeader>
+          {editingStudent ? (
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = new FormData(event.currentTarget);
+                updateMutation.mutate({
+                  studentId: editingStudent.id,
+                  payload: {
+                    student_id: String(form.get("student_id") ?? ""),
+                    name: String(form.get("name") ?? ""),
+                    room_number: String(form.get("room_number") ?? ""),
+                    mobile: String(form.get("mobile") ?? ""),
+                    parent_mobile: String(form.get("parent_mobile") ?? ""),
+                    password: String(form.get("password") ?? "") || undefined,
+                    status: String(form.get("status") ?? ""),
+                    hostel_id: selectedHostel || undefined,
+                  },
+                });
+              }}
+              className="grid gap-4 md:grid-cols-2"
+            >
+              <Field name="student_id" label="Student ID" defaultValue={editingStudent.student_id} required />
+              <Field name="name" label="Full Name" defaultValue={editingStudent.name} required />
+              <Field name="room_number" label="Room Number" defaultValue={editingStudent.room_number} required />
+              <Field name="mobile" label="Mobile Number" defaultValue={editingStudent.mobile} required />
+              <div className="md:col-span-2">
+                <Field name="parent_mobile" label="Parent Mobile" defaultValue={editingStudent.parent_mobile} required />
+              </div>
+              <div className="md:col-span-2">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="hostel_id">Hostel (Optional)</Label>
+                  <Select value={selectedHostel} onValueChange={setSelectedHostel}>
+                    <SelectTrigger id="hostel_id">
+                      <SelectValue placeholder="Select a hostel" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {hostels.map((hostel) => (
+                        <SelectItem key={hostel.id} value={hostel.id}>
+                          {hostel.hostel_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="status">Status</Label>
+                <select id="status" name="status" defaultValue={editingStudent.status} className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm">
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="DISABLED">DISABLED</option>
+                </select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="password">Password (Optional)</Label>
+                <Input id="password" name="password" type="password" />
+                <p className="text-xs text-muted-foreground">Leave blank to keep current password.</p>
+              </div>
+              <DialogFooter className="md:col-span-2">
+                <Button type="button" variant="ghost" onClick={() => setEditingStudent(null)}>Cancel</Button>
+                <Button type="submit">Save Changes</Button>
+              </DialogFooter>
+            </form>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -284,18 +383,20 @@ function Field({
   label,
   type = "text",
   required,
+  defaultValue,
   helper,
 }: {
   name: string;
   label: string;
   type?: string;
   required?: boolean;
+  defaultValue?: string;
   helper?: string;
 }) {
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={name}>{label}</Label>
-      <Input id={name} name={name} type={type} required={required} />
+      <Input id={name} name={name} type={type} required={required} defaultValue={defaultValue} />
       {helper ? <p className="text-xs text-muted-foreground">{helper}</p> : null}
     </div>
   );

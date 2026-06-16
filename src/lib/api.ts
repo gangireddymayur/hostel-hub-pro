@@ -202,6 +202,25 @@ export async function createStudent(payload: { student_id: string; name: string;
   });
 }
 
+export async function updateStudent(
+  studentId: string,
+  payload: {
+    student_id?: string;
+    name?: string;
+    room_number?: string;
+    mobile?: string;
+    parent_mobile?: string;
+    password?: string;
+    status?: string;
+    hostel_id?: string;
+  }
+) {
+  return request<{ data: unknown }>(`/hostel-admin/students/${studentId}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
 export async function importStudents(file: File) {
   const formData = new FormData();
   formData.append("file", file);

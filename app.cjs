@@ -2102,10 +2102,85 @@ function handleHostelStudents(req, res) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
   const students = db.students
-    .filter((student) => student.hostel_id === user.hostelId)
     .slice()
+    .map((student) => {
+      const h = db.hostels.find((x) => x.id === student.hostel_id);
+      return {
+        ...student,
+        hostel_name: h ? h.hostel_name : "",
+      };
+    })
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
   return sendJson(res, 200, { data: students });
+}
+
+async function handleUpdateStudent(req, res, studentId, body) {
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
+  if (!user) return;
+  try {
+    const student = db.students.find((item) => item.id === studentId);
+    if (!student) return sendJson(res, 404, { error: "Student not found" });
+
+    const student_id = body.student_id ? String(body.student_id).trim() : student.student_id;
+    const name = body.name ? String(body.name).trim() : student.name;
+    const room_number = body.room_number ? String(body.room_number).trim() : student.room_number;
+    const mobile = body.mobile ? String(body.mobile).trim() : student.mobile;
+    const parent_mobile = body.parent_mobile ? String(body.parent_mobile).trim() : student.parent_mobile;
+    const status = body.status ? String(body.status).trim().toUpperCase() : student.status;
+    const hostel_id = body.hostel_id ? String(body.hostel_id).trim() : student.hostel_id;
+
+    if (!student_id || !name || !room_number || !mobile || !parent_mobile) {
+      return sendJson(res, 400, { error: "student_id, name, room_number, mobile and parent_mobile cannot be empty" });
+    }
+
+    if (student_id !== student.student_id) {
+      if (db.students.some((s) => s.hostel_id === hostel_id && s.student_id === student_id && s.id !== student.id)) {
+        return sendJson(res, 409, { error: "Student ID already exists" });
+      }
+    }
+
+    if (mobile !== student.mobile) {
+      if (db.students.some((s) => s.hostel_id === hostel_id && s.mobile === mobile && s.id !== student.id)) {
+        return sendJson(res, 409, { error: "Student mobile number already exists in this hostel" });
+      }
+    }
+
+    student.student_id = student_id;
+    student.name = name;
+    student.room_number = room_number;
+    student.mobile = mobile;
+    student.parent_mobile = parent_mobile;
+    student.status = status;
+    student.hostel_id = hostel_id;
+
+    if (body.password) {
+      student.password_hash = hashPassword(body.password);
+    }
+
+    // Update corresponding parent mobile/hostel if needed
+    let parent = db.parents.find((item) => item.hostel_id === student.hostel_id && item.mobile === parent_mobile);
+    if (!parent) {
+      parent = {
+        id: uuid("parent"),
+        hostel_id: hostel_id,
+        mobile: parent_mobile,
+        password_hash: body.password ? hashPassword(body.password) : student.password_hash,
+        created_at: nowIso(),
+      };
+      db.parents.push(parent);
+    } else {
+      parent.hostel_id = hostel_id;
+      if (body.password) {
+        parent.password_hash = hashPassword(body.password);
+      }
+    }
+
+    addAudit("UPDATE", "STUDENT", student.id, user, { student_id, name, room_number });
+    await persist();
+    return sendJson(res, 200, { data: student });
+  } catch (error) {
+    return sendJson(res, 500, { error: error.message });
+  }
 }
 
 async function handleCreateStudent(req, res, body) {
@@ -2186,8 +2261,14 @@ function handleHostelStaff(req, res) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
   const staff = db.staff
-    .filter((item) => item.hostel_id === user.hostelId)
     .slice()
+    .map((item) => {
+      const h = db.hostels.find((x) => x.id === item.hostel_id);
+      return {
+        ...item,
+        hostel_name: h ? h.hostel_name : "",
+      };
+    })
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
   return sendJson(res, 200, { data: staff });
 }
@@ -2207,26 +2288,28 @@ async function handleUpdateStaff(req, res, staffId, body) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
   try {
-    const staffRow = db.staff.find((item) => item.id === staffId && item.hostel_id === user.hostelId);
+    const staffRow = db.staff.find((item) => item.id === staffId);
     if (!staffRow) return sendJson(res, 404, { error: "Staff member not found" });
 
     const role = body.role ? normalizeRole(body.role) : staffRow.role;
     const name = body.name ? String(body.name).trim() : staffRow.name;
     const email = body.email ? String(body.email).trim().toLowerCase() : staffRow.email;
+    const hostel_id = body.hostel_id ? String(body.hostel_id).trim() : staffRow.hostel_id;
 
     if (!role || !name || !email) {
       return sendJson(res, 400, { error: "role, name and email cannot be empty" });
     }
 
     if (email !== staffRow.email) {
-      if (db.users.some((u) => u.email.toLowerCase() === email && (u.role === "SUPER_ADMIN" || u.hostelId === user.hostelId))) {
-        return sendJson(res, 409, { error: "Email already exists in this hostel" });
+      if (db.users.some((u) => u.email.toLowerCase() === email && u.id !== staffId)) {
+        return sendJson(res, 409, { error: "Email already exists" });
       }
     }
 
     staffRow.role = role;
     staffRow.name = name;
     staffRow.email = email;
+    staffRow.hostel_id = hostel_id;
     if (body.password) {
       staffRow.password_hash = hashPassword(body.password);
     }
@@ -2236,12 +2319,13 @@ async function handleUpdateStaff(req, res, staffId, body) {
       userRow.role = role;
       userRow.name = name;
       userRow.email = email;
+      userRow.hostelId = hostel_id;
       if (body.password) {
         userRow.passwordHash = staffRow.password_hash;
       }
     }
 
-    addAudit("UPDATE", "STAFF", staffRow.id, user, { role, email });
+    addAudit("UPDATE", "STAFF", staffRow.id, user, { role, email, hostel_id });
     await persist();
     return sendJson(res, 200, { data: staffRow });
   } catch (error) {
@@ -2823,6 +2907,12 @@ async function handleApi(req, res, pathname) {
     if (match && req.method === "POST") {
       const data = await readRequestData(req);
       return handleUploadStudentPhoto(req, res, decodeURIComponent(match[1]), data);
+    }
+
+    match = pathname.match(/^\/api\/hostel-admin\/students\/([^/]+)$/);
+    if (match && req.method === "PATCH") {
+      const data = await readRequestData(req);
+      return handleUpdateStudent(req, res, decodeURIComponent(match[1]), data.kind === "json" ? data.value : {});
     }
 
     if (pathname === "/api/hostel-admin/staff" && req.method === "GET") {

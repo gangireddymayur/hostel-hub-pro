@@ -28,7 +28,6 @@ const adminNav = [
     { to: "/admin/students/import", label: "Import Students", icon: FileSpreadsheet },
     { to: "/admin/hostels", label: "Hostels", icon: Building2 },
     { to: "/admin/staff", label: "Staff", icon: UserCog },
-    { to: "/admin/guards", label: "Security Guards", icon: ShieldCheck },
   ]},
   { group: "Leaves", items: [
     { to: "/admin/leaves", label: "Leave Requests", icon: ClipboardList },

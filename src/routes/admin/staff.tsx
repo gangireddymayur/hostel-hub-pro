@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, UserCog } from "lucide-react";
+import { Plus, Pencil, UserCog, Search } from "lucide-react";
 import { PageHeader } from "@/components/dashboard-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,6 +19,8 @@ type StaffRow = {
   name: string;
   email: string;
   created_at: string;
+  hostel_id?: string;
+  hostel_name?: string;
 };
 
 export const Route = createFileRoute("/admin/staff")({
@@ -31,11 +33,23 @@ function StaffPage() {
   const [open, setOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffRow | null>(null);
   const [selectedHostel, setSelectedHostel] = useState("");
+  const [q, setQ] = useState("");
+  const [roleFilter, setRoleFilter] = useState("ALL");
 
   const staffQuery = useQuery({ queryKey: ["hostel-staff"], queryFn: getHostelStaff });
   const hostelsQuery = useQuery({ queryKey: ["active-hostels"], queryFn: getHostels });
-  const list = useMemo(() => staffQuery.data?.data ?? [], [staffQuery.data]);
+  const list = useMemo(() => (staffQuery.data?.data ?? []) as StaffRow[], [staffQuery.data]);
   const hostels = hostelsQuery.data?.data ?? [];
+
+  const filtered = useMemo(() => {
+    return list.filter((staff) => {
+      const matchesSearch =
+        staff.name.toLowerCase().includes(q.toLowerCase()) ||
+        staff.email.toLowerCase().includes(q.toLowerCase());
+      const matchesRole = roleFilter === "ALL" || staff.role === roleFilter;
+      return matchesSearch && matchesRole;
+    });
+  }, [list, q, roleFilter]);
 
   const createMutation = useMutation({
     mutationFn: createStaff,
@@ -106,24 +120,22 @@ function StaffPage() {
                 <Field name="name" label="Name" defaultValue={editingStaff?.name} required />
                 <Field name="role" label="Role" asSelect defaultValue={editingStaff?.role} helper="Choose hostel admin, guard or hostel staff." />
                 
-                {!editingStaff && (
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="hostel_select">Hostel (Optional)</Label>
-                    <select
-                      id="hostel_select"
-                      value={selectedHostel}
-                      onChange={(e) => setSelectedHostel(e.target.value)}
-                      className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    >
-                      <option value="">Select a hostel</option>
-                      {hostels.map((hostel) => (
-                        <option key={hostel.id} value={hostel.id}>
-                          {hostel.hostel_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <div className="grid gap-1.5">
+                  <Label htmlFor="hostel_select">Hostel (Optional)</Label>
+                  <select
+                    id="hostel_select"
+                    value={selectedHostel}
+                    onChange={(e) => setSelectedHostel(e.target.value)}
+                    className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">Select a hostel</option>
+                    {hostels.map((hostel) => (
+                      <option key={hostel.id} value={hostel.id}>
+                        {hostel.hostel_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 
                 <Field name="email" label="Email" type="email" defaultValue={editingStaff?.email} required />
                 <Field name="password" label="Password" type="password" helper={editingStaff ? "Leave blank to keep current password." : "Leave blank to use the default reset password."} />
@@ -135,18 +147,41 @@ function StaffPage() {
       />
       <Card>
         <CardContent className="p-4">
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <div className="relative max-w-sm flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search staff by name, email…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="ALL">All Roles</option>
+              <option value="HOSTEL_ADMIN">Hostel Admin</option>
+              <option value="SECURITY_GUARD">Security Guard</option>
+              <option value="HOSTEL_STAFF">Hostel Staff</option>
+            </select>
+          </div>
+
           <div className="overflow-x-auto rounded-lg border border-border/60">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Hostel</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {list.map((staff) => (
+                {filtered.map((staff) => (
                   <TableRow key={staff.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -163,6 +198,7 @@ function StaffPage() {
                       </div>
                     </TableCell>
                     <TableCell>{staff.role.toLowerCase().replaceAll("_", " ")}</TableCell>
+                    <TableCell>{staff.hostel_name || "N/A"}</TableCell>
                     <TableCell className="text-xs">{staff.email}</TableCell>
                     <TableCell className="text-right">
                       <Button
@@ -170,6 +206,7 @@ function StaffPage() {
                         variant="ghost"
                         onClick={() => {
                           setEditingStaff(staff);
+                          setSelectedHostel(staff.hostel_id ?? "");
                           setOpen(true);
                         }}
                       >

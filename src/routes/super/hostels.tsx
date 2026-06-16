@@ -45,7 +45,7 @@ function HostelsPage() {
 
   const list = useMemo(() => hostelsQuery.data?.data ?? [], [hostelsQuery.data]);
   const filtered = list.filter((hostel) =>
-    hostel.hostel_name.toLowerCase().includes(q.toLowerCase()) || hostel.email.toLowerCase().includes(q.toLowerCase()),
+    hostel.hostel_name?.toLowerCase().includes(q.toLowerCase()) || hostel.email?.toLowerCase().includes(q.toLowerCase()),
   );
 
   if (hostelsQuery.isLoading) {
@@ -136,8 +136,6 @@ function HostelsPage() {
                 onSubmit={(payload) =>
                   createMutation.mutate({
                     hostel_name: payload.hostel_name ?? "",
-                    email: payload.email ?? "",
-                    password: payload.password,
                   })
                 }
                 submitLabel={createMutation.isPending ? "Creating..." : "Create Hostel"}
@@ -253,29 +251,23 @@ function HostelForm({
 }: {
   initial?: Partial<HostelRow>;
   isCreate: boolean;
-  onSubmit: (payload: { hostel_name?: string; email?: string; password?: string }) => void;
+  onSubmit: (payload: { hostel_name?: string }) => void;
   submitLabel: string;
   onCancel: () => void;
 }) {
   return (
     <form
-      className="grid gap-4 md:grid-cols-2"
+      className="grid gap-4"
       onSubmit={(event) => {
         event.preventDefault();
         const form = new FormData(event.currentTarget);
         onSubmit({
           hostel_name: String(form.get("hostel_name") ?? ""),
-          email: String(form.get("email") ?? ""),
-          password: String(form.get("password") ?? "") || undefined,
         });
       }}
     >
       <Field name="hostel_name" label="Hostel Name" defaultValue={initial?.hostel_name ?? ""} required />
-      <Field name="email" label="Hostel Email" type="email" defaultValue={initial?.email ?? ""} required />
-      <div className="md:col-span-2">
-        <Field name="password" label="Password" type="password" defaultValue="" helper="Used for both the hostel and its auto-created admin login." />
-      </div>
-      <DialogFooter className="md:col-span-2">
+      <DialogFooter>
         <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel
         </Button>

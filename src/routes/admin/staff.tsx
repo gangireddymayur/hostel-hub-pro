@@ -64,7 +64,7 @@ function StaffPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, ...payload }: { id: string; role: "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF"; name: string; email: string; password?: string }) =>
+    mutationFn: ({ id, ...payload }: { id: string; role: "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF"; name: string; email: string; password?: string; hostel_id?: string }) =>
       updateStaff(id, payload),
     onSuccess: async () => {
       toast.success("Staff updated");
@@ -102,13 +102,17 @@ function StaffPage() {
                 className="grid gap-4"
                 onSubmit={(event) => {
                   event.preventDefault();
+                  if (!selectedHostel) {
+                    toast.error("Hostel is required");
+                    return;
+                  }
                   const form = new FormData(event.currentTarget);
                   const payload = {
                     role: String(form.get("role")) as "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF",
                     name: String(form.get("name")),
                     email: String(form.get("email")),
                     password: String(form.get("password") ?? "") || undefined,
-                    hostel_id: selectedHostel || undefined,
+                    hostel_id: selectedHostel,
                   };
                   if (editingStaff) {
                     updateMutation.mutate({ id: editingStaff.id, ...payload });
@@ -121,11 +125,12 @@ function StaffPage() {
                 <Field name="role" label="Role" asSelect defaultValue={editingStaff?.role} helper="Choose hostel admin, guard or hostel staff." />
                 
                 <div className="grid gap-1.5">
-                  <Label htmlFor="hostel_select">Hostel (Optional)</Label>
+                  <Label htmlFor="hostel_select">Hostel</Label>
                   <select
                     id="hostel_select"
                     value={selectedHostel}
                     onChange={(e) => setSelectedHostel(e.target.value)}
+                    required
                     className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                   >
                     <option value="">Select a hostel</option>

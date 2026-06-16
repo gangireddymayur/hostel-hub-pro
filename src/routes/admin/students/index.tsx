@@ -50,17 +50,23 @@ function StudentsPage() {
   const [editingStudent, setEditingStudent] = useState<StudentRow | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [selectedHostel, setSelectedHostel] = useState("");
+  const [hostelFilter, setHostelFilter] = useState("ALL");
 
   const studentsQuery = useQuery({ queryKey: ["hostel-students"], queryFn: getHostelStudents });
   const hostelsQuery = useQuery({ queryKey: ["active-hostels"], queryFn: getHostels });
   const hostels = hostelsQuery.data?.data ?? [];
 
   const list = useMemo(() => (studentsQuery.data?.data ?? []) as StudentRow[], [studentsQuery.data]);
-  const filtered = list.filter((student) =>
-    student.name.toLowerCase().includes(q.toLowerCase()) ||
-    student.student_id.toLowerCase().includes(q.toLowerCase()) ||
-    student.room_number.toLowerCase().includes(q.toLowerCase()),
-  );
+  const filtered = useMemo(() => {
+    return list.filter((student) => {
+      const matchesSearch =
+        student.name.toLowerCase().includes(q.toLowerCase()) ||
+        student.student_id.toLowerCase().includes(q.toLowerCase()) ||
+        student.room_number.toLowerCase().includes(q.toLowerCase());
+      const matchesHostel = hostelFilter === "ALL" || student.hostel_id === hostelFilter;
+      return matchesSearch && matchesHostel;
+    });
+  }, [list, q, hostelFilter]);
 
   const createMutation = useMutation({
     mutationFn: createStudent,
@@ -120,6 +126,10 @@ function StudentsPage() {
               <form
                 onSubmit={(event) => {
                   event.preventDefault();
+                  if (!selectedHostel) {
+                    toast.error("Hostel is required");
+                    return;
+                  }
                   const form = new FormData(event.currentTarget);
                   createMutation.mutate({
                     student_id: String(form.get("student_id") ?? ""),
@@ -128,7 +138,7 @@ function StudentsPage() {
                     mobile: String(form.get("mobile") ?? ""),
                     parent_mobile: String(form.get("parent_mobile") ?? ""),
                     password: String(form.get("password") ?? "") || undefined,
-                    hostel_id: selectedHostel || undefined,
+                    hostel_id: selectedHostel,
                   });
                 }}
                 className="grid gap-4 md:grid-cols-2"
@@ -142,7 +152,7 @@ function StudentsPage() {
                 </div>
                 <div className="md:col-span-2">
                   <div className="grid gap-1.5">
-                    <Label htmlFor="hostel_id">Hostel (Optional)</Label>
+                    <Label htmlFor="hostel_id">Hostel</Label>
                     <Select value={selectedHostel} onValueChange={setSelectedHostel}>
                       <SelectTrigger id="hostel_id">
                         <SelectValue placeholder="Select a hostel" />
@@ -172,9 +182,23 @@ function StudentsPage() {
 
       <Card>
         <CardContent className="p-4">
-          <div className="mb-4 relative max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Search by name, ID, room…" value={q} onChange={(e) => setQ(e.target.value)} className="pl-9" />
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <div className="relative max-w-sm flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Search by name, ID, room…" value={q} onChange={(e) => setQ(e.target.value)} className="pl-9" />
+            </div>
+            <select
+              value={hostelFilter}
+              onChange={(e) => setHostelFilter(e.target.value)}
+              className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="ALL">All Hostels</option>
+              {hostels.map((hostel) => (
+                <option key={hostel.id} value={hostel.id}>
+                  {hostel.hostel_name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="overflow-x-auto rounded-lg border border-border/60">
@@ -313,6 +337,10 @@ function StudentsPage() {
             <form
               onSubmit={(event) => {
                 event.preventDefault();
+                if (!selectedHostel) {
+                  toast.error("Hostel is required");
+                  return;
+                }
                 const form = new FormData(event.currentTarget);
                 updateMutation.mutate({
                   studentId: editingStudent.id,
@@ -324,7 +352,7 @@ function StudentsPage() {
                     parent_mobile: String(form.get("parent_mobile") ?? ""),
                     password: String(form.get("password") ?? "") || undefined,
                     status: String(form.get("status") ?? ""),
-                    hostel_id: selectedHostel || undefined,
+                    hostel_id: selectedHostel,
                   },
                 });
               }}
@@ -339,7 +367,7 @@ function StudentsPage() {
               </div>
               <div className="md:col-span-2">
                 <div className="grid gap-1.5">
-                  <Label htmlFor="hostel_id">Hostel (Optional)</Label>
+                  <Label htmlFor="hostel_id">Hostel</Label>
                   <Select value={selectedHostel} onValueChange={setSelectedHostel}>
                     <SelectTrigger id="hostel_id">
                       <SelectValue placeholder="Select a hostel" />

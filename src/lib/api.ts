@@ -144,7 +144,7 @@ export async function getSuperHostels() {
   return request<{ data: Array<Record<string, unknown> & { id: string; hostel_name: string; email: string; status: string; created_at: string; _count?: { students: number; parents: number; staff: number; leaveRequests: number } }> }>("/super-admin/hostels");
 }
 
-export async function createHostel(payload: { hostel_name: string; email: string; password?: string }) {
+export async function createHostel(payload: { hostel_name: string; email?: string; password?: string }) {
   return request<{
     data: {
       hostel: { id: string; hostel_name: string; email: string; status: string; created_at: string };
@@ -250,7 +250,7 @@ export async function createStaff(payload: { role: "HOSTEL_ADMIN" | "SECURITY_GU
   });
 }
 
-export async function updateStaff(id: string, payload: { role?: "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF"; name?: string; email?: string; password?: string }) {
+export async function updateStaff(id: string, payload: { role?: "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF"; name?: string; email?: string; password?: string; hostel_id?: string }) {
   return request<{ data: unknown }>(`/hostel-admin/staff/${id}`, {
     method: "PATCH",
     body: payload,

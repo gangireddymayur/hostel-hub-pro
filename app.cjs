@@ -1560,16 +1560,22 @@ function linkHostelAdmin(hostel, password, actor) {
 
 async function createHostelRecord(payload, actor) {
   const hostelName = String(payload.hostel_name ?? "").trim();
-  const hostelEmail = String(payload.email ?? "").trim().toLowerCase();
   if (!hostelName) {
     const error = new Error("hostel_name is required");
     error.statusCode = 400;
     throw error;
   }
+
+  let hostelEmail = String(payload.email ?? "").trim().toLowerCase();
   if (!hostelEmail) {
-    const error = new Error("email is required");
-    error.statusCode = 400;
-    throw error;
+    const cleanName = hostelName.toLowerCase().replace(/[^a-z0-9]/g, "");
+    let candidate = `${cleanName}@hostelhub.local`;
+    let counter = 1;
+    while (db.hostels.some((h) => h.email.toLowerCase() === candidate)) {
+      candidate = `${cleanName}${counter}@hostelhub.local`;
+      counter++;
+    }
+    hostelEmail = candidate;
   }
 
   if (db.hostels.some((hostel) => hostel.email.toLowerCase() === hostelEmail)) {

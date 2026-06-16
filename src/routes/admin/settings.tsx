@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { Upload } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { changePassword } from "@/lib/api";
@@ -45,24 +44,6 @@ function AdminSettings() {
         </Card>
 
         <div className="grid gap-4">
-          <Card>
-            <CardHeader><CardTitle>Notifications</CardTitle></CardHeader>
-            <CardContent className="grid gap-4">
-              {[
-                ["New leave request", "Notify when a parent approves a new request."],
-                ["Student returned late", "Alert when a student misses expected return time."],
-                ["Daily summary", "Email morning summary at 8:00 AM."],
-              ].map(([title, description]) => (
-                <div key={title} className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-medium">{title}</p>
-                    <p className="text-xs text-muted-foreground">{description}</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
           <Card>
             <CardHeader><CardTitle>Change password</CardTitle></CardHeader>
             <CardContent className="grid gap-4">

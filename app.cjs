@@ -2344,7 +2344,7 @@ function handleLeaveRequests(req, res) {
   if (!user) return;
   
   let baseRequests;
-  if (user.role === "HOSTEL_ADMIN" || user.role === "SUPER_ADMIN") {
+  if (user.role === "HOSTEL_ADMIN" || user.role === "SUPER_ADMIN" || user.role === "SECURITY_GUARD") {
     baseRequests = db.leaveRequests;
   } else {
     baseRequests = leaveRequestsForHostel(user.hostelId);
@@ -2636,7 +2636,7 @@ function handleGuardToday(req, res) {
   if (!user) return;
 
   const studentIds = new Set(
-    db.students.filter((student) => student.hostel_id === user.hostelId).map((student) => student.id)
+    db.students.map((student) => student.id)
   );
 
   const todayPart = nowIso().split("T")[0];
@@ -2679,7 +2679,7 @@ async function handleGuardScan(req, res, body) {
   if (!leave) return sendJson(res, 404, { error: "Associated leave request not found" });
 
   const student = db.students.find((s) => s.id === leave.student_id);
-  if (!student || student.hostel_id !== user.hostelId) {
+  if (!student) {
     return sendJson(res, 403, { error: "Forbidden" });
   }
 

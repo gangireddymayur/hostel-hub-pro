@@ -45,7 +45,8 @@ function HostelsPage() {
 
   const list = useMemo(() => hostelsQuery.data?.data ?? [], [hostelsQuery.data]);
   const filtered = list.filter((hostel) =>
-    hostel.hostel_name?.toLowerCase().includes(q.toLowerCase()) || hostel.email?.toLowerCase().includes(q.toLowerCase()),
+    (hostel.hostel_name?.toLowerCase() ?? "").includes(q.toLowerCase()) ||
+    (hostel.email?.toLowerCase() ?? "").includes(q.toLowerCase()),
   );
 
   if (hostelsQuery.isLoading) {
@@ -86,7 +87,7 @@ function HostelsPage() {
     onSuccess: async (response) => {
       const creds = response.data.credentials;
       toast.success("Hostel created", {
-        description: `Hostel login: ${creds.hostel_email}`,
+        description: `Login Email: ${creds.hostel_email} | Password: ${creds.password}`,
       });
       setOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["super-hostels"] });
@@ -129,7 +130,7 @@ function HostelsPage() {
             <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Create new hostel</DialogTitle>
-                <DialogDescription>Provision a new hostel workspace. The hostel admin is created automatically with the same email and password.</DialogDescription>
+                <DialogDescription>Provision a new hostel workspace. The admin login details will be auto-generated.</DialogDescription>
               </DialogHeader>
               <HostelForm
                 isCreate

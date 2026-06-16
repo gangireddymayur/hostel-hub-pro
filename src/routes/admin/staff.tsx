@@ -35,6 +35,7 @@ function StaffPage() {
   const [selectedHostel, setSelectedHostel] = useState("");
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
+  const [hostelFilter, setHostelFilter] = useState("ALL");
 
   const staffQuery = useQuery({ queryKey: ["hostel-staff"], queryFn: getHostelStaff });
   const hostelsQuery = useQuery({ queryKey: ["active-hostels"], queryFn: getHostels });
@@ -47,9 +48,10 @@ function StaffPage() {
         staff.name.toLowerCase().includes(q.toLowerCase()) ||
         staff.email.toLowerCase().includes(q.toLowerCase());
       const matchesRole = roleFilter === "ALL" || staff.role === roleFilter;
-      return matchesSearch && matchesRole;
+      const matchesHostel = hostelFilter === "ALL" || staff.hostel_id === hostelFilter;
+      return matchesSearch && matchesRole && matchesHostel;
     });
-  }, [list, q, roleFilter]);
+  }, [list, q, roleFilter, hostelFilter]);
 
   const createMutation = useMutation({
     mutationFn: createStaff,
@@ -171,6 +173,18 @@ function StaffPage() {
               <option value="HOSTEL_ADMIN">Hostel Admin</option>
               <option value="SECURITY_GUARD">Security Guard</option>
               <option value="HOSTEL_STAFF">Hostel Staff</option>
+            </select>
+            <select
+              value={hostelFilter}
+              onChange={(e) => setHostelFilter(e.target.value)}
+              className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="ALL">All Hostels</option>
+              {hostels.map((hostel) => (
+                <option key={hostel.id} value={hostel.id}>
+                  {hostel.hostel_name}
+                </option>
+              ))}
             </select>
           </div>
 

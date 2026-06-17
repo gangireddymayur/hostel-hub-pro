@@ -808,155 +808,173 @@ async function persist() {
     await conn.query("DELETE FROM super_admins");
     await conn.query("DELETE FROM hostels");
 
-    for (const hostel of db.hostels) {
+    if (db.hostels.length > 0) {
+      const values = db.hostels.map((h) => [
+        h.id,
+        h.hostel_name,
+        h.email,
+        h.password_hash,
+        h.status ?? "ACTIVE",
+        h.parent_hostel_id ?? null,
+        toSqlDateTime(h.created_at),
+        toSqlDateTime(h.updated_at ?? h.created_at),
+      ]);
       await conn.query(
-        "INSERT INTO hostels (id, hostel_name, email, password_hash, status, parent_hostel_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        [
-          hostel.id,
-          hostel.hostel_name,
-          hostel.email,
-          hostel.password_hash,
-          hostel.status ?? "ACTIVE",
-          hostel.parent_hostel_id ?? null,
-          toSqlDateTime(hostel.created_at),
-          toSqlDateTime(hostel.updated_at ?? hostel.created_at),
-        ],
+        "INSERT INTO hostels (id, hostel_name, email, password_hash, status, parent_hostel_id, created_at, updated_at) VALUES ?",
+        [values]
       );
     }
 
-    for (const user of db.users.filter((item) => item.role === "SUPER_ADMIN")) {
+    const superAdmins = db.users.filter((item) => item.role === "SUPER_ADMIN");
+    if (superAdmins.length > 0) {
+      const values = superAdmins.map((u) => [
+        u.id,
+        u.email,
+        u.passwordHash,
+        u.name,
+        toSqlDateTime(u.created_at),
+        toSqlDateTime(u.updated_at ?? u.created_at),
+      ]);
       await conn.query(
-        "INSERT INTO super_admins (id, email, password_hash, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-        [user.id, user.email, user.passwordHash, user.name, toSqlDateTime(user.created_at), toSqlDateTime(user.updated_at ?? user.created_at)],
+        "INSERT INTO super_admins (id, email, password_hash, name, created_at, updated_at) VALUES ?",
+        [values]
       );
     }
 
-    for (const user of db.users.filter((item) => item.role !== "SUPER_ADMIN")) {
+    const staffMembers = db.users.filter((item) => item.role !== "SUPER_ADMIN");
+    if (staffMembers.length > 0) {
+      const values = staffMembers.map((u) => [
+        u.id,
+        u.hostelId,
+        u.role,
+        u.name,
+        u.email,
+        u.passwordHash,
+        u.status ?? "ACTIVE",
+        u.profile_photo ?? null,
+        toSqlDateTime(u.created_at),
+        toSqlDateTime(u.updated_at ?? u.created_at),
+      ]);
       await conn.query(
-        "INSERT INTO staff (id, hostel_id, role, name, email, password_hash, status, profile_photo, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [
-          user.id,
-          user.hostelId,
-          user.role,
-          user.name,
-          user.email,
-          user.passwordHash,
-          user.status ?? "ACTIVE",
-          user.profile_photo ?? null,
-          toSqlDateTime(user.created_at),
-          toSqlDateTime(user.updated_at ?? user.created_at),
-        ],
+        "INSERT INTO staff (id, hostel_id, role, name, email, password_hash, status, profile_photo, created_at, updated_at) VALUES ?",
+        [values]
       );
     }
 
-    for (const parent of db.parents) {
+    if (db.parents.length > 0) {
+      const values = db.parents.map((p) => [
+        p.id,
+        p.hostel_id,
+        p.mobile,
+        p.password_hash,
+        p.status ?? "ACTIVE",
+        toSqlDateTime(p.created_at),
+        toSqlDateTime(p.updated_at ?? p.created_at),
+      ]);
       await conn.query(
-        "INSERT INTO parents (id, hostel_id, mobile, password_hash, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [
-          parent.id,
-          parent.hostel_id,
-          parent.mobile,
-          parent.password_hash,
-          parent.status ?? "ACTIVE",
-          toSqlDateTime(parent.created_at),
-          toSqlDateTime(parent.updated_at ?? parent.created_at),
-        ],
+        "INSERT INTO parents (id, hostel_id, mobile, password_hash, status, created_at, updated_at) VALUES ?",
+        [values]
       );
     }
 
-    for (const student of db.students) {
+    if (db.students.length > 0) {
+      const values = db.students.map((s) => [
+        s.id,
+        s.hostel_id,
+        s.student_id,
+        s.name,
+        s.room_number,
+        s.mobile,
+        s.parent_mobile,
+        s.profile_photo,
+        s.password_hash,
+        s.status ?? "ACTIVE",
+        s.student_year ?? null,
+        toSqlDateTime(s.created_at),
+        toSqlDateTime(s.updated_at ?? s.created_at),
+      ]);
       await conn.query(
-        "INSERT INTO students (id, hostel_id, student_id, name, room_number, mobile, parent_mobile, profile_photo, password_hash, status, student_year, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [
-          student.id,
-          student.hostel_id,
-          student.student_id,
-          student.name,
-          student.room_number,
-          student.mobile,
-          student.parent_mobile,
-          student.profile_photo,
-          student.password_hash,
-          student.status ?? "ACTIVE",
-          student.student_year ?? null,
-          toSqlDateTime(student.created_at),
-          toSqlDateTime(student.updated_at ?? student.created_at),
-        ],
+        "INSERT INTO students (id, hostel_id, student_id, name, room_number, mobile, parent_mobile, profile_photo, password_hash, status, student_year, created_at, updated_at) VALUES ?",
+        [values]
       );
     }
 
-    for (const leave of db.leaveRequests) {
+    if (db.leaveRequests.length > 0) {
+      const values = db.leaveRequests.map((leave) => [
+        leave.id,
+        leave.hostel_id ?? studentById(leave.student_id)?.hostel_id ?? null,
+        leave.student_id,
+        leave.reason,
+        toSqlDateTime(leave.from_date),
+        toSqlDateTime(leave.to_date),
+        toSqlDateTime(leave.out_time),
+        toSqlDateTime(leave.return_time),
+        leave.parent_status,
+        leave.hostel_status,
+        leave.final_status,
+        leave.student_lat ?? null,
+        leave.student_lng ?? null,
+        toSqlDateTime(leave.created_at),
+        toSqlDateTime(leave.updated_at ?? leave.created_at),
+      ]);
       await conn.query(
-        "INSERT INTO leave_requests (id, hostel_id, student_id, reason, from_date, to_date, out_time, return_time, parent_status, hostel_status, final_status, student_lat, student_lng, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [
-          leave.id,
-          leave.hostel_id ?? studentById(leave.student_id)?.hostel_id ?? null,
-          leave.student_id,
-          leave.reason,
-          toSqlDateTime(leave.from_date),
-          toSqlDateTime(leave.to_date),
-          toSqlDateTime(leave.out_time),
-          toSqlDateTime(leave.return_time),
-          leave.parent_status,
-          leave.hostel_status,
-          leave.final_status,
-          leave.student_lat ?? null,
-          leave.student_lng ?? null,
-          toSqlDateTime(leave.created_at),
-          toSqlDateTime(leave.updated_at ?? leave.created_at),
-        ],
+        "INSERT INTO leave_requests (id, hostel_id, student_id, reason, from_date, to_date, out_time, return_time, parent_status, hostel_status, final_status, student_lat, student_lng, created_at, updated_at) VALUES ?",
+        [values]
       );
     }
 
-    for (const gatePass of db.gatePasses) {
+    if (db.gatePasses.length > 0) {
+      const values = db.gatePasses.map((gp) => [
+        gp.id,
+        gp.leave_request_id,
+        gp.qr_code,
+        toSqlDateTime(gp.out_time_actual),
+        toSqlDateTime(gp.in_time_actual),
+        gp.status ?? "APPROVED",
+        gp.out_guard_lat ?? null,
+        gp.out_guard_lng ?? null,
+        gp.in_guard_lat ?? null,
+        gp.in_guard_lng ?? null,
+        toSqlDateTime(gp.created_at),
+        toSqlDateTime(gp.updated_at ?? gp.created_at),
+      ]);
       await conn.query(
-        "INSERT INTO gate_passes (id, leave_request_id, qr_code, out_time_actual, in_time_actual, status, out_guard_lat, out_guard_lng, in_guard_lat, in_guard_lng, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [
-          gatePass.id,
-          gatePass.leave_request_id,
-          gatePass.qr_code,
-          toSqlDateTime(gatePass.out_time_actual),
-          toSqlDateTime(gatePass.in_time_actual),
-          gatePass.status ?? "APPROVED",
-          gatePass.out_guard_lat ?? null,
-          gatePass.out_guard_lng ?? null,
-          gatePass.in_guard_lat ?? null,
-          gatePass.in_guard_lng ?? null,
-          toSqlDateTime(gatePass.created_at),
-          toSqlDateTime(gatePass.updated_at ?? gatePass.created_at),
-        ],
+        "INSERT INTO gate_passes (id, leave_request_id, qr_code, out_time_actual, in_time_actual, status, out_guard_lat, out_guard_lng, in_guard_lat, in_guard_lng, created_at, updated_at) VALUES ?",
+        [values]
       );
     }
 
-    for (const log of db.auditLogs) {
+    if (db.auditLogs.length > 0) {
+      const values = db.auditLogs.map((log) => [
+        log.id,
+        log.hostel_id ?? null,
+        log.actor_role,
+        log.actor_id,
+        log.action,
+        log.entity,
+        log.entity_id,
+        log.meta != null ? JSON.stringify(log.meta) : null,
+        toSqlDateTime(log.created_at),
+      ]);
       await conn.query(
-        "INSERT INTO audit_logs (id, hostel_id, actor_role, actor_id, action, entity, entity_id, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [
-          log.id,
-          log.hostel_id ?? null,
-          log.actor_role,
-          log.actor_id,
-          log.action,
-          log.entity,
-          log.entity_id,
-          log.meta != null ? JSON.stringify(log.meta) : null,
-          toSqlDateTime(log.created_at),
-        ],
+        "INSERT INTO audit_logs (id, hostel_id, actor_role, actor_id, action, entity, entity_id, metadata, created_at) VALUES ?",
+        [values]
       );
     }
 
-    for (const token of db.refreshTokens) {
+    if (db.refreshTokens.length > 0) {
+      const values = db.refreshTokens.map((token) => [
+        token.jti,
+        token.userId,
+        token.userRole ?? "HOSTEL_STAFF",
+        token.tokenHash ?? "",
+        toSqlDateTime(token.expiresAt),
+        toSqlDateTime(token.revokedAt),
+        toSqlDateTime(token.createdAt),
+      ]);
       await conn.query(
-        "INSERT INTO refresh_tokens (id, user_id, user_role, token_hash, expires_at, revoked_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [
-          token.jti,
-          token.userId,
-          token.userRole ?? "HOSTEL_STAFF",
-          token.tokenHash ?? "",
-          toSqlDateTime(token.expiresAt),
-          toSqlDateTime(token.revokedAt),
-          toSqlDateTime(token.createdAt),
-        ],
+        "INSERT INTO refresh_tokens (id, user_id, user_role, token_hash, expires_at, revoked_at, created_at) VALUES ?",
+        [values]
       );
     }
 

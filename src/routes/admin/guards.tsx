@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { createStaff, getHostelStaff, updateStaff, uploadStaffPhoto } from "@/lib/api";
+import { createStaff, getHostelStaff, updateStaff, uploadStaffPhoto, deleteStaff } from "@/lib/api";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/guards")({
@@ -60,6 +60,17 @@ function GuardsPage() {
       await queryClient.invalidateQueries({ queryKey: ["hostel-staff"] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to update guard"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteStaff,
+    onSuccess: async () => {
+      toast.success("Security guard deleted successfully");
+      setOpen(false);
+      setEditingGuard(null);
+      await queryClient.invalidateQueries({ queryKey: ["hostel-staff"] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to delete guard"),
   });
 
   return (
@@ -140,7 +151,23 @@ function GuardsPage() {
                 )}
 
                 <Field name="password" label="Password" type="password" helper={editingGuard ? "Leave blank to keep current password." : "Leave blank to use the default reset password."} />
-                <DialogFooter><Button type="submit">{editingGuard ? "Save changes" : "Save"}</Button></DialogFooter>
+                <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-between items-center gap-2">
+                   {editingGuard ? (
+                     <Button
+                       type="button"
+                       variant="destructive"
+                       disabled={deleteMutation.isPending}
+                       onClick={() => {
+                         if (window.confirm(`Are you sure you want to delete security guard ${editingGuard.name}? This action cannot be undone.`)) {
+                           deleteMutation.mutate(editingGuard.id);
+                         }
+                       }}
+                     >
+                       Delete Guard
+                     </Button>
+                   ) : <div />}
+                   <Button type="submit">{editingGuard ? "Save changes" : "Save"}</Button>
+                 </DialogFooter>
               </form>
             </DialogContent>
           </Dialog>

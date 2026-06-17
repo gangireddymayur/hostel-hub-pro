@@ -44,7 +44,7 @@ function ImportPage() {
 
             <div className="mt-4 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground">
               <p className="mb-1 font-medium text-foreground">Expected columns</p>
-              Student ID · Student Name · Room Number · Student Mobile · Parent Mobile
+              Student ID · Student Name · Room Number · Student Mobile · Parent Mobile · Student Year
             </div>
 
             <Button

@@ -198,10 +198,10 @@ export async function getHostelDashboard() {
 }
 
 export async function getHostelStudents() {
-  return request<{ data: Array<Record<string, unknown> & { id: string; student_id: string; name: string; room_number: string; mobile: string; parent_mobile: string; profile_photo: string | null; status: string; created_at: string }> }>("/hostel-admin/students");
+  return request<{ data: Array<Record<string, unknown> & { id: string; student_id: string; name: string; room_number: string; mobile: string; parent_mobile: string; profile_photo: string | null; status: string; created_at: string; student_year?: string | null }> }>("/hostel-admin/students");
 }
 
-export async function createStudent(payload: { student_id: string; name: string; room_number: string; mobile: string; parent_mobile: string; password?: string; hostel_id?: string }) {
+export async function createStudent(payload: { student_id: string; name: string; room_number: string; mobile: string; parent_mobile: string; password?: string; hostel_id?: string; student_year?: string | null }) {
   return request<{ data: unknown }>("/hostel-admin/students", {
     method: "POST",
     body: payload,
@@ -219,11 +219,18 @@ export async function updateStudent(
     password?: string;
     status?: string;
     hostel_id?: string;
+    student_year?: string | null;
   }
 ) {
   return request<{ data: unknown }>(`/hostel-admin/students/${studentId}`, {
     method: "PATCH",
     body: payload,
+  });
+}
+
+export async function deleteStudent(studentId: string) {
+  return request<{ message: string }>(`/hostel-admin/students/${studentId}`, {
+    method: "DELETE",
   });
 }
 
@@ -269,6 +276,12 @@ export async function updateStaff(id: string, payload: { role?: "HOSTEL_ADMIN" |
   return request<{ data: unknown }>(`/hostel-admin/staff/${id}`, {
     method: "PATCH",
     body: payload,
+  });
+}
+
+export async function deleteStaff(id: string) {
+  return request<{ message: string }>(`/hostel-admin/staff/${id}`, {
+    method: "DELETE",
   });
 }
 

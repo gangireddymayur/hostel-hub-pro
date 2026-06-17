@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { createStaff, getHostelStaff, updateStaff, getHostels, uploadStaffPhoto } from "@/lib/api";
+import { createStaff, getHostelStaff, updateStaff, getHostels, uploadStaffPhoto, deleteStaff } from "@/lib/api";
 import { toast } from "sonner";
 
 type StaffRow = {
@@ -88,6 +88,19 @@ function StaffPage() {
       await queryClient.invalidateQueries({ queryKey: ["hostel-staff"] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to update staff"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteStaff,
+    onSuccess: async () => {
+      toast.success("Staff member deleted successfully");
+      setOpen(false);
+      setEditingStaff(null);
+      setSelectedHostel("");
+      await queryClient.invalidateQueries({ queryKey: ["hostel-staff"] });
+      await queryClient.invalidateQueries({ queryKey: ["hostel-dashboard"] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to delete staff member"),
   });
 
   return (
@@ -198,7 +211,23 @@ function StaffPage() {
                 )}
 
                 <Field name="password" label="Password" type="password" helper={editingStaff ? "Leave blank to keep current password." : "Leave blank to use the default reset password."} />
-                <DialogFooter><Button type="submit">{editingStaff ? "Save changes" : "Save"}</Button></DialogFooter>
+                <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-between items-center gap-2">
+                  {editingStaff ? (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      disabled={deleteMutation.isPending}
+                      onClick={() => {
+                        if (window.confirm(`Are you sure you want to delete staff member ${editingStaff.name}? This action cannot be undone.`)) {
+                          deleteMutation.mutate(editingStaff.id);
+                        }
+                      }}
+                    >
+                      Delete Staff
+                    </Button>
+                  ) : <div />}
+                  <Button type="submit">{editingStaff ? "Save changes" : "Save"}</Button>
+                </DialogFooter>
               </form>
             </DialogContent>
           </Dialog>

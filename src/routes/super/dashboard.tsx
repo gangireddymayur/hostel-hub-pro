@@ -66,17 +66,41 @@ function SuperDashboard() {
           <CardHeader><CardTitle>Platform growth</CardTitle></CardHeader>
           <CardContent className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyGrowth}>
+              <AreaChart data={monthlyGrowth} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gs" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.45} />
-                    <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0} />
+                    <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0.01} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                <XAxis dataKey="month" stroke="var(--color-muted-foreground)" fontSize={12} />
-                <YAxis stroke="var(--color-muted-foreground)" fontSize={12} />
-                <Tooltip contentStyle={{ background: "var(--color-popover)", border: "1px solid var(--color-border)", borderRadius: 8 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} opacity={0.3} />
+                <XAxis 
+                  dataKey="month" 
+                  stroke="var(--color-muted-foreground)" 
+                  fontSize={12} 
+                  tickLine={false} 
+                  axisLine={false} 
+                  dy={8} 
+                />
+                <YAxis 
+                  stroke="var(--color-muted-foreground)" 
+                  fontSize={12} 
+                  allowDecimals={false} 
+                  tickLine={false} 
+                  axisLine={false} 
+                  dx={-8} 
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    background: "rgba(15, 23, 42, 0.85)", 
+                    backdropFilter: "blur(12px)", 
+                    border: "1px solid rgba(255, 255, 255, 0.1)", 
+                    borderRadius: 12, 
+                    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)" 
+                  }} 
+                  itemStyle={{ color: "#f8fafc" }} 
+                  labelStyle={{ color: "#94a3b8", fontWeight: "bold" }} 
+                />
                 <Area type="monotone" dataKey="students" stroke="var(--color-primary)" fill="url(#gs)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
@@ -87,14 +111,52 @@ function SuperDashboard() {
           <CardHeader><CardTitle>Permission activity</CardTitle></CardHeader>
           <CardContent className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={weeklyLeaves}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                <XAxis dataKey="day" stroke="var(--color-muted-foreground)" fontSize={12} />
-                <YAxis stroke="var(--color-muted-foreground)" fontSize={12} />
-                <Tooltip contentStyle={{ background: "var(--color-popover)", border: "1px solid var(--color-border)", borderRadius: 8 }} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="requests" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="approved" fill="var(--color-success)" radius={[4, 4, 0, 0]} />
+              <BarChart data={weeklyLeaves} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="superRequestsGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.95} />
+                    <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0.25} />
+                  </linearGradient>
+                  <linearGradient id="superApprovedGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--color-success)" stopOpacity={0.95} />
+                    <stop offset="100%" stopColor="var(--color-success)" stopOpacity={0.25} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} opacity={0.3} />
+                <XAxis 
+                  dataKey="day" 
+                  stroke="var(--color-muted-foreground)" 
+                  fontSize={12} 
+                  tickLine={false} 
+                  axisLine={false} 
+                  dy={8} 
+                />
+                <YAxis 
+                  stroke="var(--color-muted-foreground)" 
+                  fontSize={12} 
+                  allowDecimals={false} 
+                  tickLine={false} 
+                  axisLine={false} 
+                  dx={-8} 
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    background: "rgba(15, 23, 42, 0.85)", 
+                    backdropFilter: "blur(12px)", 
+                    border: "1px solid rgba(255, 255, 255, 0.1)", 
+                    borderRadius: 12, 
+                    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)" 
+                  }} 
+                  itemStyle={{ color: "#f8fafc" }} 
+                  labelStyle={{ color: "#94a3b8", fontWeight: "bold" }} 
+                />
+                <Legend 
+                  wrapperStyle={{ fontSize: 12, paddingTop: 12 }} 
+                  iconType="circle" 
+                  iconSize={8} 
+                />
+                <Bar dataKey="requests" fill="url(#superRequestsGradient)" radius={[6, 6, 0, 0]} maxBarSize={24} />
+                <Bar dataKey="approved" fill="url(#superApprovedGradient)" radius={[6, 6, 0, 0]} maxBarSize={24} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>

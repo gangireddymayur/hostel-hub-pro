@@ -19,7 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { createStudent, getHostelStudents, uploadStudentPhoto, getHostels, updateStudent } from "@/lib/api";
+import { createStudent, getHostelStudents, uploadStudentPhoto, getHostels, updateStudent, deleteStudent } from "@/lib/api";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
@@ -33,6 +33,7 @@ type StudentRow = {
   profile_photo: string | null;
   status: string;
   created_at: string;
+  student_year?: string | null;
   hostel_id?: string;
   hostel_name?: string;
 };
@@ -91,6 +92,16 @@ function StudentsPage() {
     onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to update student"),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: deleteStudent,
+    onSuccess: async () => {
+      toast.success("Student deleted successfully");
+      setEditingStudent(null);
+      await queryClient.invalidateQueries({ queryKey: ["hostel-students"] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to delete student"),
+  });
+
   const photoMutation = useMutation({
     mutationFn: ({ studentId, file }: { studentId: string; file: File }) => uploadStudentPhoto(studentId, file),
     onSuccess: async () => {
@@ -139,6 +150,7 @@ function StudentsPage() {
                     parent_mobile: String(form.get("parent_mobile") ?? ""),
                     password: String(form.get("password") ?? "") || undefined,
                     hostel_id: selectedHostel,
+                    student_year: String(form.get("student_year") ?? "") || null,
                   });
                 }}
                 className="grid gap-4 md:grid-cols-2"
@@ -147,8 +159,20 @@ function StudentsPage() {
                 <Field name="name" label="Full Name" required />
                 <Field name="room_number" label="Room Number" required />
                 <Field name="mobile" label="Mobile Number" required />
-                <div className="md:col-span-2">
-                  <Field name="parent_mobile" label="Parent Mobile" required />
+                <Field name="parent_mobile" label="Parent Mobile" required />
+                <div className="grid gap-1.5">
+                  <Label htmlFor="student_year">Student Year</Label>
+                  <select
+                    id="student_year"
+                    name="student_year"
+                    className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">Select Year (Optional)</option>
+                    <option value="1st Year">1st Year</option>
+                    <option value="2nd Year">2nd Year</option>
+                    <option value="3rd Year">3rd Year</option>
+                    <option value="4th Year">4th Year</option>
+                  </select>
                 </div>
                 <div className="md:col-span-2">
                   <div className="grid gap-1.5">
@@ -298,6 +322,7 @@ function StudentsPage() {
                 <Info k="Room" v={view.room_number} />
                 <Info k="Mobile" v={view.mobile} />
                 <Info k="Parent" v={view.parent_mobile} />
+                <Info k="Student Year" v={view.student_year || "N/A"} />
                 <Info k="Status" v={view.status} />
               </dl>
 
@@ -353,6 +378,7 @@ function StudentsPage() {
                     password: String(form.get("password") ?? "") || undefined,
                     status: String(form.get("status") ?? ""),
                     hostel_id: selectedHostel,
+                    student_year: String(form.get("student_year") ?? "") || null,
                   },
                 });
               }}
@@ -362,8 +388,21 @@ function StudentsPage() {
               <Field name="name" label="Full Name" defaultValue={editingStudent.name} required />
               <Field name="room_number" label="Room Number" defaultValue={editingStudent.room_number} required />
               <Field name="mobile" label="Mobile Number" defaultValue={editingStudent.mobile} required />
-              <div className="md:col-span-2">
-                <Field name="parent_mobile" label="Parent Mobile" defaultValue={editingStudent.parent_mobile} required />
+              <Field name="parent_mobile" label="Parent Mobile" defaultValue={editingStudent.parent_mobile} required />
+              <div className="grid gap-1.5">
+                <Label htmlFor="student_year">Student Year</Label>
+                <select
+                  id="student_year"
+                  name="student_year"
+                  defaultValue={editingStudent.student_year || ""}
+                  className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Select Year (Optional)</option>
+                  <option value="1st Year">1st Year</option>
+                  <option value="2nd Year">2nd Year</option>
+                  <option value="3rd Year">3rd Year</option>
+                  <option value="4th Year">4th Year</option>
+                </select>
               </div>
               <div className="md:col-span-2">
                 <div className="grid gap-1.5">
@@ -394,9 +433,23 @@ function StudentsPage() {
                 <Input id="password" name="password" type="password" />
                 <p className="text-xs text-muted-foreground">Leave blank to keep current password.</p>
               </div>
-              <DialogFooter className="md:col-span-2">
-                <Button type="button" variant="ghost" onClick={() => setEditingStudent(null)}>Cancel</Button>
-                <Button type="submit">Save Changes</Button>
+              <DialogFooter className="md:col-span-2 flex flex-col-reverse sm:flex-row sm:justify-between items-center gap-2">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={deleteMutation.isPending}
+                  onClick={() => {
+                    if (window.confirm(`Are you sure you want to delete student ${editingStudent.name}? This will remove all their leave requests and gate passes.`)) {
+                      deleteMutation.mutate(editingStudent.id);
+                    }
+                  }}
+                >
+                  Delete Student
+                </Button>
+                <div className="flex gap-2 w-full sm:w-auto justify-end">
+                  <Button type="button" variant="ghost" onClick={() => setEditingStudent(null)}>Cancel</Button>
+                  <Button type="submit">Save Changes</Button>
+                </div>
               </DialogFooter>
             </form>
           ) : null}

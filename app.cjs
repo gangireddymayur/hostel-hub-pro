@@ -313,6 +313,7 @@ function defaultData() {
         profile_photo: null,
         password_hash: studentPassword,
         status: "ACTIVE",
+        student_year: "1st Year",
         created_at: nowIso(),
       },
       {
@@ -326,6 +327,7 @@ function defaultData() {
         profile_photo: null,
         password_hash: studentPassword,
         status: "ACTIVE",
+        student_year: "2nd Year",
         created_at: nowIso(),
       },
     ],
@@ -546,6 +548,20 @@ async function ensureStaffProfilePhotoColumn() {
   }
 }
 
+async function ensureStudentYearColumn() {
+  if (!dbPool) return;
+  try {
+    const [columns] = await dbPool.query("SHOW COLUMNS FROM students LIKE 'student_year'");
+    if (columns.length === 0) {
+      console.log("Auto-Migration: Adding 'student_year' column to 'students' table...");
+      await dbPool.query("ALTER TABLE students ADD COLUMN student_year VARCHAR(50) NULL");
+      console.log("Auto-Migration: Column 'student_year' added successfully!");
+    }
+  } catch (error) {
+    console.error("Auto-Migration Error: Failed to check or add 'student_year' column to students:", error.message);
+  }
+}
+
 async function hydrateDataFromDatabase() {
   if (!dbPool) {
     db = loadData();
@@ -558,6 +574,7 @@ async function hydrateDataFromDatabase() {
   await ensureStatusColumns();
   await ensureRefreshTokenColumnLength();
   await ensureParentHostelIdColumn();
+  await ensureStudentYearColumn();
 
   try {
     const [
@@ -638,6 +655,7 @@ async function hydrateDataFromDatabase() {
         profile_photo: row.profile_photo ?? null,
         password_hash: String(row.password_hash ?? ""),
         status: String(row.status ?? "ACTIVE"),
+        student_year: row.student_year ? String(row.student_year) : null,
         created_at: normalizeDateTime(row.created_at),
       })),
       staff: staffRows.map((row) => ({
@@ -785,7 +803,7 @@ async function persist() {
 
     for (const student of db.students) {
       await conn.query(
-        "INSERT INTO students (id, hostel_id, student_id, name, room_number, mobile, parent_mobile, profile_photo, password_hash, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO students (id, hostel_id, student_id, name, room_number, mobile, parent_mobile, profile_photo, password_hash, status, student_year, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
           student.id,
           student.hostel_id,
@@ -797,6 +815,7 @@ async function persist() {
           student.profile_photo,
           student.password_hash,
           student.status ?? "ACTIVE",
+          student.student_year ?? null,
           toSqlDateTime(student.created_at),
           toSqlDateTime(student.updated_at ?? student.created_at),
         ],
@@ -968,6 +987,7 @@ async function getStudentByIdDb(id) {
       profile_photo: rows[0].profile_photo ?? null,
       password_hash: String(rows[0].password_hash),
       status: String(rows[0].status),
+      student_year: rows[0].student_year ? String(rows[0].student_year) : null,
       created_at: normalizeDateTime(rows[0].created_at),
     } : null;
   }
@@ -1474,6 +1494,7 @@ async function createStudentRecord(hostelId, payload, actor) {
   const mobile = String(payload.mobile ?? "").trim();
   const parentMobile = String(payload.parent_mobile ?? "").trim();
   const password = String(payload.password ?? "Student@12345");
+  const studentYear = payload.student_year ? String(payload.student_year).trim() : null;
 
   if (!studentId || !name || !roomNumber || !mobile || !parentMobile) {
     throw new Error("student_id, name, room_number, mobile and parent_mobile are required");
@@ -1501,6 +1522,7 @@ async function createStudentRecord(hostelId, payload, actor) {
     profile_photo: null,
     password_hash: hashPassword(password),
     status: "ACTIVE",
+    student_year: studentYear,
     created_at: createdAt,
   };
   db.students.push(student);
@@ -2235,6 +2257,7 @@ async function handleUpdateStudent(req, res, studentId, body) {
     const parent_mobile = body.parent_mobile ? String(body.parent_mobile).trim() : student.parent_mobile;
     const status = body.status ? String(body.status).trim().toUpperCase() : student.status;
     const hostel_id = body.hostel_id ? String(body.hostel_id).trim() : student.hostel_id;
+    const student_year = body.student_year !== undefined ? (body.student_year ? String(body.student_year).trim() : null) : student.student_year;
 
     if (!student_id || !name || !room_number || !mobile || !parent_mobile) {
       return sendJson(res, 400, { error: "student_id, name, room_number, mobile and parent_mobile cannot be empty" });
@@ -2259,6 +2282,7 @@ async function handleUpdateStudent(req, res, studentId, body) {
     student.parent_mobile = parent_mobile;
     student.status = status;
     student.hostel_id = hostel_id;
+    student.student_year = student_year;
 
     if (body.password) {
       student.password_hash = hashPassword(body.password);
@@ -2301,6 +2325,76 @@ async function handleCreateStudent(req, res, body) {
   }
 }
 
+async function handleDeleteStudent(req, res, studentId) {
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
+  if (!user) return;
+  try {
+    const student = db.students.find((s) => s.id === studentId);
+    if (!student) return sendJson(res, 404, { error: "Student not found" });
+
+    if (student.hostel_id !== user.hostelId) {
+      return sendJson(res, 403, { error: "Forbidden" });
+    }
+
+    const studentLeaveRequests = db.leaveRequests.filter((leave) => leave.student_id === studentId);
+    const leaveRequestIds = new Set(studentLeaveRequests.map((leave) => leave.id));
+
+    db.gatePasses = db.gatePasses.filter((gp) => !leaveRequestIds.has(gp.leave_request_id));
+    db.leaveRequests = db.leaveRequests.filter((leave) => leave.student_id !== studentId);
+    db.students = db.students.filter((s) => s.id !== studentId);
+
+    const parentMobile = student.parent_mobile;
+    const parentMobileShared = db.students.some((s) => s.hostel_id === student.hostel_id && s.parent_mobile === parentMobile);
+    if (!parentMobileShared) {
+      db.parents = db.parents.filter((p) => !(p.hostel_id === student.hostel_id && p.mobile === parentMobile));
+    }
+
+    db.refreshTokens = db.refreshTokens.filter((token) => token.userId !== studentId);
+
+    addAudit("DELETE", "STUDENT", studentId, user, {
+      student_id: student.student_id,
+      name: student.name,
+    });
+
+    await persist();
+    return sendJson(res, 200, { message: "Student deleted successfully" });
+  } catch (error) {
+    return sendJson(res, 500, { error: error.message });
+  }
+}
+
+async function handleDeleteStaff(req, res, staffId) {
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
+  if (!user) return;
+  try {
+    const staffRow = db.staff.find((item) => item.id === staffId);
+    if (!staffRow) return sendJson(res, 404, { error: "Staff member not found" });
+
+    if (staffRow.hostel_id !== user.hostelId) {
+      return sendJson(res, 403, { error: "Forbidden" });
+    }
+
+    if (staffRow.id === user.id) {
+      return sendJson(res, 400, { error: "You cannot delete your own account" });
+    }
+
+    db.staff = db.staff.filter((item) => item.id !== staffId);
+    db.users = db.users.filter((u) => u.id !== staffId);
+    db.refreshTokens = db.refreshTokens.filter((token) => token.userId !== staffId);
+
+    addAudit("DELETE", "STAFF", staffId, user, {
+      name: staffRow.name,
+      email: staffRow.email,
+      role: staffRow.role,
+    });
+
+    await persist();
+    return sendJson(res, 200, { message: "Staff member deleted successfully" });
+  } catch (error) {
+    return sendJson(res, 500, { error: error.message });
+  }
+}
+
 async function handleImportStudents(req, res, data) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
@@ -2329,6 +2423,7 @@ async function handleImportStudents(req, res, data) {
         parent_mobile: row.parent_mobile || row.parentmobile || row.parent_phone || "",
         password: row.password || row.password_hash || "Student@12345",
         hostel_id: resolvedHostelId,
+        student_year: row.student_year || row.studentyear || row.year || row.class || row.student_class || null,
       };
       if (!mapped.student_id || !mapped.name || !mapped.room_number || !mapped.mobile || !mapped.parent_mobile) {
         continue;
@@ -3049,6 +3144,10 @@ async function handleApi(req, res, pathname) {
       return handleUpdateStudent(req, res, decodeURIComponent(match[1]), data.kind === "json" ? data.value : {});
     }
 
+    if (match && req.method === "DELETE") {
+      return handleDeleteStudent(req, res, decodeURIComponent(match[1]));
+    }
+
     if (pathname === "/api/hostel-admin/staff" && req.method === "GET") {
       return handleHostelStaff(req, res);
     }
@@ -3062,6 +3161,10 @@ async function handleApi(req, res, pathname) {
     if (match && req.method === "PATCH") {
       const data = await readRequestData(req);
       return handleUpdateStaff(req, res, decodeURIComponent(match[1]), data.kind === "json" ? data.value : {});
+    }
+
+    if (match && req.method === "DELETE") {
+      return handleDeleteStaff(req, res, decodeURIComponent(match[1]));
     }
 
     match = pathname.match(/^\/api\/hostel-admin\/staff\/([^/]+)\/photo$/);

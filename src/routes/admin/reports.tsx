@@ -183,17 +183,41 @@ function Reports() {
         <CardHeader><CardTitle>Permission volume - last 7 days</CardTitle></CardHeader>
         <CardContent className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData}>
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--color-success)" stopOpacity={0.4} />
-                  <stop offset="100%" stopColor="var(--color-success)" stopOpacity={0} />
+                  <stop offset="0%" stopColor="var(--color-success)" stopOpacity={0.45} />
+                  <stop offset="100%" stopColor="var(--color-success)" stopOpacity={0.01} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-              <XAxis dataKey="day" stroke="var(--color-muted-foreground)" fontSize={12} />
-              <YAxis stroke="var(--color-muted-foreground)" fontSize={12} />
-              <Tooltip contentStyle={{ background: "var(--color-popover)", border: "1px solid var(--color-border)", borderRadius: 8 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} opacity={0.3} />
+              <XAxis 
+                dataKey="day" 
+                stroke="var(--color-muted-foreground)" 
+                fontSize={12} 
+                tickLine={false} 
+                axisLine={false} 
+                dy={8} 
+              />
+              <YAxis 
+                stroke="var(--color-muted-foreground)" 
+                fontSize={12} 
+                allowDecimals={false} 
+                tickLine={false} 
+                axisLine={false} 
+                dx={-8} 
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  background: "rgba(15, 23, 42, 0.85)", 
+                  backdropFilter: "blur(12px)", 
+                  border: "1px solid rgba(255, 255, 255, 0.1)", 
+                  borderRadius: 12, 
+                  boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)" 
+                }} 
+                itemStyle={{ color: "#f8fafc" }} 
+                labelStyle={{ color: "#94a3b8", fontWeight: "bold" }} 
+              />
               <Area type="monotone" dataKey="approved" stroke="var(--color-success)" fill="url(#g2)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>

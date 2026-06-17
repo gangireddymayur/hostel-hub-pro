@@ -50,7 +50,10 @@ for (const candidate of [
 const LISTEN_TARGET = getListenTarget();
 const HOST = process.env.HOST ?? "0.0.0.0";
 const JWT_SECRET = process.env.JWT_SECRET ?? "change-me-in-plesk-env";
-const DB_HOST = process.env.DB_HOST ?? "";
+let DB_HOST = process.env.DB_HOST ?? "";
+if (DB_HOST.toLowerCase() === "localhost") {
+  DB_HOST = "127.0.0.1";
+}
 const DB_PORT = parsePort(process.env.DB_PORT) ?? 3306;
 const DB_USER = process.env.DB_USER ?? "";
 const DB_PASSWORD = process.env.DB_PASSWORD ?? "";
@@ -604,13 +607,15 @@ const HYDRATE_RETRY_COOLDOWN_MS = 15000; // 15 seconds cooldown
 async function runMigrations() {
   if (migrationsRun) return;
   await ensureBaseTables();
-  await ensureProfilePhotoColumn();
-  await ensureStaffProfilePhotoColumn();
-  await ensureLocationColumns();
-  await ensureStatusColumns();
-  await ensureRefreshTokenColumnLength();
-  await ensureParentHostelIdColumn();
-  await ensureStudentYearColumn();
+  await Promise.all([
+    ensureProfilePhotoColumn(),
+    ensureStaffProfilePhotoColumn(),
+    ensureLocationColumns(),
+    ensureStatusColumns(),
+    ensureRefreshTokenColumnLength(),
+    ensureParentHostelIdColumn(),
+    ensureStudentYearColumn(),
+  ]);
   migrationsRun = true;
 }
 
@@ -652,8 +657,8 @@ async function hydrateDataFromDatabase() {
       dbPool.query("SELECT * FROM students ORDER BY created_at ASC"),
       dbPool.query("SELECT * FROM leave_requests ORDER BY created_at ASC"),
       dbPool.query("SELECT * FROM gate_passes ORDER BY created_at ASC"),
-      dbPool.query("SELECT * FROM audit_logs ORDER BY created_at DESC"),
-      dbPool.query("SELECT * FROM refresh_tokens ORDER BY created_at ASC"),
+      dbPool.query("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 500"),
+      dbPool.query("SELECT * FROM refresh_tokens WHERE revoked_at IS NULL AND expires_at > NOW() ORDER BY created_at ASC"),
     ]);
 
     const users = [

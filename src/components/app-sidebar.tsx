@@ -11,6 +11,7 @@ import {
 import { clearSession, type Role } from "@/lib/role";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
 
 const superNav = [
   { to: "/super/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -43,6 +44,7 @@ const adminNav = [
 export function AppSidebar({ role }: { role: Role }) {
   const path = useRouterState({ select: s => s.location.pathname });
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const isActive = (to: string) => path === to || path.startsWith(to + "/");
 
   return (
@@ -104,6 +106,7 @@ export function AppSidebar({ role }: { role: Role }) {
           className="justify-start gap-2"
           onClick={async () => {
             await logout();
+            queryClient.clear();
             clearSession();
             navigate({ to: "/login" });
           }}

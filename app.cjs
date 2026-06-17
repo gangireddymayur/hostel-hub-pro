@@ -562,12 +562,11 @@ async function ensureStudentYearColumn() {
   }
 }
 
-async function hydrateDataFromDatabase() {
-  if (!dbPool) {
-    db = loadData();
-    return db;
-  }
+let migrationsRun = false;
+let hasHydrated = false;
 
+async function runMigrations() {
+  if (migrationsRun) return;
   await ensureProfilePhotoColumn();
   await ensureStaffProfilePhotoColumn();
   await ensureLocationColumns();
@@ -575,6 +574,20 @@ async function hydrateDataFromDatabase() {
   await ensureRefreshTokenColumnLength();
   await ensureParentHostelIdColumn();
   await ensureStudentYearColumn();
+  migrationsRun = true;
+}
+
+async function hydrateDataFromDatabase() {
+  if (!dbPool) {
+    db = loadData();
+    return db;
+  }
+
+  await runMigrations();
+
+  if (hasHydrated) {
+    return db;
+  }
 
   try {
     const [
@@ -719,6 +732,7 @@ async function hydrateDataFromDatabase() {
         createdAt: normalizeDateTime(row.created_at),
       })),
     };
+    hasHydrated = true;
     return db;
   } catch (error) {
     lastHydrateError = error.message;
@@ -901,7 +915,8 @@ async function persist() {
   } catch (error) {
     await conn.rollback();
     lastPersistError = error.message;
-    console.warn("[db] persist failed:", error.message);
+    console.warn("[db] persist failed, resetting hydration flag:", error.message);
+    hasHydrated = false;
     throw error;
   } finally {
     conn.release();

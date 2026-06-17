@@ -149,6 +149,7 @@ function StudentsPage() {
                     mobile: String(form.get("mobile") ?? ""),
                     parent_mobile: String(form.get("parent_mobile") ?? ""),
                     password: String(form.get("password") ?? "") || undefined,
+                    parent_password: String(form.get("parent_password") ?? "") || undefined,
                     hostel_id: selectedHostel,
                     student_year: String(form.get("student_year") ?? "") || null,
                   });
@@ -191,9 +192,8 @@ function StudentsPage() {
                     </Select>
                   </div>
                 </div>
-                <div className="md:col-span-2">
-                  <Field name="password" label="Password" type="password" helper="Leave blank to use the default reset password." />
-                </div>
+                <Field name="password" label="Student Password (Optional)" type="password" helper="Leave blank for default password." />
+                <Field name="parent_password" label="Parent Password (Optional)" type="password" helper="Leave blank for default password." />
                 <DialogFooter className="md:col-span-2">
                   <Button type="button" variant="ghost" onClick={() => handleOpenChange(false)}>Cancel</Button>
                   <Button type="submit">Save Student</Button>
@@ -376,6 +376,7 @@ function StudentsPage() {
                     mobile: String(form.get("mobile") ?? ""),
                     parent_mobile: String(form.get("parent_mobile") ?? ""),
                     password: String(form.get("password") ?? "") || undefined,
+                    parent_password: String(form.get("parent_password") ?? "") || undefined,
                     status: String(form.get("status") ?? ""),
                     hostel_id: selectedHostel,
                     student_year: String(form.get("student_year") ?? "") || null,
@@ -421,7 +422,7 @@ function StudentsPage() {
                   </Select>
                 </div>
               </div>
-              <div className="grid gap-1.5">
+              <div className="md:col-span-2 grid gap-1.5">
                 <Label htmlFor="status">Status</Label>
                 <select id="status" name="status" defaultValue={editingStudent.status} className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm">
                   <option value="ACTIVE">ACTIVE</option>
@@ -429,9 +430,14 @@ function StudentsPage() {
                 </select>
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="password">Password (Optional)</Label>
+                <Label htmlFor="password">Student Password (Optional)</Label>
                 <Input id="password" name="password" type="password" />
-                <p className="text-xs text-muted-foreground">Leave blank to keep current password.</p>
+                <p className="text-xs text-muted-foreground">Leave blank to keep current student password.</p>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="parent_password">Parent Password (Optional)</Label>
+                <Input id="parent_password" name="parent_password" type="password" />
+                <p className="text-xs text-muted-foreground">Leave blank to keep current parent password.</p>
               </div>
               <DialogFooter className="md:col-span-2 flex flex-col-reverse sm:flex-row sm:justify-between items-center gap-2">
                 <Button

@@ -201,7 +201,7 @@ export async function getHostelStudents() {
   return request<{ data: Array<Record<string, unknown> & { id: string; student_id: string; name: string; room_number: string; mobile: string; parent_mobile: string; profile_photo: string | null; status: string; created_at: string; student_year?: string | null }> }>("/hostel-admin/students");
 }
 
-export async function createStudent(payload: { student_id: string; name: string; room_number: string; mobile: string; parent_mobile: string; password?: string; hostel_id?: string; student_year?: string | null }) {
+export async function createStudent(payload: { student_id: string; name: string; room_number: string; mobile: string; parent_mobile: string; password?: string; parent_password?: string; hostel_id?: string; student_year?: string | null }) {
   return request<{ data: unknown }>("/hostel-admin/students", {
     method: "POST",
     body: payload,
@@ -217,6 +217,7 @@ export async function updateStudent(
     mobile?: string;
     parent_mobile?: string;
     password?: string;
+    parent_password?: string;
     status?: string;
     hostel_id?: string;
     student_year?: string | null;

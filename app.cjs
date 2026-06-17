@@ -1494,6 +1494,7 @@ async function createStudentRecord(hostelId, payload, actor) {
   const mobile = String(payload.mobile ?? "").trim();
   const parentMobile = String(payload.parent_mobile ?? "").trim();
   const password = String(payload.password ?? "Student@12345");
+  const parentPassword = String(payload.parent_password ?? payload.password ?? "Student@12345");
   const studentYear = payload.student_year ? String(payload.student_year).trim() : null;
 
   if (!studentId || !name || !roomNumber || !mobile || !parentMobile) {
@@ -1533,7 +1534,7 @@ async function createStudentRecord(hostelId, payload, actor) {
       id: uuid("parent"),
       hostel_id: targetHostelId,
       mobile: parentMobile,
-      password_hash: hashPassword(password),
+      password_hash: hashPassword(parentPassword),
       created_at: createdAt,
     };
     db.parents.push(parent);
@@ -2250,6 +2251,9 @@ async function handleUpdateStudent(req, res, studentId, body) {
     const student = db.students.find((item) => item.id === studentId);
     if (!student) return sendJson(res, 404, { error: "Student not found" });
 
+    const oldParentMobile = student.parent_mobile;
+    const oldHostelId = student.hostel_id;
+
     const student_id = body.student_id ? String(body.student_id).trim() : student.student_id;
     const name = body.name ? String(body.name).trim() : student.name;
     const room_number = body.room_number ? String(body.room_number).trim() : student.room_number;
@@ -2289,20 +2293,29 @@ async function handleUpdateStudent(req, res, studentId, body) {
     }
 
     // Update corresponding parent mobile/hostel if needed
-    let parent = db.parents.find((item) => item.hostel_id === student.hostel_id && item.mobile === parent_mobile);
+    let parent = db.parents.find((item) => item.hostel_id === hostel_id && item.mobile === parent_mobile);
     if (!parent) {
+      const parentFallbackPass = body.parent_password ? body.parent_password : (body.password ? body.password : "Student@12345");
       parent = {
         id: uuid("parent"),
         hostel_id: hostel_id,
         mobile: parent_mobile,
-        password_hash: body.password ? hashPassword(body.password) : student.password_hash,
+        password_hash: hashPassword(parentFallbackPass),
         created_at: nowIso(),
       };
       db.parents.push(parent);
     } else {
       parent.hostel_id = hostel_id;
-      if (body.password) {
-        parent.password_hash = hashPassword(body.password);
+      if (body.parent_password) {
+        parent.password_hash = hashPassword(body.parent_password);
+      }
+    }
+
+    // Clean up old parent account if the mobile number or hostel ID changed and it is no longer shared by any student
+    if (oldParentMobile !== parent_mobile || oldHostelId !== hostel_id) {
+      const parentMobileShared = db.students.some((s) => s.id !== student.id && s.hostel_id === oldHostelId && s.parent_mobile === oldParentMobile);
+      if (!parentMobileShared) {
+        db.parents = db.parents.filter((p) => !(p.hostel_id === oldHostelId && p.mobile === oldParentMobile));
       }
     }
 

@@ -61,7 +61,7 @@ const DB_NAME = process.env.DB_NAME ?? "";
 const ACCESS_TTL_SECONDS = 60 * 60 * 24 * 7;
 const REFRESH_TTL_SECONDS = 60 * 60 * 24 * 30;
 const DEFAULT_SUPER_ADMIN_ID = "super_admin_87a9d497-8b89-47a9-8923-34c9da59d427";
-const DEFAULT_SUPER_ADMIN_EMAIL = "admin@hostelhub.local";
+const DEFAULT_SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL ?? "admin@hostelhub.local";
 
 let mysqlPoolFactory = null;
 let mysqlLoadError = null;
@@ -224,7 +224,7 @@ function safeWriteJson(filePath, value) {
 }
 
 function defaultData() {
-  const superAdminPassword = hashPassword("Admin@12345");
+  const superAdminPassword = hashPassword(process.env.SUPER_ADMIN_PASSWORD ?? "Admin@12345");
   const hostelAdminPassword = hashPassword("Hostel@12345");
   const securityPassword = hashPassword("Security@12345");
   const studentPassword = hashPassword("Student@12345");

@@ -2967,7 +2967,7 @@ function handleGetParentRequests(req, res) {
 
   const studentIds = new Set(
     db.students
-      .filter((s) => s.hostel_id === user.hostelId && s.parent_mobile === user.email)
+      .filter((s) => s.parent_mobile === user.email)
       .map((s) => s.id)
   );
 
@@ -2994,7 +2994,7 @@ async function handleReviewParentRequest(req, res, leaveRequestId, body) {
   if (!leave) return sendJson(res, 404, { error: "Leave request not found" });
 
   const student = db.students.find((s) => s.id === leave.student_id);
-  if (!student || student.hostel_id !== user.hostelId || student.parent_mobile !== user.email) {
+  if (!student || student.parent_mobile !== user.email) {
     return sendJson(res, 403, { error: "Forbidden" });
   }
 
@@ -3427,8 +3427,8 @@ async function handleApi(req, res, pathname) {
       } else if (user.role === "PARENT") {
         if (dbPool) {
           const [rows] = await dbPool.query(
-            "SELECT * FROM students WHERE hostel_id = ? AND parent_mobile = ? LIMIT 1",
-            [user.hostelId, user.email]
+            "SELECT * FROM students WHERE parent_mobile = ? LIMIT 1",
+            [user.email]
           );
           if (rows[0]) {
             student = {
@@ -3446,7 +3446,7 @@ async function handleApi(req, res, pathname) {
             };
           }
         } else {
-          student = db.students.find((s) => s.hostel_id === user.hostelId && s.parent_mobile === user.email);
+          student = db.students.find((s) => s.parent_mobile === user.email);
         }
       }
       if (!student) return sendJson(res, 404, { error: "Student not found" });

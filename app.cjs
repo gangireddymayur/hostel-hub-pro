@@ -1321,6 +1321,26 @@ function sendJson(res, statusCode, payload) {
   res.end(JSON.stringify(payload));
 }
 
+function sendPhotoResponse(res, base64String) {
+  try {
+    const matches = base64String.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+    if (matches) {
+      const mimeType = matches[1];
+      const buffer = Buffer.from(matches[2], "base64");
+      res.writeHead(200, {
+        "Content-Type": mimeType,
+        "Content-Length": buffer.length,
+        "Cache-Control": "public, max-age=86400", // Cache for 1 day
+      });
+      res.end(buffer);
+      return;
+    }
+  } catch (e) {
+    console.error("Error sending photo response", e);
+  }
+  return sendJson(res, 400, { error: "Invalid photo format" });
+}
+
 function sendText(res, statusCode, text, contentType = "text/plain; charset=utf-8") {
   res.writeHead(statusCode, { "Content-Type": contentType, "Cache-Control": "no-store" });
   res.end(text);
@@ -2674,6 +2694,7 @@ function handleLeaveRequests(req, res) {
         const hostel = findHostelById(student.hostel_id);
         studentWithHostel = {
           ...student,
+          profile_photo: null,
           hostel_name: hostel ? hostel.hostel_name : "",
         };
       }
@@ -2861,7 +2882,7 @@ function handleGetStudentLeaveRequests(req, res) {
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .map((leave) => ({
       ...leave,
-      student,
+      student: { ...student, profile_photo: null }, // STRIP photo to improve speed and avoid crashes
       gatePass: gatePassByLeaveId(leave.id) ?? null,
     }));
 
@@ -2885,7 +2906,7 @@ function handleGetParentRequests(req, res) {
       const student = db.students.find((s) => s.id === leave.student_id);
       return {
         ...leave,
-        student,
+        student: student ? { ...student, profile_photo: null } : null, // STRIP photo to improve speed and avoid crashes
         gatePass: gatePassByLeaveId(leave.id) ?? null,
       };
     });
@@ -2957,11 +2978,14 @@ function handleGuardToday(req, res) {
 
   const leaves = db.leaveRequests
     .filter((leave) => studentIds.has(leave.student_id))
-    .map((leave) => ({
-      ...leave,
-      student: db.students.find((s) => s.id === leave.student_id),
-      gatePass: gatePassByLeaveId(leave.id) ?? null,
-    }))
+    .map((leave) => {
+      const student = db.students.find((s) => s.id === leave.student_id);
+      return {
+        ...leave,
+        student: student ? { ...student, profile_photo: null } : null, // STRIP photo to improve speed and avoid crashes
+        gatePass: gatePassByLeaveId(leave.id) ?? null,
+      };
+    })
     .filter((leave) => {
       if (leave.gatePass === null) return false;
 
@@ -3123,6 +3147,26 @@ async function delegateToSsr(req, res) {
 async function handleApi(req, res, pathname) {
   await hydrateDataFromDatabase();
   try {
+    if (pathname.startsWith("/api/profile-photo/") && req.method === "GET") {
+      const match = pathname.match(/^\/api\/profile-photo\/([^/]+)$/);
+      if (match) {
+        const userId = decodeURIComponent(match[1]);
+        const student = db.students.find((s) => s.id === userId);
+        if (student && student.profile_photo) {
+          return sendPhotoResponse(res, student.profile_photo);
+        }
+        const staffMember = db.staff.find((s) => s.id === userId);
+        if (staffMember && staffMember.profile_photo) {
+          return sendPhotoResponse(res, staffMember.profile_photo);
+        }
+        const user = db.users.find((u) => u.id === userId);
+        if (user && user.profile_photo) {
+          return sendPhotoResponse(res, user.profile_photo);
+        }
+        return sendJson(res, 404, { error: "Photo not found" });
+      }
+    }
+
     if (pathname === "/api/health" && req.method === "GET") {
       const dbState = await pingDatabase();
       return sendJson(res, 200, {

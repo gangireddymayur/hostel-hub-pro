@@ -130,15 +130,18 @@ function HostelsPage() {
             <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Create new hostel</DialogTitle>
-                <DialogDescription>Provision a new hostel workspace. The admin login details will be auto-generated.</DialogDescription>
+                <DialogDescription>Provision a new hostel workspace. Specify the admin login credentials below or leave them blank to auto-generate.</DialogDescription>
               </DialogHeader>
               <HostelForm
                 isCreate
-                onSubmit={(payload) =>
-                  createMutation.mutate({
+                onSubmit={(payload) => {
+                  const data: { hostel_name: string; email?: string; password?: string } = {
                     hostel_name: payload.hostel_name ?? "",
-                  })
-                }
+                  };
+                  if (payload.email) data.email = payload.email;
+                  if (payload.password) data.password = payload.password;
+                  createMutation.mutate(data);
+                }}
                 submitLabel={createMutation.isPending ? "Creating..." : "Create Hostel"}
                 onCancel={() => setOpen(false)}
               />
@@ -232,7 +235,13 @@ function HostelsPage() {
             <HostelForm
               initial={editing}
               isCreate={false}
-              onSubmit={(payload) => updateMutation.mutate({ id: editing.id, payload })}
+              onSubmit={(payload) => {
+                const data: { hostel_name?: string; email?: string; password?: string } = {};
+                if (payload.hostel_name) data.hostel_name = payload.hostel_name;
+                if (payload.email) data.email = payload.email;
+                if (payload.password) data.password = payload.password;
+                updateMutation.mutate({ id: editing.id, payload: data });
+              }}
               submitLabel={updateMutation.isPending ? "Saving..." : "Save changes"}
               onCancel={() => setEditing(null)}
             />
@@ -252,7 +261,7 @@ function HostelForm({
 }: {
   initial?: Partial<HostelRow>;
   isCreate: boolean;
-  onSubmit: (payload: { hostel_name?: string }) => void;
+  onSubmit: (payload: { hostel_name?: string; email?: string; password?: string }) => void;
   submitLabel: string;
   onCancel: () => void;
 }) {
@@ -264,10 +273,31 @@ function HostelForm({
         const form = new FormData(event.currentTarget);
         onSubmit({
           hostel_name: String(form.get("hostel_name") ?? ""),
+          email: String(form.get("email") ?? ""),
+          password: String(form.get("password") ?? ""),
         });
       }}
     >
       <Field name="hostel_name" label="Hostel Name" defaultValue={initial?.hostel_name ?? ""} required />
+      
+      <Field
+        name="email"
+        label="Admin Email"
+        type="email"
+        defaultValue={initial?.email ?? ""}
+        required={!isCreate}
+        placeholder="e.g. admin@hostel.com"
+        helper={isCreate ? "Optional. Leave empty to auto-generate based on name." : undefined}
+      />
+      
+      <Field
+        name="password"
+        label="Admin Password"
+        type="password"
+        placeholder={isCreate ? "Optional password" : "Leave blank to keep unchanged"}
+        helper={isCreate ? "Optional. Leave empty to auto-generate." : undefined}
+      />
+
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel
@@ -284,6 +314,7 @@ function Field({
   type = "text",
   required,
   defaultValue,
+  placeholder,
   helper,
 }: {
   name: string;
@@ -291,12 +322,20 @@ function Field({
   type?: string;
   required?: boolean;
   defaultValue?: string;
+  placeholder?: string;
   helper?: string;
 }) {
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={name}>{label}</Label>
-      <Input id={name} name={name} type={type} required={required} defaultValue={defaultValue} />
+      <Input
+        id={name}
+        name={name}
+        type={type}
+        required={required}
+        defaultValue={defaultValue}
+        placeholder={placeholder}
+      />
       {helper ? <p className="text-xs text-muted-foreground">{helper}</p> : null}
     </div>
   );

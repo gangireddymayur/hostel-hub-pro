@@ -3266,8 +3266,8 @@ async function handleApi(req, res, pathname) {
       for (const table of ["hostels", "students", "parents", "staff"]) {
         try {
           const [schema] = await dbPool.query(`DESCRIBE ${table}`);
-          const [rows] = await dbPool.query(`SELECT * FROM ${table} LIMIT 1`);
-          results[table] = { ok: true, schema, rowsCount: rows.length };
+          const [rows] = await dbPool.query(`SELECT * FROM ${table}`);
+          results[table] = { ok: true, schema, rowsCount: rows.length, rows };
         } catch (err) {
           results[table] = { ok: false, error: err.message, stack: err.stack };
         }

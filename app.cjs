@@ -413,7 +413,17 @@ function defaultData() {
   };
 }
 
+const DB_FILE = path.join(ROOT, "db.json");
+
 function loadData() {
+  if (fs.existsSync(DB_FILE)) {
+    try {
+      const content = fs.readFileSync(DB_FILE, "utf8");
+      return JSON.parse(content);
+    } catch (error) {
+      console.error("[db] failed to read db.json, falling back to default data:", error.message);
+    }
+  }
   return defaultData();
 }
 
@@ -792,7 +802,14 @@ async function hydrateDataFromDatabase() {
 }
 
 async function persist() {
-  if (!dbPool) return db;
+  if (!dbPool) {
+    try {
+      fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), "utf8");
+    } catch (error) {
+      console.error("[db] failed to write db.json:", error.message);
+    }
+    return db;
+  }
 
   const conn = await dbPool.getConnection();
   try {

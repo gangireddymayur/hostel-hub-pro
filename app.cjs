@@ -78,15 +78,15 @@ try {
 const dbPool =
   mysqlPoolFactory && DB_HOST && DB_USER && DB_PASSWORD && DB_NAME
     ? mysqlPoolFactory({
-        host: DB_HOST,
-        port: DB_PORT,
-        user: DB_USER,
-        password: DB_PASSWORD,
-        database: DB_NAME,
-        waitForConnections: true,
-        connectionLimit: 5,
-        dateStrings: true,
-      })
+      host: DB_HOST,
+      port: DB_PORT,
+      user: DB_USER,
+      password: DB_PASSWORD,
+      database: DB_NAME,
+      waitForConnections: true,
+      connectionLimit: 5,
+      dateStrings: true,
+    })
     : null;
 
 function getEnvDebugSnapshot() {
@@ -548,6 +548,40 @@ async function ensureStaffProfilePhotoColumn() {
   }
 }
 
+async function ensureBaseTables() {
+  if (!dbPool) return;
+  try {
+    const [tables] = await dbPool.query("SHOW TABLES LIKE 'hostels'");
+    if (tables.length === 0) {
+      console.log("Auto-Migration: Base tables are missing. Initializing database from schema.sql...");
+      const schemaPath = path.join(ROOT, "db", "schema.sql");
+      if (fs.existsSync(schemaPath)) {
+        const schemaSql = fs.readFileSync(schemaPath, "utf8");
+        const queries = schemaSql
+          .split(";")
+          .map((q) => q.trim())
+          .filter((q) => q.length > 0 && !q.startsWith("CREATE DATABASE") && !q.startsWith("USE"));
+        
+        for (const query of queries) {
+          const cleaned = query
+            .split("\n")
+            .filter((line) => !line.trim().startsWith("--"))
+            .join("\n")
+            .trim();
+          if (cleaned) {
+            await dbPool.query(cleaned);
+          }
+        }
+        console.log("Auto-Migration: Database schema initialized successfully!");
+      } else {
+        console.warn("Auto-Migration Warning: schema.sql not found at", schemaPath);
+      }
+    }
+  } catch (error) {
+    console.error("Auto-Migration Error: Failed to initialize database tables:", error.message);
+  }
+}
+
 async function ensureStudentYearColumn() {
   if (!dbPool) return;
   try {
@@ -564,9 +598,12 @@ async function ensureStudentYearColumn() {
 
 let migrationsRun = false;
 let hasHydrated = false;
+let lastHydrateAttemptTime = 0;
+const HYDRATE_RETRY_COOLDOWN_MS = 15000; // 15 seconds cooldown
 
 async function runMigrations() {
   if (migrationsRun) return;
+  await ensureBaseTables();
   await ensureProfilePhotoColumn();
   await ensureStaffProfilePhotoColumn();
   await ensureLocationColumns();
@@ -583,11 +620,18 @@ async function hydrateDataFromDatabase() {
     return db;
   }
 
-  await runMigrations();
-
   if (hasHydrated) {
     return db;
   }
+
+  // If a hydration attempt failed recently, don't block current request with another slow connection attempt.
+  // Instead, immediately fall back to the last known memory state (db).
+  if (Date.now() - lastHydrateAttemptTime < HYDRATE_RETRY_COOLDOWN_MS) {
+    return db;
+  }
+
+  lastHydrateAttemptTime = Date.now();
+  await runMigrations();
 
   try {
     const [
@@ -2433,9 +2477,9 @@ async function handleImportStudents(req, res, data) {
       let resolvedHostelId = user.hostelId;
       const hostelNameVal = String(row.hostel || row.hostel_name || row.hostel_id || "").trim();
       if (hostelNameVal) {
-        const matchedHostel = db.hostels.find(h => 
-          h.hostel_name.toLowerCase() === hostelNameVal.toLowerCase() || 
-          h.id === hostelNameVal || 
+        const matchedHostel = db.hostels.find(h =>
+          h.hostel_name.toLowerCase() === hostelNameVal.toLowerCase() ||
+          h.id === hostelNameVal ||
           h.email.toLowerCase() === hostelNameVal.toLowerCase()
         );
         if (matchedHostel) {
@@ -2589,14 +2633,14 @@ async function handleUpdateStaff(req, res, staffId, body) {
 function handleLeaveRequests(req, res) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN", "HOSTEL_STAFF", "SECURITY_GUARD"]);
   if (!user) return;
-  
+
   let baseRequests;
   if (user.role === "HOSTEL_ADMIN" || user.role === "SUPER_ADMIN" || user.role === "SECURITY_GUARD") {
     baseRequests = db.leaveRequests;
   } else {
     baseRequests = leaveRequestsForHostel(user.hostelId);
   }
-  
+
   const leaveRequests = baseRequests
     .slice()
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -2897,10 +2941,10 @@ function handleGuardToday(req, res) {
     }))
     .filter((leave) => {
       if (leave.gatePass === null) return false;
-      
+
       const fromPart = String(leave.from_date).split("T")[0].split(" ")[0];
       const toPart = String(leave.to_date).split("T")[0].split(" ")[0];
-      
+
       // Filter: only show if today is within the leave request's scheduled date range
       return todayPart >= fromPart && todayPart <= toPart;
     })

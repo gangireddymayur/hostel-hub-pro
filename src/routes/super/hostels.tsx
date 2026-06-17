@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Pencil, Ban, CheckCircle2 } from "lucide-react";
+import { Plus, Search, Pencil, Ban, CheckCircle2, CornerDownRight } from "lucide-react";
 import { PageHeader } from "@/components/dashboard-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ type HostelRow = {
   email: string;
   status: string;
   created_at: string;
+  parent_hostel_id?: string | null;
   _count?: { students: number; parents: number; staff: number; leaveRequests: number };
 };
 
@@ -79,10 +80,42 @@ function HostelsPage() {
   });
 
   const list = useMemo(() => hostelsQuery.data?.data ?? [], [hostelsQuery.data]);
-  const filtered = list.filter((hostel) =>
-    (hostel.hostel_name?.toLowerCase() ?? "").includes(q.toLowerCase()) ||
-    (hostel.email?.toLowerCase() ?? "").includes(q.toLowerCase()),
-  );
+
+  // Arrange hostels hierarchically (branches placed right below their parent hostel)
+  const orderedList = useMemo(() => {
+    const parents = list.filter((h) => !h.parent_hostel_id);
+    const children = list.filter((h) => h.parent_hostel_id);
+
+    const result: HostelRow[] = [];
+    const processedIds = new Set<string>();
+
+    parents.forEach((parent) => {
+      result.push(parent as HostelRow);
+      processedIds.add(parent.id);
+
+      const parentChildren = children.filter((c) => c.parent_hostel_id === parent.id);
+      parentChildren.forEach((child) => {
+        result.push(child as HostelRow);
+        processedIds.add(child.id);
+      });
+    });
+
+    // Append any orphaned branches or any missed hostels
+    list.forEach((h) => {
+      if (!processedIds.has(h.id)) {
+        result.push(h as HostelRow);
+      }
+    });
+
+    return result;
+  }, [list]);
+
+  const filtered = useMemo(() => {
+    return orderedList.filter((hostel) =>
+      (hostel.hostel_name?.toLowerCase() ?? "").includes(q.toLowerCase()) ||
+      (hostel.email?.toLowerCase() ?? "").includes(q.toLowerCase())
+    );
+  }, [orderedList, q]);
 
   if (hostelsQuery.isLoading) {
     return (
@@ -179,46 +212,66 @@ function HostelsPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ) : filtered.map((hostel) => (
-                  <TableRow key={hostel.id}>
-                    <TableCell>
-                      <div className="font-medium">{hostel.hostel_name}</div>
-                      <div className="text-xs text-muted-foreground">{hostel.email}</div>
-                    </TableCell>
-                    <TableCell>{hostel._count?.students ?? 0}</TableCell>
-                    <TableCell>{hostel._count?.staff ?? 0}</TableCell>
-                    <TableCell>
-                      <Badge
-                        className={
-                          hostel.status === "ACTIVE"
-                            ? "bg-success text-success-foreground hover:bg-success"
-                            : "bg-muted text-muted-foreground hover:bg-muted"
-                        }
-                      >
-                        {hostel.status.toLowerCase()}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button size="icon" variant="ghost" onClick={() => setEditing(hostel)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() =>
-                            statusMutation.mutate({
-                              id: hostel.id,
-                              status: hostel.status === "ACTIVE" ? "DISABLED" : "ACTIVE",
-                            })
+                ) : filtered.map((hostel) => {
+                  const isBranch = !!hostel.parent_hostel_id;
+                  const parentHostel = isBranch ? list.find((h) => h.id === hostel.parent_hostel_id) : null;
+                  return (
+                    <TableRow key={hostel.id} className={isBranch ? "bg-muted/10 hover:bg-muted/20" : ""}>
+                      <TableCell className={isBranch ? "pl-8" : ""}>
+                        <div className="flex items-start gap-2">
+                          {isBranch && (
+                            <CornerDownRight className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                          )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className={isBranch ? "text-sm font-medium text-foreground/90" : "font-medium"}>
+                                {hostel.hostel_name}
+                              </span>
+                              {isBranch && (
+                                <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 font-normal bg-background/50 text-muted-foreground border-muted-foreground/30">
+                                  Branch of {parentHostel ? parentHostel.hostel_name : "Main Hostel"}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{hostel.email}</div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>{hostel._count?.students ?? 0}</TableCell>
+                      <TableCell>{hostel._count?.staff ?? 0}</TableCell>
+                      <TableCell>
+                        <Badge
+                          className={
+                            hostel.status === "ACTIVE"
+                              ? "bg-success text-success-foreground hover:bg-success"
+                              : "bg-muted text-muted-foreground hover:bg-muted"
                           }
                         >
-                          {hostel.status === "ACTIVE" ? <Ban className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                          {hostel.status.toLowerCase()}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button size="icon" variant="ghost" onClick={() => setEditing(hostel)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() =>
+                              statusMutation.mutate({
+                                id: hostel.id,
+                                status: hostel.status === "ACTIVE" ? "DISABLED" : "ACTIVE",
+                              })
+                            }
+                          >
+                            {hostel.status === "ACTIVE" ? <Ban className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

@@ -141,7 +141,7 @@ export async function changePassword(payload: { currentPassword: string; newPass
 }
 
 export async function getSuperHostels() {
-  return request<{ data: Array<Record<string, unknown> & { id: string; hostel_name: string; email: string; status: string; created_at: string; _count?: { students: number; parents: number; staff: number; leaveRequests: number } }> }>("/super-admin/hostels");
+  return request<{ data: Array<Record<string, unknown> & { id: string; hostel_name: string; email: string; status: string; created_at: string; parent_hostel_id?: string | null; _count?: { students: number; parents: number; staff: number; leaveRequests: number } }> }>("/super-admin/hostels");
 }
 
 export async function createHostel(payload: { hostel_name: string; email?: string; password?: string }) {

@@ -1011,6 +1011,17 @@ function findHostelById(hostelId) {
   return db.hostels.find((hostel) => hostel.id === hostelId) ?? null;
 }
 
+function getAccessibleHostelIds(user) {
+  if (!user || !user.hostelId) return [];
+  const ids = [user.hostelId];
+  db.hostels.forEach((h) => {
+    if (h.parent_hostel_id === user.hostelId) {
+      ids.push(h.id);
+    }
+  });
+  return ids;
+}
+
 function findUserByEmail(email, role) {
   const normalized = String(email ?? "").trim().toLowerCase();
   return (
@@ -1590,6 +1601,12 @@ function issueGatePass(leaveRequest) {
 
 async function createStudentRecord(hostelId, payload, actor) {
   const targetHostelId = payload.hostel_id || hostelId;
+  const allowedHostelIds = getAccessibleHostelIds(actor);
+  if (actor.role !== "SUPER_ADMIN" && !allowedHostelIds.includes(targetHostelId)) {
+    const error = new Error("Forbidden: You do not have access to this hostel/branch");
+    error.statusCode = 403;
+    throw error;
+  }
   const studentId = String(payload.student_id ?? "").trim();
   const name = String(payload.name ?? "").trim();
   const roomNumber = String(payload.room_number ?? "").trim();
@@ -1653,6 +1670,12 @@ async function createStudentRecord(hostelId, payload, actor) {
 
 async function createStaffRecord(hostelId, payload, actor) {
   const targetHostelId = payload.hostel_id || hostelId;
+  const allowedHostelIds = getAccessibleHostelIds(actor);
+  if (actor.role !== "SUPER_ADMIN" && !allowedHostelIds.includes(targetHostelId)) {
+    const error = new Error("Forbidden: You do not have access to this hostel/branch");
+    error.statusCode = 403;
+    throw error;
+  }
   const role = normalizeRole(payload.role);
   const name = String(payload.name ?? "").trim();
   const email = String(payload.email ?? "").trim().toLowerCase();
@@ -2316,14 +2339,20 @@ function handleSuperAuditLogs(req, res) {
 function handleHostelDashboard(req, res) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
-  const counts = computeHostelCounts(user.hostelId);
-  const studentIds = new Set(db.students.filter((student) => student.hostel_id === user.hostelId).map((student) => student.id));
+  const allowedHostelIds = getAccessibleHostelIds(user);
+  const allowedSet = new Set(allowedHostelIds);
+  
+  const students = db.students.filter((student) => allowedSet.has(student.hostel_id));
+  const parents = db.parents.filter((parent) => allowedSet.has(parent.hostel_id));
+  const staff = db.staff.filter((item) => allowedSet.has(item.hostel_id));
+  
+  const studentIds = new Set(students.map((student) => student.id));
   const leaveCounts = computeStudentLeaveCounts(studentIds);
   return sendJson(res, 200, {
     data: {
-      students: counts.students,
-      parents: counts.parents,
-      staff: counts.staff,
+      students: students.length,
+      parents: parents.length,
+      staff: staff.length,
       pendingLeaves: leaveCounts.pendingLeaves,
       approvedLeaves: leaveCounts.approvedLeaves,
     },
@@ -2333,8 +2362,9 @@ function handleHostelDashboard(req, res) {
 function handleHostelStudents(req, res) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
+  const allowedHostelIds = getAccessibleHostelIds(user);
   const students = db.students
-    .slice()
+    .filter((student) => allowedHostelIds.includes(student.hostel_id))
     .map((student) => {
       const h = db.hostels.find((x) => x.id === student.hostel_id);
       return {
@@ -2352,6 +2382,14 @@ async function handleUpdateStudent(req, res, studentId, body) {
   try {
     const student = db.students.find((item) => item.id === studentId);
     if (!student) return sendJson(res, 404, { error: "Student not found" });
+
+    const allowedHostelIds = getAccessibleHostelIds(user);
+    if (!allowedHostelIds.includes(student.hostel_id)) {
+      return sendJson(res, 403, { error: "Forbidden: You do not have access to this student" });
+    }
+    if (body.hostel_id && !allowedHostelIds.includes(body.hostel_id)) {
+      return sendJson(res, 403, { error: "Forbidden: Target hostel is not accessible" });
+    }
 
     const oldParentMobile = student.parent_mobile;
     const oldHostelId = student.hostel_id;
@@ -2447,8 +2485,9 @@ async function handleDeleteStudent(req, res, studentId) {
     const student = db.students.find((s) => s.id === studentId);
     if (!student) return sendJson(res, 404, { error: "Student not found" });
 
-    if (student.hostel_id !== user.hostelId) {
-      return sendJson(res, 403, { error: "Forbidden" });
+    const allowedHostelIds = getAccessibleHostelIds(user);
+    if (!allowedHostelIds.includes(student.hostel_id)) {
+      return sendJson(res, 403, { error: "Forbidden: You do not have access to this student" });
     }
 
     const studentLeaveRequests = db.leaveRequests.filter((leave) => leave.student_id === studentId);
@@ -2485,8 +2524,9 @@ async function handleDeleteStaff(req, res, staffId) {
     const staffRow = db.staff.find((item) => item.id === staffId);
     if (!staffRow) return sendJson(res, 404, { error: "Staff member not found" });
 
-    if (staffRow.hostel_id !== user.hostelId) {
-      return sendJson(res, 403, { error: "Forbidden" });
+    const allowedHostelIds = getAccessibleHostelIds(user);
+    if (!allowedHostelIds.includes(staffRow.hostel_id)) {
+      return sendJson(res, 403, { error: "Forbidden: You do not have access to this staff member" });
     }
 
     if (staffRow.id === user.id) {
@@ -2600,8 +2640,9 @@ async function handleUploadStaffPhoto(req, res, staffId, data) {
 function handleHostelStaff(req, res) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
+  const allowedHostelIds = getAccessibleHostelIds(user);
   const staff = db.staff
-    .slice()
+    .filter((item) => allowedHostelIds.includes(item.hostel_id))
     .map((item) => {
       const h = db.hostels.find((x) => x.id === item.hostel_id);
       return {
@@ -2630,6 +2671,14 @@ async function handleUpdateStaff(req, res, staffId, body) {
   try {
     const staffRow = db.staff.find((item) => item.id === staffId);
     if (!staffRow) return sendJson(res, 404, { error: "Staff member not found" });
+
+    const allowedHostelIds = getAccessibleHostelIds(user);
+    if (!allowedHostelIds.includes(staffRow.hostel_id)) {
+      return sendJson(res, 403, { error: "Forbidden: You do not have access to this staff member" });
+    }
+    if (body.hostel_id && !allowedHostelIds.includes(body.hostel_id)) {
+      return sendJson(res, 403, { error: "Forbidden: Target hostel is not accessible" });
+    }
 
     const role = body.role ? normalizeRole(body.role) : staffRow.role;
     const name = body.name ? String(body.name).trim() : staffRow.name;
@@ -2678,10 +2727,14 @@ function handleLeaveRequests(req, res) {
   if (!user) return;
 
   let baseRequests;
-  if (user.role === "HOSTEL_ADMIN" || user.role === "SUPER_ADMIN" || user.role === "SECURITY_GUARD") {
+  if (user.role === "SUPER_ADMIN") {
     baseRequests = db.leaveRequests;
   } else {
-    baseRequests = leaveRequestsForHostel(user.hostelId);
+    const allowedHostelIds = getAccessibleHostelIds(user);
+    baseRequests = db.leaveRequests.filter((leave) => {
+      const student = db.students.find((s) => s.id === leave.student_id);
+      return student && allowedHostelIds.includes(student.hostel_id);
+    });
   }
 
   const leaveRequests = baseRequests
@@ -2799,8 +2852,10 @@ async function handleBulkReviewLeaveRequests(req, res, body) {
 function handleReports(req, res) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
-  const leaveRequests = leaveRequestsForHostel(user.hostelId);
-  const studentIds = new Set(db.students.filter((student) => student.hostel_id === user.hostelId).map((student) => student.id));
+  const allowedHostelIds = getAccessibleHostelIds(user);
+  const allowedSet = new Set(allowedHostelIds);
+  const studentIds = new Set(db.students.filter((student) => allowedSet.has(student.hostel_id)).map((student) => student.id));
+  const leaveRequests = db.leaveRequests.filter((leave) => studentIds.has(leave.student_id));
   const gatePasses = db.gatePasses.filter((gatePass) => {
     const leave = db.leaveRequests.find((item) => item.id === gatePass.leave_request_id);
     return leave ? studentIds.has(leave.student_id) : false;
@@ -2970,8 +3025,11 @@ function handleGuardToday(req, res) {
   const user = requireAuth(req, res, ["SECURITY_GUARD"]);
   if (!user) return;
 
+  const allowedHostelIds = getAccessibleHostelIds(user);
   const studentIds = new Set(
-    db.students.map((student) => student.id)
+    db.students
+      .filter((student) => allowedHostelIds.includes(student.hostel_id))
+      .map((student) => student.id)
   );
 
   const todayPart = nowIso().split("T")[0];
@@ -3329,9 +3387,12 @@ async function handleApi(req, res, pathname) {
     if (pathname === "/api/hostels" && req.method === "GET") {
       const user = requireAuth(req, res, ["SUPER_ADMIN", "HOSTEL_ADMIN", "HOSTEL_STAFF", "SECURITY_GUARD"]);
       if (!user) return;
-      const data = db.hostels
-        .filter(h => h.status === "ACTIVE")
-        .map(h => ({ id: h.id, hostel_name: h.hostel_name }));
+      let list = db.hostels.filter(h => h.status === "ACTIVE");
+      if (user.role !== "SUPER_ADMIN") {
+        const allowedHostelIds = getAccessibleHostelIds(user);
+        list = list.filter(h => allowedHostelIds.includes(h.id));
+      }
+      const data = list.map(h => ({ id: h.id, hostel_name: h.hostel_name }));
       return sendJson(res, 200, { data });
     }
 

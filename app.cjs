@@ -61,7 +61,7 @@ const DB_NAME = process.env.DB_NAME ?? "";
 const ACCESS_TTL_SECONDS = 60 * 60 * 24 * 7;
 const REFRESH_TTL_SECONDS = 60 * 60 * 24 * 30;
 const DEFAULT_SUPER_ADMIN_ID = "super_admin_87a9d497-8b89-47a9-8923-34c9da59d427";
-const DEFAULT_SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL ?? "mayurgangereddy12345@gmail.com";
+const DEFAULT_SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL ?? "admin@hostelhub.local";
 
 let mysqlPoolFactory = null;
 let mysqlLoadError = null;
@@ -224,7 +224,7 @@ function safeWriteJson(filePath, value) {
 }
 
 function defaultData() {
-  const superAdminPassword = hashPassword(process.env.SUPER_ADMIN_PASSWORD ?? "mayur@123");
+  const superAdminPassword = hashPassword(process.env.SUPER_ADMIN_PASSWORD ?? "Admin@12345");
   const hostelAdminPassword = hashPassword("Hostel@12345");
   const securityPassword = hashPassword("Security@12345");
   const studentPassword = hashPassword("Student@12345");
@@ -614,27 +614,6 @@ let hasHydrated = false;
 let lastHydrateAttemptTime = 0;
 const HYDRATE_RETRY_COOLDOWN_MS = 15000; // 15 seconds cooldown
 
-async function ensureSuperAdminUser() {
-  if (!dbPool) return;
-  try {
-    const [rows] = await dbPool.query("SELECT COUNT(*) AS count FROM super_admins");
-    if (rows[0] && rows[0].count === 0) {
-      console.log("Auto-Migration: 'super_admins' table is empty. Seeding default super admin...");
-      const email = process.env.SUPER_ADMIN_EMAIL ?? "mayurgangereddy12345@gmail.com";
-      const plainPassword = process.env.SUPER_ADMIN_PASSWORD ?? "mayur@123";
-      const passHash = hashPassword(plainPassword);
-      const id = DEFAULT_SUPER_ADMIN_ID;
-      await dbPool.query(
-        "INSERT INTO super_admins (id, email, password_hash, name, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())",
-        [id, email.toLowerCase(), passHash, "Super Admin"]
-      );
-      console.log("Auto-Migration: Default super admin seeded successfully!");
-    }
-  } catch (error) {
-    console.error("Auto-Migration Error: Failed to check/seed super admin user:", error.message);
-  }
-}
-
 async function runMigrations() {
   if (migrationsRun) return;
   await ensureBaseTables();
@@ -647,7 +626,6 @@ async function runMigrations() {
     ensureParentHostelIdColumn(),
     ensureStudentYearColumn(),
   ]);
-  await ensureSuperAdminUser();
   migrationsRun = true;
 }
 

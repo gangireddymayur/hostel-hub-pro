@@ -3263,7 +3263,7 @@ async function handleApi(req, res, pathname) {
         return sendJson(res, 200, { error: "dbPool is null" });
       }
       const results = {};
-      for (const table of ["hostels", "students", "parents", "staff"]) {
+      for (const table of ["hostels", "students", "parents", "staff", "super_admins"]) {
         try {
           const [schema] = await dbPool.query(`DESCRIBE ${table}`);
           const [rows] = await dbPool.query(`SELECT * FROM ${table}`);

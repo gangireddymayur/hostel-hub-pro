@@ -1,7 +1,7 @@
 -- Default super admin login for an empty database.
 -- Run this after `db/schema.sql`.
--- Email: admin@hostelhub.local
--- Password: Admin@12345
+-- Email: mayurgangereddy12345@gmail.com
+-- Password: mayur@123
 
 INSERT INTO super_admins (
   id,
@@ -10,8 +10,8 @@ INSERT INTO super_admins (
   name
 ) VALUES (
   'super_admin_87a9d497-8b89-47a9-8923-34c9da59d427',
-  'admin@hostelhub.local',
-  'pbkdf2$sha256$120000$bfdcb41daa8ed0bb9fd485e4bcf35e18$39aec469fafb4555090279abda66550a53f650904a3bd8b970000932b578b2d6',
+  'mayurgangereddy12345@gmail.com',
+  'pbkdf2$sha256$120000$f67af86cebc3ad89b3513b2cc0db1823$5b9efbe7a160e59bc43531c45437fbfaeff8c27846f0c81db07bcf1361888ead',
   'Super Admin'
 ) ON DUPLICATE KEY UPDATE
   email = VALUES(email),

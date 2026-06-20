@@ -3129,7 +3129,7 @@ function handleGuardToday(req, res) {
 function getCombinedDateTime(dateVal, timeVal) {
   try {
     const dStr = String(dateVal).split('T')[0];
-    let tStr = '00:00:00.000Z';
+    let tStr = '00:00:00.000';
     if (String(timeVal).includes('T')) {
       tStr = String(timeVal).split('T')[1];
     } else if (String(timeVal).includes(' ')) {
@@ -3137,7 +3137,9 @@ function getCombinedDateTime(dateVal, timeVal) {
     } else {
       tStr = String(timeVal);
     }
-    const combinedStr = `${dStr}T${tStr}`;
+    // Clean any Z or offset suffix and treat the time as local IST (+05:30)
+    tStr = tStr.replace(/[Zz]/g, '').split('+')[0].split('-')[0];
+    const combinedStr = `${dStr}T${tStr.slice(0, 8)}+05:30`;
     const parsed = new Date(combinedStr);
     if (!isNaN(parsed.getTime())) {
       return parsed;

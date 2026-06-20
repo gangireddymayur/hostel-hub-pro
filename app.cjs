@@ -2799,7 +2799,7 @@ function handleLeaveRequests(req, res) {
 }
 
 async function handleReviewLeaveRequest(req, res, leaveRequestId, body) {
-  const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN", "HOSTEL_STAFF"]);
   if (!user) return;
   const leave = db.leaveRequests.find((item) => item.id === leaveRequestId);
   if (!leave) return sendJson(res, 404, { error: "Leave request not found" });

@@ -350,7 +350,7 @@ function StaffPage() {
                     </TableCell>
                     <TableCell>{staff.role.toLowerCase().replaceAll("_", " ")}</TableCell>
                     <TableCell>
-                      {staff.role === "HOSTEL_ADMIN" ? (
+                      {staff.role === "HOSTEL_ADMIN" || (hostels.length > 0 && staff.hostel_id === hostels[0]?.id && hostels.length > 1) ? (
                         <span className="text-xs text-muted-foreground italic">All hostels</span>
                       ) : (
                         staff.hostel_name || "N/A"

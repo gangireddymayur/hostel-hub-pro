@@ -3181,8 +3181,20 @@ async function handleGuardScan(req, res, body) {
     gatePass.out_time_actual = nowIso();
     gatePass.out_guard_lat = guard_lat;
     gatePass.out_guard_lng = guard_lng;
+    // Invalidate the old exit QR by generating a new entry QR
+    const newQr = `GP-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
+    gatePass.qr_code = newQr;
     addAudit("SCAN_OUT", "GATE_PASS", gatePass.id, user, { qr_code: qrCode, guard_lat, guard_lng });
   } else if (gatePass.status === "OUT") {
+    // 1-Minute Scan Cooldown check
+    if (gatePass.out_time_actual) {
+      const outTime = new Date(gatePass.out_time_actual);
+      const now = new Date();
+      const diffMs = now.getTime() - outTime.getTime();
+      if (diffMs < 60000) {
+        return sendJson(res, 400, { error: "Please wait at least 1 minute after exit before checking back in." });
+      }
+    }
     gatePass.status = "RETURNED";
     gatePass.in_time_actual = nowIso();
     gatePass.in_guard_lat = guard_lat;

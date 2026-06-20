@@ -609,6 +609,20 @@ async function ensureStudentYearColumn() {
   }
 }
 
+async function ensureRejectReasonColumns() {
+  if (!dbPool) return;
+  try {
+    const [columns] = await dbPool.query("SHOW COLUMNS FROM leave_requests LIKE 'parent_reject_reason'");
+    if (columns.length === 0) {
+      console.log("Auto-Migration: Adding reject reason columns to leave_requests table...");
+      await dbPool.query("ALTER TABLE leave_requests ADD COLUMN parent_reject_reason TEXT NULL, ADD COLUMN hostel_reject_reason TEXT NULL");
+      console.log("Auto-Migration: Reject reason columns added successfully!");
+    }
+  } catch (error) {
+    console.error("Auto-Migration Error: Failed to check or add reject reason columns:", error.message);
+  }
+}
+
 let migrationsRun = false;
 let hasHydrated = false;
 let lastHydrateAttemptTime = 0;
@@ -625,6 +639,7 @@ async function runMigrations() {
     ensureRefreshTokenColumnLength(),
     ensureParentHostelIdColumn(),
     ensureStudentYearColumn(),
+    ensureRejectReasonColumns(),
   ]);
   migrationsRun = true;
 }
@@ -753,6 +768,8 @@ async function hydrateDataFromDatabase() {
         hostel_status: String(row.hostel_status ?? "PENDING"),
         final_status: String(row.final_status ?? "PENDING"),
         note: row.note ?? null,
+        parent_reject_reason: row.parent_reject_reason ? String(row.parent_reject_reason) : null,
+        hostel_reject_reason: row.hostel_reject_reason ? String(row.hostel_reject_reason) : null,
         student_lat: row.student_lat != null ? Number(row.student_lat) : null,
         student_lng: row.student_lng != null ? Number(row.student_lng) : null,
         created_at: normalizeDateTime(row.created_at),
@@ -931,11 +948,13 @@ async function persist() {
         leave.final_status,
         leave.student_lat ?? null,
         leave.student_lng ?? null,
+        leave.parent_reject_reason ?? null,
+        leave.hostel_reject_reason ?? null,
         toSqlDateTime(leave.created_at),
         toSqlDateTime(leave.updated_at ?? leave.created_at),
       ]);
       await conn.query(
-        "INSERT INTO leave_requests (id, hostel_id, student_id, reason, from_date, to_date, out_time, return_time, parent_status, hostel_status, final_status, student_lat, student_lng, created_at, updated_at) VALUES ?",
+        "INSERT INTO leave_requests (id, hostel_id, student_id, reason, from_date, to_date, out_time, return_time, parent_status, hostel_status, final_status, student_lat, student_lng, parent_reject_reason, hostel_reject_reason, created_at, updated_at) VALUES ?",
         [values]
       );
     }
@@ -2788,14 +2807,20 @@ async function handleReviewLeaveRequest(req, res, leaveRequestId, body) {
   const status = String(body.status ?? "").toUpperCase();
   if (!["APPROVED", "REJECTED"].includes(status)) return sendJson(res, 400, { error: "Invalid status" });
 
+  if (status === "APPROVED" && leave.parent_status !== "APPROVED") {
+    return sendJson(res, 400, { error: "Cannot approve request. Waiting for parent approval." });
+  }
+
   leave.hostel_status = status;
   if (status === "REJECTED") {
+    leave.hostel_reject_reason = body.hostel_reject_reason ? String(body.hostel_reject_reason).trim() : null;
     leave.final_status = "REJECTED";
     const gatePass = gatePassByLeaveId(leave.id);
     if (gatePass) {
       db.gatePasses = db.gatePasses.filter((item) => item.id !== gatePass.id);
     }
   } else {
+    leave.hostel_reject_reason = null;
     if (leave.parent_status === "APPROVED") {
       leave.final_status = "APPROVED";
       issueGatePass(leave);
@@ -2837,14 +2862,20 @@ async function handleBulkReviewLeaveRequests(req, res, body) {
       continue;
     }
 
+    if (status === "APPROVED" && leave.parent_status !== "APPROVED") {
+      continue;
+    }
+
     leave.hostel_status = status;
     if (status === "REJECTED") {
+      leave.hostel_reject_reason = body.hostel_reject_reason ? String(body.hostel_reject_reason).trim() : null;
       leave.final_status = "REJECTED";
       const gatePass = gatePassByLeaveId(leave.id);
       if (gatePass) {
         db.gatePasses = db.gatePasses.filter((item) => item.id !== gatePass.id);
       }
     } else {
+      leave.hostel_reject_reason = null;
       if (leave.parent_status === "APPROVED") {
         leave.final_status = "APPROVED";
         issueGatePass(leave);
@@ -2952,11 +2983,18 @@ function handleGetStudentLeaveRequests(req, res) {
   const leaves = db.leaveRequests
     .filter((leave) => leave.student_id === student.id)
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .map((leave) => ({
-      ...leave,
-      student: { ...student, profile_photo: null }, // STRIP photo to improve speed and avoid crashes
-      gatePass: gatePassByLeaveId(leave.id) ?? null,
-    }));
+    .map((leave) => {
+      const hostel = findHostelById(student.hostel_id);
+      return {
+        ...leave,
+        student: {
+          ...student,
+          profile_photo: null,
+          hostel_name: hostel ? hostel.hostel_name : "",
+        },
+        gatePass: gatePassByLeaveId(leave.id) ?? null,
+      };
+    });
 
   return sendJson(res, 200, { data: leaves });
 }
@@ -2976,9 +3014,18 @@ function handleGetParentRequests(req, res) {
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .map((leave) => {
       const student = db.students.find((s) => s.id === leave.student_id);
+      let studentWithHostel = null;
+      if (student) {
+        const hostel = findHostelById(student.hostel_id);
+        studentWithHostel = {
+          ...student,
+          profile_photo: null,
+          hostel_name: hostel ? hostel.hostel_name : "",
+        };
+      }
       return {
         ...leave,
-        student: student ? { ...student, profile_photo: null } : null, // STRIP photo to improve speed and avoid crashes
+        student: studentWithHostel,
         gatePass: gatePassByLeaveId(leave.id) ?? null,
       };
     });
@@ -3007,12 +3054,14 @@ async function handleReviewParentRequest(req, res, leaveRequestId, body) {
   }
 
   if (status === "REJECTED") {
+    leave.parent_reject_reason = body.parent_reject_reason ? String(body.parent_reject_reason).trim() : null;
     leave.final_status = "REJECTED";
     const gatePass = gatePassByLeaveId(leave.id);
     if (gatePass) {
       db.gatePasses = db.gatePasses.filter((item) => item.id !== gatePass.id);
     }
   } else {
+    leave.parent_reject_reason = null;
     if (leave.hostel_status === "APPROVED") {
       leave.final_status = "APPROVED";
       issueGatePass(leave);

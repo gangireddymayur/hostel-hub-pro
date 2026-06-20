@@ -769,6 +769,7 @@ async function hydrateDataFromDatabase() {
         parent_status: String(row.parent_status ?? "PENDING"),
         hostel_status: String(row.hostel_status ?? "PENDING"),
         final_status: String(row.final_status ?? "PENDING"),
+        request_type: String(row.request_type ?? "LEAVE"),
         note: row.note ?? null,
         parent_reject_reason: row.parent_reject_reason ? String(row.parent_reject_reason) : null,
         hostel_reject_reason: row.hostel_reject_reason ? String(row.hostel_reject_reason) : null,
@@ -2937,9 +2938,37 @@ async function handleCreateLeaveRequest(req, res, body) {
   const return_time = String(body.return_time ?? "").trim();
   const student_lat = body.student_lat != null ? Number(body.student_lat) : null;
   const student_lng = body.student_lng != null ? Number(body.student_lng) : null;
+  const request_type = String(body.request_type ?? "LEAVE").trim().toUpperCase();
 
   if (!reason || !from_date || !to_date || !out_time || !return_time) {
     return sendJson(res, 400, { error: "reason, from_date, to_date, out_time, and return_time are required" });
+  }
+
+  if (request_type === "PERMISSION") {
+    const start = getCombinedDateTime(from_date, out_time);
+    const end = getCombinedDateTime(to_date, return_time);
+    const now = new Date();
+
+    if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return sendJson(res, 400, { error: "Invalid date or time formats provided for Permission" });
+    }
+
+    const durationMs = end.getTime() - start.getTime();
+    if (durationMs <= 0) {
+      return sendJson(res, 400, { error: "Permission return time must be after exit time" });
+    }
+    if (durationMs > 24 * 60 * 60 * 1000) {
+      return sendJson(res, 400, { error: "Permission request duration cannot exceed 24 hours" });
+    }
+
+    const timeToStartMs = start.getTime() - now.getTime();
+    // Allow up to 10 minutes grace period for drift
+    if (timeToStartMs < -10 * 60 * 1000) {
+      return sendJson(res, 400, { error: "Permission exit time cannot be in the past" });
+    }
+    if (timeToStartMs > 24 * 60 * 60 * 1000) {
+      return sendJson(res, 400, { error: "Permission exit time must start within the next 24 hours" });
+    }
   }
 
   const student = db.students.find((s) => s.id === user.id);
@@ -2954,6 +2983,7 @@ async function handleCreateLeaveRequest(req, res, body) {
     to_date: normalizeDateTime(to_date),
     out_time: normalizeDateTime(out_time),
     return_time: normalizeDateTime(return_time),
+    request_type,
     parent_status: "PENDING",
     hostel_status: "PENDING",
     final_status: "PENDING",

@@ -190,7 +190,7 @@ function StaffPage() {
                 {/* Hostel picker — only shown for HOSTEL_STAFF and SECURITY_GUARD */}
                 {showHostelPicker && (
                   <div className="grid gap-1.5">
-                    <Label htmlFor="hostel_select">Hostel</Label>
+                    <Label htmlFor="hostel_select">Hostel Access</Label>
                     <select
                       id="hostel_select"
                       value={selectedHostel}
@@ -199,6 +199,10 @@ function StaffPage() {
                       className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                     >
                       <option value="">Select a hostel</option>
+                      {/* ALL = assign to the parent/primary hostel so getAccessibleHostelIds gives full branch access */}
+                      {hostels.length > 0 && (
+                        <option value={hostels[0]?.id ?? ""}>🏢 All Hostels (all branches)</option>
+                      )}
                       {hostels.map((hostel) => (
                         <option key={hostel.id} value={hostel.id}>
                           {hostel.hostel_name}
@@ -206,7 +210,9 @@ function StaffPage() {
                       ))}
                     </select>
                     <p className="text-xs text-muted-foreground">
-                      You can reassign this staff member to any hostel you manage.
+                      {selectedHostel === (hostels[0]?.id ?? "") && hostels.length > 1
+                        ? "⚠️ All Hostels: this staff member can see students from ALL branches."
+                        : "You can reassign this staff member to any hostel you manage."}
                     </p>
                   </div>
                 )}

@@ -3253,6 +3253,16 @@ async function handleGuardScan(req, res, body) {
     return sendJson(res, 403, { error: "Forbidden" });
   }
 
+  // Cross-branch detection: warn if guard's assigned hostel differs from student's hostel
+  // A guard assigned to the parent hostel (getAccessibleHostelIds returns all branches) → no warning
+  const guardAllowedHostelIds = getAccessibleHostelIds(user);
+  const studentHostel = db.hostels.find((h) => h.id === student.hostel_id);
+  const isFromDifferentBranch = !guardAllowedHostelIds.includes(student.hostel_id);
+  // If guard doesn't even have access via allowed IDs, still allow scan but warn
+  const branchWarning = isFromDifferentBranch
+    ? { hostel_name: studentHostel?.hostel_name ?? "Unknown Branch" }
+    : null;
+
   if (gatePass.status === "APPROVED") {
     const start = getCombinedDateTime(leave.from_date, leave.out_time);
     const end = getCombinedDateTime(leave.to_date, leave.return_time);
@@ -3312,7 +3322,7 @@ async function handleGuardScan(req, res, body) {
     }
   }
 
-  return sendJson(res, 200, { data: gatePass });
+  return sendJson(res, 200, { data: gatePass, branch_warning: branchWarning });
 }
 
 function serveStaticFile(res, filePath) {

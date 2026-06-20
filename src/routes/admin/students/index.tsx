@@ -262,7 +262,7 @@ function StudentsPage() {
                   <TableHead>Student</TableHead>
                   <TableHead>Hostel</TableHead>
                   <TableHead>Room</TableHead>
-                  <TableHead>Parent Mobile</TableHead>
+                  <TableHead>Parent</TableHead>
                   <TableHead>Mobile</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -291,7 +291,17 @@ function StudentsPage() {
                     </TableCell>
                     <TableCell>{student.hostel_name || "N/A"}</TableCell>
                     <TableCell>{student.room_number}</TableCell>
-                    <TableCell className="font-mono text-xs">{student.parent_mobile}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-8 w-8">
+                          {student.parent_profile_photo && <AvatarImage src={student.parent_profile_photo} alt="Parent" className="object-cover" />}
+                          <AvatarFallback className="bg-secondary text-secondary-foreground text-xs font-semibold">
+                            P
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="font-mono text-xs">{student.parent_mobile}</span>
+                      </div>
+                    </TableCell>
                     <TableCell className="font-mono text-xs">{student.mobile}</TableCell>
                     <TableCell>
                       <Badge className={student.status === "ACTIVE" ? "bg-success text-success-foreground hover:bg-success" : "bg-warning/20 text-warning-foreground dark:text-warning hover:bg-warning/20"}>

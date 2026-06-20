@@ -3124,6 +3124,26 @@ function handleGuardToday(req, res) {
   return sendJson(res, 200, { data: leaves });
 }
 
+function getCombinedDateTime(dateVal, timeVal) {
+  try {
+    const dStr = String(dateVal).split('T')[0];
+    let tStr = '00:00:00.000Z';
+    if (String(timeVal).includes('T')) {
+      tStr = String(timeVal).split('T')[1];
+    } else if (String(timeVal).includes(' ')) {
+      tStr = String(timeVal).split(' ')[1];
+    } else {
+      tStr = String(timeVal);
+    }
+    const combinedStr = `${dStr}T${tStr}`;
+    const parsed = new Date(combinedStr);
+    if (!isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  } catch (_) {}
+  return null;
+}
+
 async function handleGuardScan(req, res, body) {
   const user = requireAuth(req, res, ["SECURITY_GUARD"]);
   if (!user) return;
@@ -3146,6 +3166,17 @@ async function handleGuardScan(req, res, body) {
   }
 
   if (gatePass.status === "APPROVED") {
+    const start = getCombinedDateTime(leave.from_date, leave.out_time);
+    const end = getCombinedDateTime(leave.to_date, leave.return_time);
+    const now = new Date();
+
+    if (start && now < start) {
+      return sendJson(res, 400, { error: "Exit permitted only during leave window. Code activates at " + start.toISOString() });
+    }
+    if (end && now > end) {
+      return sendJson(res, 400, { error: "Exit denied. The leave request permission window has expired." });
+    }
+
     gatePass.status = "OUT";
     gatePass.out_time_actual = nowIso();
     gatePass.out_guard_lat = guard_lat;

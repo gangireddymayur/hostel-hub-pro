@@ -92,6 +92,8 @@ const dbPool =
     })
     : null;
 
+const sseClients = new Set();
+
 function getEnvDebugSnapshot() {
   const vendorMysql2Path = path.join(VENDOR_NODE_MODULES, "mysql2", "promise.js");
   const vendorSqlEscaperPath = path.join(VENDOR_NODE_MODULES, "sql-escaper", "lib", "index.js");
@@ -3206,6 +3208,24 @@ async function handleGuardScan(req, res, body) {
   }
 
   await persist();
+
+  // Broadcast status update over Server-Sent Events (SSE)
+  const sseData = {
+    ...leave,
+    student: {
+      ...student,
+      profile_photo: null,
+    },
+    gatePass: gatePass,
+  };
+  for (const client of sseClients) {
+    if (client.studentId === student.id) {
+      try {
+        client.res.write(`data: ${JSON.stringify(sseData)}\n\n`);
+      } catch (_) {}
+    }
+  }
+
   return sendJson(res, 200, { data: gatePass });
 }
 
@@ -3314,6 +3334,30 @@ async function delegateToSsr(req, res) {
 async function handleApi(req, res, pathname) {
   await hydrateDataFromDatabase();
   try {
+    if (pathname === "/api/leave-requests/events" && req.method === "GET") {
+      const url = new URL(req.url ?? "/", "http://localhost");
+      const studentId = url.searchParams.get("studentId");
+      
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Allow-Methods": "GET, OPTIONS"
+      });
+      
+      const client = { res, studentId };
+      sseClients.add(client);
+      
+      res.write("data: connected\n\n");
+      
+      req.on("close", () => {
+        sseClients.delete(client);
+      });
+      return;
+    }
+
     if (pathname.startsWith("/api/profile-photo/") && req.method === "GET") {
       const match = pathname.match(/^\/api\/profile-photo\/([^/]+)$/);
       if (match) {

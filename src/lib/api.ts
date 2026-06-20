@@ -253,6 +253,15 @@ export async function uploadStudentPhoto(studentId: string, file: File) {
   });
 }
 
+export async function uploadParentPhoto(studentId: string, file: File) {
+  const formData = new FormData();
+  formData.append("photo", file);
+  return request<{ data: unknown }>(`/hostel-admin/students/${studentId}/parent-photo`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
 export async function getHostelStaff() {
   return request<{ data: Array<Record<string, unknown> & { id: string; role: string; name: string; email: string; created_at: string; profile_photo?: string | null }> }>("/hostel-admin/staff");
 }

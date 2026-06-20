@@ -119,7 +119,7 @@ function GuardsPage() {
                         <AvatarFallback className="bg-primary text-primary-foreground text-sm">
                           {editingGuard.name
                             .split(" ")
-                            .map((part) => part[0])
+                            .map((part: string) => part[0])
                             .slice(0, 2)
                             .join("")}
                         </AvatarFallback>

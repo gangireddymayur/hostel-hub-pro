@@ -19,7 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { createStudent, getHostelStudents, uploadStudentPhoto, getHostels, updateStudent, deleteStudent } from "@/lib/api";
+import { createStudent, getHostelStudents, uploadStudentPhoto, uploadParentPhoto, getHostels, updateStudent, deleteStudent } from "@/lib/api";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
@@ -31,6 +31,7 @@ type StudentRow = {
   mobile: string;
   parent_mobile: string;
   profile_photo: string | null;
+  parent_profile_photo?: string | null;
   status: string;
   created_at: string;
   student_year?: string | null;
@@ -50,6 +51,7 @@ function StudentsPage() {
   const [view, setView] = useState<StudentRow | null>(null);
   const [editingStudent, setEditingStudent] = useState<StudentRow | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [parentPhotoFile, setParentPhotoFile] = useState<File | null>(null);
   const [selectedHostel, setSelectedHostel] = useState("");
   const [hostelFilter, setHostelFilter] = useState("ALL");
 
@@ -104,10 +106,38 @@ function StudentsPage() {
 
   const photoMutation = useMutation({
     mutationFn: ({ studentId, file }: { studentId: string; file: File }) => uploadStudentPhoto(studentId, file),
-    onSuccess: async () => {
+    onSuccess: async (resData: any) => {
       toast.success("Student photo uploaded");
       setPhotoFile(null);
       await queryClient.invalidateQueries({ queryKey: ["hostel-students"] });
+      if (view) {
+        setView((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            profile_photo: resData.data?.profile_photo ?? prev.profile_photo,
+          };
+        });
+      }
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to upload photo"),
+  });
+
+  const parentPhotoMutation = useMutation({
+    mutationFn: ({ studentId, file }: { studentId: string; file: File }) => uploadParentPhoto(studentId, file),
+    onSuccess: async (resData: any) => {
+      toast.success("Parent photo uploaded");
+      setParentPhotoFile(null);
+      await queryClient.invalidateQueries({ queryKey: ["hostel-students"] });
+      if (view) {
+        setView((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            parent_profile_photo: resData.data?.profile_photo ?? prev.parent_profile_photo,
+          };
+        });
+      }
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to upload photo"),
   });
@@ -293,7 +323,7 @@ function StudentsPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={!!view} onOpenChange={() => setView(null)}>
+      <Dialog open={!!view} onOpenChange={(open) => { if (!open) { setView(null); setPhotoFile(null); setParentPhotoFile(null); } }}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Student profile</DialogTitle>
@@ -326,26 +356,80 @@ function StudentsPage() {
                 <Info k="Status" v={view.status} />
               </dl>
 
-              <div className="grid gap-2 rounded-xl border border-border/60 p-4">
-                <Label htmlFor="photo">Upload profile photo</Label>
-                <Input
-                  id="photo"
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)}
-                />
-                <Button
-                  type="button"
-                  className="w-fit"
-                  disabled={!photoFile || photoMutation.isPending}
-                  onClick={() => {
-                    if (!view || !photoFile) return;
-                    photoMutation.mutate({ studentId: view.id, file: photoFile });
-                  }}
-                >
-                  <Upload className="h-4 w-4" />
-                  Upload photo
-                </Button>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                {/* Student Photo */}
+                <div className="grid gap-2 rounded-xl border border-border/60 p-4">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-12 w-12">
+                      {view.profile_photo && <AvatarImage src={view.profile_photo} alt={view.name} className="object-cover" />}
+                      <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+                        {view.name
+                          .split(" ")
+                          .map((part) => part[0])
+                          .slice(0, 2)
+                          .join("")}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <Label htmlFor="photo" className="text-xs font-medium">Student photo</Label>
+                      <Input
+                        id="photo"
+                        type="file"
+                        accept="image/*"
+                        className="mt-1 h-9 text-xs"
+                        onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)}
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="w-full mt-1"
+                    disabled={!photoFile || photoMutation.isPending}
+                    onClick={() => {
+                      if (!view || !photoFile) return;
+                      photoMutation.mutate({ studentId: view.id, file: photoFile });
+                    }}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload student photo
+                  </Button>
+                </div>
+
+                {/* Parent Photo */}
+                <div className="grid gap-2 rounded-xl border border-border/60 p-4">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-12 w-12">
+                      {view.parent_profile_photo && <AvatarImage src={view.parent_profile_photo} alt="Parent" className="object-cover" />}
+                      <AvatarFallback className="bg-secondary text-secondary-foreground text-sm font-semibold">
+                        P
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <Label htmlFor="parent_photo" className="text-xs font-medium">Parent photo</Label>
+                      <Input
+                        id="parent_photo"
+                        type="file"
+                        accept="image/*"
+                        className="mt-1 h-9 text-xs"
+                        onChange={(event) => setParentPhotoFile(event.target.files?.[0] ?? null)}
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="w-full mt-1"
+                    disabled={!parentPhotoFile || parentPhotoMutation.isPending}
+                    onClick={() => {
+                      if (!view || !parentPhotoFile) return;
+                      parentPhotoMutation.mutate({ studentId: view.id, file: parentPhotoFile });
+                    }}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload parent photo
+                  </Button>
+                </div>
               </div>
             </div>
           ) : null}

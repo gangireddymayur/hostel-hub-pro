@@ -905,11 +905,12 @@ async function persist() {
         p.mobile,
         p.password_hash,
         p.status ?? "ACTIVE",
+        p.profile_photo ?? null,
         toSqlDateTime(p.created_at),
         toSqlDateTime(p.updated_at ?? p.created_at),
       ]);
       await conn.query(
-        "INSERT INTO parents (id, hostel_id, mobile, password_hash, status, created_at, updated_at) VALUES ?",
+        "INSERT INTO parents (id, hostel_id, mobile, password_hash, status, profile_photo, created_at, updated_at) VALUES ?",
         [values]
       );
     }
@@ -2125,6 +2126,7 @@ async function handleLogin(req, res, body) {
         email: String(rows[0].mobile),
         passwordHash: String(rows[0].password_hash),
         status: String(rows[0].status),
+        profile_photo: rows[0].profile_photo ?? null,
         tokenVersion: 0,
         created_at: nowIso(),
       };
@@ -2140,6 +2142,7 @@ async function handleLogin(req, res, body) {
         email: parent.mobile,
         passwordHash: parent.password_hash,
         status: parent.status,
+        profile_photo: parent.profile_photo ?? null,
         tokenVersion: 0,
         created_at: parent.created_at,
       };
@@ -2406,9 +2409,11 @@ function handleHostelStudents(req, res) {
     .filter((student) => allowedHostelIds.includes(student.hostel_id))
     .map((student) => {
       const h = db.hostels.find((x) => x.id === student.hostel_id);
+      const parent = db.parents.find((p) => p.hostel_id === student.hostel_id && p.mobile === student.parent_mobile);
       return {
         ...student,
         hostel_name: h ? h.hostel_name : "",
+        parent_profile_photo: parent ? parent.profile_photo : null,
       };
     })
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
@@ -2648,6 +2653,39 @@ async function handleUploadStudentPhoto(req, res, studentId, data) {
     addAudit("UPDATE", "STUDENT_PHOTO", student.id, user, { profile_photo: student.profile_photo });
     await persist();
     return sendJson(res, 200, { data: student });
+  } catch (error) {
+    return sendJson(res, 500, { error: error.message });
+  }
+}
+
+async function handleUploadParentPhoto(req, res, studentId, data) {
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
+  if (!user) return;
+  const student = studentById(studentId);
+  if (!student || student.hostel_id !== user.hostelId) return sendJson(res, 404, { error: "Student not found" });
+  if (data.kind !== "multipart" || !data.value.files.photo) return sendJson(res, 400, { error: "photo file required" });
+  try {
+    const file = data.value.files.photo;
+    const mimeType = String(file.contentType ?? "image/jpeg").toLowerCase();
+    const photoBase64 = `data:${mimeType};base64,${file.data.toString("base64")}`;
+    
+    let parent = db.parents.find((p) => p.hostel_id === student.hostel_id && p.mobile === student.parent_mobile);
+    if (!parent) {
+      parent = {
+        id: uuid("parent"),
+        hostel_id: student.hostel_id,
+        mobile: student.parent_mobile,
+        password_hash: hashPassword("Parent@12345"),
+        status: "ACTIVE",
+        profile_photo: null,
+        created_at: nowIso(),
+      };
+      db.parents.push(parent);
+    }
+    parent.profile_photo = photoBase64;
+    addAudit("UPDATE", "PARENT_PHOTO", parent.id, user, { profile_photo: photoBase64 });
+    await persist();
+    return sendJson(res, 200, { data: parent });
   } catch (error) {
     return sendJson(res, 500, { error: error.message });
   }
@@ -3406,6 +3444,10 @@ async function handleApi(req, res, pathname) {
         if (user && user.profile_photo) {
           return sendPhotoResponse(res, user.profile_photo);
         }
+        const parent = db.parents.find((p) => p.id === userId);
+        if (parent && parent.profile_photo) {
+          return sendPhotoResponse(res, parent.profile_photo);
+        }
         return sendJson(res, 404, { error: "Photo not found" });
       }
     }
@@ -3518,6 +3560,12 @@ async function handleApi(req, res, pathname) {
     if (match && req.method === "POST") {
       const data = await readRequestData(req);
       return handleUploadStudentPhoto(req, res, decodeURIComponent(match[1]), data);
+    }
+
+    match = pathname.match(/^\/api\/hostel-admin\/students\/([^/]+)\/parent-photo$/);
+    if (match && req.method === "POST") {
+      const data = await readRequestData(req);
+      return handleUploadParentPhoto(req, res, decodeURIComponent(match[1]), data);
     }
 
     match = pathname.match(/^\/api\/hostel-admin\/students\/([^/]+)$/);

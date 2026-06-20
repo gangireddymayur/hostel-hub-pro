@@ -563,6 +563,20 @@ async function ensureStaffProfilePhotoColumn() {
   }
 }
 
+async function ensureParentProfilePhotoColumn() {
+  if (!dbPool) return;
+  try {
+    const [columns] = await dbPool.query("SHOW COLUMNS FROM parents LIKE 'profile_photo'");
+    if (columns.length === 0) {
+      console.log("Auto-Migration: Adding 'profile_photo' column to 'parents' table...");
+      await dbPool.query("ALTER TABLE parents ADD COLUMN profile_photo LONGTEXT NULL");
+      console.log("Auto-Migration: Column 'profile_photo' added to 'parents' successfully!");
+    }
+  } catch (error) {
+    console.error("Auto-Migration Error: Failed to check or add 'profile_photo' column to parents:", error.message);
+  }
+}
+
 async function ensureBaseTables() {
   if (!dbPool) return;
   try {
@@ -636,6 +650,7 @@ async function runMigrations() {
   await Promise.all([
     ensureProfilePhotoColumn(),
     ensureStaffProfilePhotoColumn(),
+    ensureParentProfilePhotoColumn(),
     ensureLocationColumns(),
     ensureStatusColumns(),
     ensureRefreshTokenColumnLength(),
@@ -731,6 +746,7 @@ async function hydrateDataFromDatabase() {
         mobile: String(row.mobile ?? ""),
         password_hash: String(row.password_hash ?? ""),
         status: String(row.status ?? "ACTIVE"),
+        profile_photo: row.profile_photo ?? null,
         created_at: normalizeDateTime(row.created_at),
       })),
       students: students.map((row) => ({

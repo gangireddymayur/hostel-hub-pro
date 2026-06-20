@@ -2843,7 +2843,6 @@ function handleLeaveRequests(req, res) {
         const hostel = findHostelById(student.hostel_id);
         studentWithHostel = {
           ...student,
-          profile_photo: null,
           hostel_name: hostel ? hostel.hostel_name : "",
         };
       }
@@ -3078,7 +3077,6 @@ function handleGetStudentLeaveRequests(req, res) {
         ...leave,
         student: {
           ...student,
-          profile_photo: null,
           hostel_name: hostel ? hostel.hostel_name : "",
         },
         gatePass: gatePassByLeaveId(leave.id) ?? null,
@@ -3108,7 +3106,6 @@ function handleGetParentRequests(req, res) {
         const hostel = findHostelById(student.hostel_id);
         studentWithHostel = {
           ...student,
-          profile_photo: null,
           hostel_name: hostel ? hostel.hostel_name : "",
         };
       }
@@ -3195,7 +3192,7 @@ function handleGuardToday(req, res) {
       const student = db.students.find((s) => s.id === leave.student_id);
       return {
         ...leave,
-        student: student ? { ...student, profile_photo: null } : null, // STRIP photo to improve speed and avoid crashes
+        student: student ? { ...student, hostel_name: (db.hostels.find((h) => h.id === student.hostel_id)?.hostel_name ?? '') } : null, // include photo for guard scan screen
         gatePass: gatePassByLeaveId(leave.id) ?? null,
       };
     })

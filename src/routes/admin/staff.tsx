@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, UserCog, Search } from "lucide-react";
+import { Plus, Pencil, Search } from "lucide-react";
 import { PageHeader } from "@/components/dashboard-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,6 +34,7 @@ function StaffPage() {
   const [open, setOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffRow | null>(null);
   const [selectedHostel, setSelectedHostel] = useState("");
+  const [selectedRole, setSelectedRole] = useState("HOSTEL_STAFF");
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [hostelFilter, setHostelFilter] = useState("ALL");
@@ -43,6 +44,11 @@ function StaffPage() {
   const hostelsQuery = useQuery({ queryKey: ["active-hostels"], queryFn: getHostels });
   const list = useMemo(() => (staffQuery.data?.data ?? []) as StaffRow[], [staffQuery.data]);
   const hostels = hostelsQuery.data?.data ?? [];
+
+  // Whether to show the hostel picker:
+  // - HOSTEL_ADMIN is auto-assigned to the hostel their email belongs to (set server-side)
+  // - HOSTEL_STAFF / SECURITY_GUARD need explicit hostel assignment / re-assignment
+  const showHostelPicker = selectedRole !== "HOSTEL_ADMIN";
 
   const photoMutation = useMutation({
     mutationFn: ({ id, file }: { id: string; file: File }) => uploadStaffPhoto(id, file),
@@ -65,12 +71,19 @@ function StaffPage() {
     });
   }, [list, q, roleFilter, hostelFilter]);
 
+  const resetDialog = () => {
+    setEditingStaff(null);
+    setSelectedHostel("");
+    setSelectedRole("HOSTEL_STAFF");
+    setPhotoFile(null);
+  };
+
   const createMutation = useMutation({
     mutationFn: createStaff,
     onSuccess: async () => {
       toast.success("Staff added");
       setOpen(false);
-      setSelectedHostel("");
+      resetDialog();
       await queryClient.invalidateQueries({ queryKey: ["hostel-staff"] });
       await queryClient.invalidateQueries({ queryKey: ["hostel-dashboard"] });
     },
@@ -83,8 +96,7 @@ function StaffPage() {
     onSuccess: async () => {
       toast.success("Staff updated");
       setOpen(false);
-      setEditingStaff(null);
-      setSelectedHostel("");
+      resetDialog();
       await queryClient.invalidateQueries({ queryKey: ["hostel-staff"] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Failed to update staff"),
@@ -95,8 +107,7 @@ function StaffPage() {
     onSuccess: async () => {
       toast.success("Staff member deleted successfully");
       setOpen(false);
-      setEditingStaff(null);
-      setSelectedHostel("");
+      resetDialog();
       await queryClient.invalidateQueries({ queryKey: ["hostel-staff"] });
       await queryClient.invalidateQueries({ queryKey: ["hostel-dashboard"] });
     },
@@ -113,14 +124,11 @@ function StaffPage() {
             open={open}
             onOpenChange={(val) => {
               setOpen(val);
-              if (!val) {
-                setEditingStaff(null);
-                setSelectedHostel("");
-              }
+              if (!val) resetDialog();
             }}
           >
             <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4" /> Add Staff</Button>
+              <Button onClick={() => { resetDialog(); setOpen(true); }}><Plus className="h-4 w-4" /> Add Staff</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>{editingStaff ? "Edit staff member" : "Add staff member"}</DialogTitle></DialogHeader>
@@ -129,17 +137,21 @@ function StaffPage() {
                 className="grid gap-4"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  if (!selectedHostel) {
-                    toast.error("Hostel is required");
+
+                  // Hostel is required only when role is NOT HOSTEL_ADMIN
+                  if (selectedRole !== "HOSTEL_ADMIN" && !selectedHostel) {
+                    toast.error("Please select a hostel for this staff member");
                     return;
                   }
+
                   const form = new FormData(event.currentTarget);
                   const payload = {
-                    role: String(form.get("role")) as "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF",
+                    role: selectedRole as "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF",
                     name: String(form.get("name")),
                     email: String(form.get("email")),
                     password: String(form.get("password") ?? "") || undefined,
-                    hostel_id: selectedHostel,
+                    // For HOSTEL_ADMIN the server assigns their hostel automatically from their email
+                    hostel_id: selectedRole !== "HOSTEL_ADMIN" ? selectedHostel : undefined,
                   };
                   if (editingStaff) {
                     updateMutation.mutate({ id: editingStaff.id, ...payload });
@@ -149,28 +161,58 @@ function StaffPage() {
                 }}
               >
                 <Field name="name" label="Name" defaultValue={editingStaff?.name} required />
-                <Field name="role" label="Role" asSelect defaultValue={editingStaff?.role} helper="Choose hostel admin, guard or hostel staff." />
-                
+
+                {/* Role selector — controlled so we can show/hide hostel picker */}
                 <div className="grid gap-1.5">
-                  <Label htmlFor="hostel_select">Hostel</Label>
+                  <Label htmlFor="role">Role</Label>
                   <select
-                    id="hostel_select"
-                    value={selectedHostel}
-                    onChange={(e) => setSelectedHostel(e.target.value)}
-                    required
+                    id="role"
+                    name="role"
+                    value={selectedRole}
+                    onChange={(e) => {
+                      setSelectedRole(e.target.value);
+                      // Clear hostel selection when switching to HOSTEL_ADMIN (not needed)
+                      if (e.target.value === "HOSTEL_ADMIN") setSelectedHostel("");
+                    }}
                     className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                   >
-                    <option value="">Select a hostel</option>
-                    {hostels.map((hostel) => (
-                      <option key={hostel.id} value={hostel.id}>
-                        {hostel.hostel_name}
-                      </option>
-                    ))}
+                    <option value="HOSTEL_ADMIN">Hostel Admin</option>
+                    <option value="SECURITY_GUARD">Security Guard</option>
+                    <option value="HOSTEL_STAFF">Hostel Staff</option>
                   </select>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedRole === "HOSTEL_ADMIN"
+                      ? "Hostel Admin gets automatic access to all their hostels — no hostel selection needed."
+                      : "Choose which hostel this staff member belongs to."}
+                  </p>
                 </div>
-                
+
+                {/* Hostel picker — only shown for HOSTEL_STAFF and SECURITY_GUARD */}
+                {showHostelPicker && (
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="hostel_select">Hostel</Label>
+                    <select
+                      id="hostel_select"
+                      value={selectedHostel}
+                      onChange={(e) => setSelectedHostel(e.target.value)}
+                      required
+                      className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="">Select a hostel</option>
+                      {hostels.map((hostel) => (
+                        <option key={hostel.id} value={hostel.id}>
+                          {hostel.hostel_name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground">
+                      You can reassign this staff member to any hostel you manage.
+                    </p>
+                  </div>
+                )}
+
                 <Field name="email" label="Email" type="email" defaultValue={editingStaff?.email} required />
-                
+
                 {editingStaff && (
                   <div className="grid gap-2 rounded-xl border border-border/60 p-4">
                     <div className="flex items-center gap-3">
@@ -226,7 +268,9 @@ function StaffPage() {
                       Delete Staff
                     </Button>
                   ) : <div />}
-                  <Button type="submit">{editingStaff ? "Save changes" : "Save"}</Button>
+                  <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
+                    {editingStaff ? "Save changes" : "Save"}
+                  </Button>
                 </DialogFooter>
               </form>
             </DialogContent>
@@ -299,7 +343,13 @@ function StaffPage() {
                       </div>
                     </TableCell>
                     <TableCell>{staff.role.toLowerCase().replaceAll("_", " ")}</TableCell>
-                    <TableCell>{staff.hostel_name || "N/A"}</TableCell>
+                    <TableCell>
+                      {staff.role === "HOSTEL_ADMIN" ? (
+                        <span className="text-xs text-muted-foreground italic">All hostels</span>
+                      ) : (
+                        staff.hostel_name || "N/A"
+                      )}
+                    </TableCell>
                     <TableCell className="text-xs">{staff.email}</TableCell>
                     <TableCell className="text-right">
                       <Button
@@ -307,7 +357,9 @@ function StaffPage() {
                         variant="ghost"
                         onClick={() => {
                           setEditingStaff(staff);
-                          setSelectedHostel(staff.hostel_id ?? "");
+                          setSelectedRole(staff.role || "HOSTEL_STAFF");
+                          // Only pre-fill hostel for non-admin roles
+                          setSelectedHostel(staff.role === "HOSTEL_ADMIN" ? "" : (staff.hostel_id ?? ""));
                           setOpen(true);
                         }}
                       >
@@ -331,7 +383,6 @@ function Field({
   type = "text",
   required,
   helper,
-  asSelect,
   defaultValue,
 }: {
   name: string;
@@ -339,21 +390,12 @@ function Field({
   type?: string;
   required?: boolean;
   helper?: string;
-  asSelect?: boolean;
   defaultValue?: string;
 }) {
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={name}>{label}</Label>
-      {asSelect ? (
-        <select id={name} name={name} required defaultValue={defaultValue} className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm">
-          <option value="HOSTEL_ADMIN">Hostel Admin</option>
-          <option value="SECURITY_GUARD">Security Guard</option>
-          <option value="HOSTEL_STAFF">Hostel Staff</option>
-        </select>
-      ) : (
-        <Input id={name} name={name} type={type} required={required} defaultValue={defaultValue} />
-      )}
+      <Input id={name} name={name} type={type} required={required} defaultValue={defaultValue} />
       {helper ? <p className="text-xs text-muted-foreground">{helper}</p> : null}
     </div>
   );

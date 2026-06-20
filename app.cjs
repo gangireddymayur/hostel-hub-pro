@@ -2660,7 +2660,8 @@ async function handleUploadStudentPhoto(req, res, studentId, data) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
   const student = studentById(studentId);
-  if (!student || student.hostel_id !== user.hostelId) return sendJson(res, 404, { error: "Student not found" });
+  const allowedHostelIds = getAccessibleHostelIds(user);
+  if (!student || !allowedHostelIds.includes(student.hostel_id)) return sendJson(res, 404, { error: "Student not found" });
   if (data.kind !== "multipart" || !data.value.files.photo) return sendJson(res, 400, { error: "photo file required" });
   try {
     const file = data.value.files.photo;
@@ -2678,7 +2679,8 @@ async function handleUploadParentPhoto(req, res, studentId, data) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
   const student = studentById(studentId);
-  if (!student || student.hostel_id !== user.hostelId) return sendJson(res, 404, { error: "Student not found" });
+  const allowedHostelIds = getAccessibleHostelIds(user);
+  if (!student || !allowedHostelIds.includes(student.hostel_id)) return sendJson(res, 404, { error: "Student not found" });
   if (data.kind !== "multipart" || !data.value.files.photo) return sendJson(res, 400, { error: "photo file required" });
   try {
     const file = data.value.files.photo;
@@ -2711,7 +2713,8 @@ async function handleUploadStaffPhoto(req, res, staffId, data) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
   const staffRow = db.staff.find((item) => item.id === staffId);
-  if (!staffRow || staffRow.hostel_id !== user.hostelId) return sendJson(res, 404, { error: "Staff member not found" });
+  const allowedHostelIds = getAccessibleHostelIds(user);
+  if (!staffRow || !allowedHostelIds.includes(staffRow.hostel_id)) return sendJson(res, 404, { error: "Staff member not found" });
   if (data.kind !== "multipart" || !data.value.files.photo) return sendJson(res, 400, { error: "photo file required" });
   try {
     const file = data.value.files.photo;

@@ -2951,7 +2951,8 @@ async function handleReviewLeaveRequest(req, res, leaveRequestId, body) {
   const leave = db.leaveRequests.find((item) => item.id === leaveRequestId);
   if (!leave) return sendJson(res, 404, { error: "Leave request not found" });
   const student = studentById(leave.student_id);
-  if (!student || student.hostel_id !== user.hostelId) return sendJson(res, 403, { error: "Forbidden" });
+  const allowedHostelIds = getAccessibleHostelIds(user);
+  if (!student || !allowedHostelIds.includes(student.hostel_id)) return sendJson(res, 403, { error: "Forbidden" });
 
   const status = String(body.status ?? "").toUpperCase();
   if (!["APPROVED", "REJECTED"].includes(status)) return sendJson(res, 400, { error: "Invalid status" });
@@ -3000,6 +3001,7 @@ async function handleBulkReviewLeaveRequests(req, res, body) {
     return sendJson(res, 400, { error: "Invalid status" });
   }
 
+  const allowedHostelIds = getAccessibleHostelIds(user);
   let updatedCount = 0;
   for (const leaveId of ids) {
     const leave = db.leaveRequests.find((item) => item.id === leaveId);
@@ -3007,7 +3009,7 @@ async function handleBulkReviewLeaveRequests(req, res, body) {
 
     const student = studentById(leave.student_id);
     if (!student) continue;
-    if (user.role !== "HOSTEL_ADMIN" && student.hostel_id !== user.hostelId) {
+    if (!allowedHostelIds.includes(student.hostel_id)) {
       continue;
     }
 

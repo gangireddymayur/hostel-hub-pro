@@ -418,15 +418,38 @@ function defaultData() {
 const DB_FILE = path.join(ROOT, "db.json");
 
 function loadData() {
+  let parsed = null;
   if (fs.existsSync(DB_FILE)) {
     try {
       const content = fs.readFileSync(DB_FILE, "utf8");
-      return JSON.parse(content);
+      parsed = JSON.parse(content);
     } catch (error) {
       console.error("[db] failed to read db.json, falling back to default data:", error.message);
     }
   }
-  return defaultData();
+  if (!parsed) {
+    parsed = defaultData();
+  }
+  if (parsed.hostels) {
+    const parentHostels = parsed.hostels.filter(h => !h.parent_hostel_id && !h.id.endsWith("_ALL"));
+    parentHostels.forEach((parent) => {
+      const virtualId = `${parent.id}_ALL`;
+      const exists = parsed.hostels.some(h => h.id === virtualId);
+      if (!exists) {
+        parsed.hostels.push({
+          id: virtualId,
+          hostel_name: "All Hostels (all branches)",
+          email: `all_hostels_${parent.id}@hostelhub.local`,
+          password_hash: "VIRTUAL_HOSTEL_HASH",
+          status: "ACTIVE",
+          parent_hostel_id: parent.id,
+          created_at: nowIso(),
+          updated_at: nowIso(),
+        });
+      }
+    });
+  }
+  return parsed;
 }
 
 let db = loadData();
@@ -827,6 +850,49 @@ async function hydrateDataFromDatabase() {
         createdAt: normalizeDateTime(row.created_at),
       })),
     };
+
+    // Ensure virtual _ALL hostels exist for each parent hostel
+    const parentHostels = db.hostels.filter(h => !h.parent_hostel_id && !h.id.endsWith("_ALL"));
+    for (const parent of parentHostels) {
+      const virtualId = `${parent.id}_ALL`;
+      const exists = db.hostels.some(h => h.id === virtualId);
+      if (!exists) {
+        const virtualRecord = {
+          id: virtualId,
+          hostel_name: "All Hostels (all branches)",
+          email: `all_hostels_${parent.id}@hostelhub.local`,
+          password_hash: "VIRTUAL_HOSTEL_HASH",
+          status: "ACTIVE",
+          parent_hostel_id: parent.id,
+          created_at: nowIso(),
+          updated_at: nowIso(),
+        };
+
+        if (dbPool) {
+          try {
+            await dbPool.query(
+              "INSERT INTO hostels (id, hostel_name, email, password_hash, status, parent_hostel_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+              [
+                virtualRecord.id,
+                virtualRecord.hostel_name,
+                virtualRecord.email,
+                virtualRecord.password_hash,
+                virtualRecord.status,
+                virtualRecord.parent_hostel_id,
+                virtualRecord.created_at,
+                virtualRecord.updated_at,
+              ]
+            );
+            console.log(`[db] Created virtual hostel for parent ${parent.id}`);
+          } catch (err) {
+            console.error(`[db] Failed to insert virtual hostel for parent ${parent.id}:`, err.message);
+          }
+        }
+
+        db.hostels.push(virtualRecord);
+      }
+    }
+
     hasHydrated = true;
     return db;
   } catch (error) {
@@ -1069,11 +1135,23 @@ function findHostelById(hostelId) {
 
 function getAccessibleHostelIds(user) {
   if (!user || !user.hostelId) return [];
+
+  if (user.hostelId.endsWith("_ALL")) {
+    const parentId = user.hostelId.replace(/_ALL$/, "");
+    const ids = [parentId];
+    db.hostels.forEach((h) => {
+      if (h.parent_hostel_id === parentId && !h.id.endsWith("_ALL")) {
+        ids.push(h.id);
+      }
+    });
+    return ids;
+  }
+
   const ids = [user.hostelId];
   // Only admins can see child hostels; staff/wardens see only their own hostel
   if (user.role === "HOSTEL_ADMIN" || user.role === "SUPER_ADMIN") {
     db.hostels.forEach((h) => {
-      if (h.parent_hostel_id === user.hostelId) {
+      if (h.parent_hostel_id === user.hostelId && !h.id.endsWith("_ALL")) {
         ids.push(h.id);
       }
     });
@@ -2252,10 +2330,11 @@ function handleSuperHostels(req, res) {
   const user = requireAuth(req, res, ["SUPER_ADMIN", "HOSTEL_ADMIN"]);
   if (!user) return;
 
-  let list = db.hostels;
+  let list = db.hostels.filter(h => !h.id.endsWith("_ALL"));
   if (user.role === "HOSTEL_ADMIN") {
+    const adminHostelId = user.hostelId.replace(/_ALL$/, "");
     list = db.hostels.filter(
-      (h) => h.id === user.hostelId || h.parent_hostel_id === user.hostelId
+      (h) => (h.id === adminHostelId || h.parent_hostel_id === adminHostelId) && !h.id.endsWith("_ALL")
     );
   }
 
@@ -3649,7 +3728,7 @@ async function handleApi(req, res, pathname) {
     if (pathname === "/api/hostels" && req.method === "GET") {
       const user = requireAuth(req, res, ["SUPER_ADMIN", "HOSTEL_ADMIN", "HOSTEL_STAFF", "SECURITY_GUARD"]);
       if (!user) return;
-      let list = db.hostels.filter(h => h.status === "ACTIVE");
+      let list = db.hostels.filter(h => h.status === "ACTIVE" && !h.id.endsWith("_ALL"));
       if (user.role !== "SUPER_ADMIN") {
         const allowedHostelIds = getAccessibleHostelIds(user);
         list = list.filter(h => allowedHostelIds.includes(h.id));

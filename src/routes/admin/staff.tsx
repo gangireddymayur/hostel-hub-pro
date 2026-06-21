@@ -199,9 +199,8 @@ function StaffPage() {
                       className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                     >
                       <option value="">Select a hostel</option>
-                      {/* ALL = assign to the parent/primary hostel so getAccessibleHostelIds gives full branch access */}
                       {hostels.length > 0 && (
-                        <option value={hostels[0]?.id ?? ""}>🏢 All Hostels (all branches)</option>
+                        <option value={`${hostels[0]?.id}_ALL`}>🏢 All Hostels (all branches)</option>
                       )}
                       {hostels.map((hostel) => (
                         <option key={hostel.id} value={hostel.id}>
@@ -210,7 +209,7 @@ function StaffPage() {
                       ))}
                     </select>
                     <p className="text-xs text-muted-foreground">
-                      {selectedHostel === (hostels[0]?.id ?? "") && hostels.length > 1
+                      {selectedHostel?.endsWith("_ALL")
                         ? "⚠️ All Hostels: this staff member can see students from ALL branches."
                         : "You can reassign this staff member to any hostel you manage."}
                     </p>
@@ -350,7 +349,7 @@ function StaffPage() {
                     </TableCell>
                     <TableCell>{staff.role.toLowerCase().replaceAll("_", " ")}</TableCell>
                     <TableCell>
-                      {staff.role === "HOSTEL_ADMIN" || (hostels.length > 0 && staff.hostel_id === hostels[0]?.id && hostels.length > 1) ? (
+                      {staff.role === "HOSTEL_ADMIN" || staff.hostel_id?.endsWith("_ALL") ? (
                         <span className="text-xs text-muted-foreground italic">All hostels</span>
                       ) : (
                         staff.hostel_name || "N/A"

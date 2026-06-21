@@ -1144,6 +1144,9 @@ function getAccessibleHostelIds(user) {
         ids.push(h.id);
       }
     });
+    if (!ids.includes(user.hostelId)) {
+      ids.push(user.hostelId);
+    }
     return ids;
   }
 
@@ -1155,6 +1158,11 @@ function getAccessibleHostelIds(user) {
         ids.push(h.id);
       }
     });
+    // Add virtual ALL counterpart if user's hostelId is a parent hostel
+    const targetHostel = db.hostels.find((h) => h.id === user.hostelId);
+    if (targetHostel && !targetHostel.parent_hostel_id) {
+      ids.push(`${user.hostelId}_ALL`);
+    }
   }
   return ids;
 }

@@ -1070,11 +1070,14 @@ function findHostelById(hostelId) {
 function getAccessibleHostelIds(user) {
   if (!user || !user.hostelId) return [];
   const ids = [user.hostelId];
-  db.hostels.forEach((h) => {
-    if (h.parent_hostel_id === user.hostelId) {
-      ids.push(h.id);
-    }
-  });
+  // Only admins can see child hostels; staff/wardens see only their own hostel
+  if (user.role === "HOSTEL_ADMIN" || user.role === "SUPER_ADMIN") {
+    db.hostels.forEach((h) => {
+      if (h.parent_hostel_id === user.hostelId) {
+        ids.push(h.id);
+      }
+    });
+  }
   return ids;
 }
 

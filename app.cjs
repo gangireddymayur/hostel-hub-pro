@@ -2395,7 +2395,7 @@ function handleSuperAuditLogs(req, res) {
 }
 
 function handleHostelDashboard(req, res) {
-  const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN", "HOSTEL_STAFF"]);
   if (!user) return;
   const allowedHostelIds = getAccessibleHostelIds(user);
   const allowedSet = new Set(allowedHostelIds);

@@ -513,6 +513,13 @@ async function ensureLocationColumns() {
       console.log("Auto-Migration: Location columns student_lat, student_lng added successfully!");
     }
 
+    const [lrParentCols] = await dbPool.query("SHOW COLUMNS FROM leave_requests LIKE 'parent_lat'");
+    if (lrParentCols.length === 0) {
+      console.log("Auto-Migration: Adding parent and staff location columns to leave_requests table...");
+      await dbPool.query("ALTER TABLE leave_requests ADD COLUMN parent_lat DOUBLE NULL, ADD COLUMN parent_lng DOUBLE NULL, ADD COLUMN hostel_lat DOUBLE NULL, ADD COLUMN hostel_lng DOUBLE NULL");
+      console.log("Auto-Migration: Location columns parent_lat, parent_lng, hostel_lat, hostel_lng added successfully!");
+    }
+
     const [gpCols] = await dbPool.query("SHOW COLUMNS FROM gate_passes LIKE 'out_guard_lat'");
     if (gpCols.length === 0) {
       console.log("Auto-Migration: Adding guard location columns to gate_passes table...");
@@ -814,6 +821,10 @@ async function hydrateDataFromDatabase() {
         hostel_reject_reason: row.hostel_reject_reason ? String(row.hostel_reject_reason) : null,
         student_lat: row.student_lat != null ? Number(row.student_lat) : null,
         student_lng: row.student_lng != null ? Number(row.student_lng) : null,
+        parent_lat: row.parent_lat != null ? Number(row.parent_lat) : null,
+        parent_lng: row.parent_lng != null ? Number(row.parent_lng) : null,
+        hostel_lat: row.hostel_lat != null ? Number(row.hostel_lat) : null,
+        hostel_lng: row.hostel_lng != null ? Number(row.hostel_lng) : null,
         created_at: normalizeDateTime(row.created_at),
       })),
       gatePasses: gatePasses.map((row) => ({
@@ -1034,13 +1045,17 @@ async function persist() {
         leave.final_status,
         leave.student_lat ?? null,
         leave.student_lng ?? null,
+        leave.parent_lat ?? null,
+        leave.parent_lng ?? null,
+        leave.hostel_lat ?? null,
+        leave.hostel_lng ?? null,
         leave.parent_reject_reason ?? null,
         leave.hostel_reject_reason ?? null,
         toSqlDateTime(leave.created_at),
         toSqlDateTime(leave.updated_at ?? leave.created_at),
       ]);
       await conn.query(
-        "INSERT INTO leave_requests (id, hostel_id, student_id, reason, from_date, to_date, out_time, return_time, parent_status, hostel_status, final_status, student_lat, student_lng, parent_reject_reason, hostel_reject_reason, created_at, updated_at) VALUES ?",
+        "INSERT INTO leave_requests (id, hostel_id, student_id, reason, from_date, to_date, out_time, return_time, parent_status, hostel_status, final_status, student_lat, student_lng, parent_lat, parent_lng, hostel_lat, hostel_lng, parent_reject_reason, hostel_reject_reason, created_at, updated_at) VALUES ?",
         [values]
       );
     }
@@ -2961,11 +2976,20 @@ async function handleReviewLeaveRequest(req, res, leaveRequestId, body) {
   const status = String(body.status ?? "").toUpperCase();
   if (!["APPROVED", "REJECTED"].includes(status)) return sendJson(res, 400, { error: "Invalid status" });
 
+  const hostel_lat = body.hostel_lat != null ? Number(body.hostel_lat) : (body.staff_lat != null ? Number(body.staff_lat) : (body.lat != null ? Number(body.lat) : null));
+  const hostel_lng = body.hostel_lng != null ? Number(body.hostel_lng) : (body.staff_lng != null ? Number(body.staff_lng) : (body.lng != null ? Number(body.lng) : null));
+
+  if (hostel_lat === null || hostel_lng === null || Number.isNaN(hostel_lat) || Number.isNaN(hostel_lng)) {
+    return sendJson(res, 400, { error: "Location permission is compulsory for staff to approve or reject permission requests. Please enable location services on your device." });
+  }
+
   if (status === "APPROVED" && leave.parent_status !== "APPROVED") {
     return sendJson(res, 400, { error: "Cannot approve request. Waiting for parent approval." });
   }
 
   leave.hostel_status = status;
+  leave.hostel_lat = hostel_lat;
+  leave.hostel_lng = hostel_lng;
   if (status === "REJECTED") {
     leave.hostel_reject_reason = body.hostel_reject_reason ? String(body.hostel_reject_reason).trim() : null;
     leave.final_status = "REJECTED";
@@ -3007,6 +3031,12 @@ async function handleBulkReviewLeaveRequests(req, res, body) {
 
   const allowedHostelIds = getAccessibleHostelIds(user);
   let updatedCount = 0;
+  const hostel_lat = body.hostel_lat != null ? Number(body.hostel_lat) : (body.staff_lat != null ? Number(body.staff_lat) : (body.lat != null ? Number(body.lat) : null));
+  const hostel_lng = body.hostel_lng != null ? Number(body.hostel_lng) : (body.staff_lng != null ? Number(body.staff_lng) : (body.lng != null ? Number(body.lng) : null));
+
+  if (hostel_lat === null || hostel_lng === null || Number.isNaN(hostel_lat) || Number.isNaN(hostel_lng)) {
+    return sendJson(res, 400, { error: "Location permission is compulsory for staff to approve or reject permission requests. Please enable location services on your device." });
+  }
   for (const leaveId of ids) {
     const leave = db.leaveRequests.find((item) => item.id === leaveId);
     if (!leave) continue;
@@ -3088,9 +3118,13 @@ async function handleCreateLeaveRequest(req, res, body) {
   const to_date = String(body.to_date ?? "").trim();
   const out_time = String(body.out_time ?? "").trim();
   const return_time = String(body.return_time ?? "").trim();
-  const student_lat = body.student_lat != null ? Number(body.student_lat) : null;
-  const student_lng = body.student_lng != null ? Number(body.student_lng) : null;
+  const student_lat = body.student_lat != null ? Number(body.student_lat) : (body.lat != null ? Number(body.lat) : null);
+  const student_lng = body.student_lng != null ? Number(body.student_lng) : (body.lng != null ? Number(body.lng) : null);
   const request_type = String(body.request_type ?? "LEAVE").trim().toUpperCase();
+
+  if (student_lat === null || student_lng === null || Number.isNaN(student_lat) || Number.isNaN(student_lng)) {
+    return sendJson(res, 400, { error: "Location permission is compulsory to submit permission requests. Please enable location services on your device." });
+  }
 
   if (!reason || !from_date || !to_date || !out_time || !return_time) {
     return sendJson(res, 400, { error: "reason, from_date, to_date, out_time, and return_time are required" });
@@ -3275,7 +3309,16 @@ async function handleReviewParentRequest(req, res, leaveRequestId, body) {
   const status = String(body.status ?? "").toUpperCase();
   if (!["APPROVED", "REJECTED"].includes(status)) return sendJson(res, 400, { error: "Invalid status" });
 
+  const parent_lat = body.parent_lat != null ? Number(body.parent_lat) : (body.lat != null ? Number(body.lat) : null);
+  const parent_lng = body.parent_lng != null ? Number(body.parent_lng) : (body.lng != null ? Number(body.lng) : null);
+
+  if (parent_lat === null || parent_lng === null || Number.isNaN(parent_lat) || Number.isNaN(parent_lng)) {
+    return sendJson(res, 400, { error: "Location permission is compulsory for parents to accept or reject permission requests. Please enable location services on your device." });
+  }
+
   leave.parent_status = status;
+  leave.parent_lat = parent_lat;
+  leave.parent_lng = parent_lng;
   if (body.note) {
     leave.note = String(body.note).trim();
   }
@@ -3378,8 +3421,12 @@ async function handleGuardScan(req, res, body) {
   if (!user) return;
 
   const qrCode = String(body.qr_code ?? "").trim();
-  const guard_lat = body.guard_lat != null ? Number(body.guard_lat) : null;
-  const guard_lng = body.guard_lng != null ? Number(body.guard_lng) : null;
+  const guard_lat = body.guard_lat != null ? Number(body.guard_lat) : (body.out_guard_lat != null ? Number(body.out_guard_lat) : (body.in_guard_lat != null ? Number(body.in_guard_lat) : (body.lat != null ? Number(body.lat) : null)));
+  const guard_lng = body.guard_lng != null ? Number(body.guard_lng) : (body.out_guard_lng != null ? Number(body.out_guard_lng) : (body.in_guard_lng != null ? Number(body.in_guard_lng) : (body.lng != null ? Number(body.lng) : null)));
+
+  if (guard_lat === null || guard_lng === null || Number.isNaN(guard_lat) || Number.isNaN(guard_lng)) {
+    return sendJson(res, 400, { error: "Location permission is compulsory for security guards to scan gate passes. Please enable location services on your device." });
+  }
 
   if (!qrCode) return sendJson(res, 400, { error: "qr_code is required" });
 

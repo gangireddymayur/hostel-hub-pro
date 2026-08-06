@@ -1792,7 +1792,7 @@ async function createStudentRecord(hostelId, payload, actor) {
   };
   db.students.push(student);
 
-  let parent = db.parents.find((item) => item.hostel_id === targetHostelId && item.mobile === parentMobile);
+  let parent = db.parents.find((item) => item.mobile === parentMobile);
   if (!parent) {
     parent = {
       id: uuid("parent"),
@@ -1802,6 +1802,8 @@ async function createStudentRecord(hostelId, payload, actor) {
       created_at: createdAt,
     };
     db.parents.push(parent);
+  } else if (payload.parent_password) {
+    parent.password_hash = hashPassword(payload.parent_password);
   }
 
   addAudit("CREATE", "STUDENT", student.id, actor, {
@@ -2219,26 +2221,28 @@ async function handleLogin(req, res, body) {
   // 4. Try Parent (by mobile)
   if (dbPool) {
     const [rows] = await dbPool.query(
-      "SELECT * FROM parents WHERE mobile = ? LIMIT 1",
+      "SELECT * FROM parents WHERE mobile = ? ORDER BY created_at ASC",
       [identifier]
     );
-    if (rows[0] && verifyPassword(password, String(rows[0].password_hash))) {
+    const parentRow = rows.find((r) => verifyPassword(password, String(r.password_hash)));
+    if (parentRow) {
       user = {
-        id: String(rows[0].id),
-        hostelId: String(rows[0].hostel_id),
+        id: String(parentRow.id),
+        hostelId: String(parentRow.hostel_id),
         role: "PARENT",
-        name: `Parent of ${rows[0].mobile}`,
-        email: String(rows[0].mobile),
-        passwordHash: String(rows[0].password_hash),
-        status: String(rows[0].status),
-        profile_photo: rows[0].profile_photo ?? null,
+        name: `Parent of ${parentRow.mobile}`,
+        email: String(parentRow.mobile),
+        passwordHash: String(parentRow.password_hash),
+        status: String(parentRow.status),
+        profile_photo: parentRow.profile_photo ?? null,
         tokenVersion: 0,
         created_at: nowIso(),
       };
     }
   } else {
-    const parent = db.parents.find((p) => p.mobile === identifier);
-    if (parent && verifyPassword(password, parent.password_hash)) {
+    const parentList = db.parents.filter((p) => p.mobile === identifier);
+    const parent = parentList.find((p) => verifyPassword(password, p.password_hash));
+    if (parent) {
       user = {
         id: parent.id,
         hostelId: parent.hostel_id,
@@ -2583,7 +2587,7 @@ async function handleUpdateStudent(req, res, studentId, body) {
     }
 
     // Update corresponding parent mobile/hostel if needed
-    let parent = db.parents.find((item) => item.hostel_id === hostel_id && item.mobile === parent_mobile);
+    let parent = db.parents.find((item) => item.mobile === parent_mobile);
     if (!parent) {
       const parentFallbackPass = body.parent_password ? body.parent_password : (body.password ? body.password : "Student@12345");
       parent = {
@@ -2601,11 +2605,11 @@ async function handleUpdateStudent(req, res, studentId, body) {
       }
     }
 
-    // Clean up old parent account if the mobile number or hostel ID changed and it is no longer shared by any student
-    if (oldParentMobile !== parent_mobile || oldHostelId !== hostel_id) {
-      const parentMobileShared = db.students.some((s) => s.id !== student.id && s.hostel_id === oldHostelId && s.parent_mobile === oldParentMobile);
+    // Clean up old parent account if the mobile number changed and it is no longer shared by any student
+    if (oldParentMobile !== parent_mobile) {
+      const parentMobileShared = db.students.some((s) => s.id !== student.id && s.parent_mobile === oldParentMobile);
       if (!parentMobileShared) {
-        db.parents = db.parents.filter((p) => !(p.hostel_id === oldHostelId && p.mobile === oldParentMobile));
+        db.parents = db.parents.filter((p) => p.mobile !== oldParentMobile);
       }
     }
 
@@ -3178,13 +3182,58 @@ function handleGetStudentLeaveRequests(req, res) {
   return sendJson(res, 200, { data: leaves });
 }
 
-function handleGetParentRequests(req, res) {
+async function handleGetParentRequests(req, res) {
   const user = requireAuth(req, res, ["PARENT"]);
   if (!user) return;
 
+  const parentMobile = String(user.email ?? "").trim();
+
+  if (dbPool) {
+    try {
+      const [rows] = await dbPool.query(
+        `SELECT lr.*, s.name as student_name, s.room_number, s.student_id as student_code, s.mobile as student_mobile, s.parent_mobile, s.hostel_id, h.hostel_name
+         FROM leave_requests lr
+         JOIN students s ON lr.student_id = s.id
+         LEFT JOIN hostels h ON s.hostel_id = h.id
+         WHERE s.parent_mobile = ?
+         ORDER BY lr.created_at DESC`,
+        [parentMobile]
+      );
+      const leaves = rows.map((row) => ({
+        id: String(row.id),
+        hostel_id: String(row.hostel_id ?? ""),
+        student_id: String(row.student_id ?? ""),
+        reason: String(row.reason ?? ""),
+        from_date: normalizeDateTime(row.from_date),
+        to_date: normalizeDateTime(row.to_date),
+        out_time: normalizeDateTime(row.out_time),
+        return_time: normalizeDateTime(row.return_time),
+        parent_status: String(row.parent_status ?? "PENDING"),
+        hostel_status: String(row.hostel_status ?? "PENDING"),
+        final_status: String(row.final_status ?? "PENDING"),
+        parent_reject_reason: row.parent_reject_reason ? String(row.parent_reject_reason) : null,
+        hostel_reject_reason: row.hostel_reject_reason ? String(row.hostel_reject_reason) : null,
+        created_at: normalizeDateTime(row.created_at),
+        student: {
+          id: String(row.student_id),
+          name: String(row.student_name),
+          room_number: String(row.room_number),
+          student_id: String(row.student_code),
+          mobile: String(row.student_mobile),
+          parent_mobile: String(row.parent_mobile),
+          hostel_name: String(row.hostel_name ?? ""),
+        },
+        gatePass: gatePassByLeaveId(String(row.id)) ?? null,
+      }));
+      return sendJson(res, 200, { data: leaves });
+    } catch (err) {
+      console.error("Error fetching parent requests from dbPool:", err.message);
+    }
+  }
+
   const studentIds = new Set(
     db.students
-      .filter((s) => s.parent_mobile === user.email)
+      .filter((s) => s.parent_mobile.trim() === parentMobile)
       .map((s) => s.id)
   );
 

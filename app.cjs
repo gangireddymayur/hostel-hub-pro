@@ -505,29 +505,32 @@ async function ensureProfilePhotoColumn() {
 
 async function ensureLocationColumns() {
   if (!dbPool) return;
-  try {
-    const [lrCols] = await dbPool.query("SHOW COLUMNS FROM leave_requests LIKE 'student_lat'");
-    if (lrCols.length === 0) {
-      console.log("Auto-Migration: Adding student location columns to leave_requests table...");
-      await dbPool.query("ALTER TABLE leave_requests ADD COLUMN student_lat DOUBLE NULL, ADD COLUMN student_lng DOUBLE NULL");
-      console.log("Auto-Migration: Location columns student_lat, student_lng added successfully!");
-    }
+  const columns = [
+    { table: "leave_requests", name: "student_lat", type: "DOUBLE NULL" },
+    { table: "leave_requests", name: "student_lng", type: "DOUBLE NULL" },
+    { table: "leave_requests", name: "parent_lat", type: "DOUBLE NULL" },
+    { table: "leave_requests", name: "parent_lng", type: "DOUBLE NULL" },
+    { table: "leave_requests", name: "hostel_lat", type: "DOUBLE NULL" },
+    { table: "leave_requests", name: "hostel_lng", type: "DOUBLE NULL" },
+    { table: "leave_requests", name: "request_type", type: "VARCHAR(50) NOT NULL DEFAULT 'LEAVE'" },
+    { table: "leave_requests", name: "note", type: "TEXT NULL" },
+    { table: "gate_passes", name: "out_guard_lat", type: "DOUBLE NULL" },
+    { table: "gate_passes", name: "out_guard_lng", type: "DOUBLE NULL" },
+    { table: "gate_passes", name: "in_guard_lat", type: "DOUBLE NULL" },
+    { table: "gate_passes", name: "in_guard_lng", type: "DOUBLE NULL" },
+  ];
 
-    const [lrParentCols] = await dbPool.query("SHOW COLUMNS FROM leave_requests LIKE 'parent_lat'");
-    if (lrParentCols.length === 0) {
-      console.log("Auto-Migration: Adding parent and staff location columns to leave_requests table...");
-      await dbPool.query("ALTER TABLE leave_requests ADD COLUMN parent_lat DOUBLE NULL, ADD COLUMN parent_lng DOUBLE NULL, ADD COLUMN hostel_lat DOUBLE NULL, ADD COLUMN hostel_lng DOUBLE NULL");
-      console.log("Auto-Migration: Location columns parent_lat, parent_lng, hostel_lat, hostel_lng added successfully!");
+  for (const c of columns) {
+    try {
+      const [found] = await dbPool.query(`SHOW COLUMNS FROM ${c.table} LIKE '${c.name}'`);
+      if (found.length === 0) {
+        console.log(`Auto-Migration: Adding '${c.name}' column to '${c.table}' table...`);
+        await dbPool.query(`ALTER TABLE ${c.table} ADD COLUMN ${c.name} ${c.type}`);
+        console.log(`Auto-Migration: Column '${c.name}' added successfully!`);
+      }
+    } catch (err) {
+      console.error(`Auto-Migration Error adding ${c.name} to ${c.table}:`, err.message);
     }
-
-    const [gpCols] = await dbPool.query("SHOW COLUMNS FROM gate_passes LIKE 'out_guard_lat'");
-    if (gpCols.length === 0) {
-      console.log("Auto-Migration: Adding guard location columns to gate_passes table...");
-      await dbPool.query("ALTER TABLE gate_passes ADD COLUMN out_guard_lat DOUBLE NULL, ADD COLUMN out_guard_lng DOUBLE NULL, ADD COLUMN in_guard_lat DOUBLE NULL, ADD COLUMN in_guard_lng DOUBLE NULL");
-      console.log("Auto-Migration: Location columns for guard (exit and entry) added successfully!");
-    }
-  } catch (error) {
-    console.error("Auto-Migration Error: Failed to check or add location columns:", error.message);
   }
 }
 
@@ -1040,9 +1043,11 @@ async function persist() {
         toSqlDateTime(leave.to_date),
         toSqlDateTime(leave.out_time),
         toSqlDateTime(leave.return_time),
+        leave.request_type ?? "LEAVE",
         leave.parent_status,
         leave.hostel_status,
         leave.final_status,
+        leave.note ?? null,
         leave.student_lat ?? null,
         leave.student_lng ?? null,
         leave.parent_lat ?? null,
@@ -1055,7 +1060,7 @@ async function persist() {
         toSqlDateTime(leave.updated_at ?? leave.created_at),
       ]);
       await conn.query(
-        "INSERT INTO leave_requests (id, hostel_id, student_id, reason, from_date, to_date, out_time, return_time, parent_status, hostel_status, final_status, student_lat, student_lng, parent_lat, parent_lng, hostel_lat, hostel_lng, parent_reject_reason, hostel_reject_reason, created_at, updated_at) VALUES ?",
+        "INSERT INTO leave_requests (id, hostel_id, student_id, reason, from_date, to_date, out_time, return_time, request_type, parent_status, hostel_status, final_status, note, student_lat, student_lng, parent_lat, parent_lng, hostel_lat, hostel_lng, parent_reject_reason, hostel_reject_reason, created_at, updated_at) VALUES ?",
         [values]
       );
     }

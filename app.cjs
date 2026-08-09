@@ -2749,6 +2749,17 @@ async function handleDeleteStaff(req, res, staffId) {
   }
 }
 
+function normalizeStudentYear(val) {
+  if (!val) return null;
+  const clean = String(val).trim().toLowerCase();
+  if (!clean) return null;
+  if (clean.includes("1") || clean.includes("first")) return "1st Year";
+  if (clean.includes("2") || clean.includes("second")) return "2nd Year";
+  if (clean.includes("3") || clean.includes("third")) return "3rd Year";
+  if (clean.includes("4") || clean.includes("fourth")) return "4th Year";
+  return String(val).trim();
+}
+
 async function handleImportStudents(req, res, data) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
@@ -2769,6 +2780,7 @@ async function handleImportStudents(req, res, data) {
         }
       }
 
+      const rawYear = row.student_year || row.studentyear || row.year || row.class || row.student_class || null;
       const mapped = {
         student_id: row.student_id || row.studentid || row.id || row.student || row.admission_no,
         name: row.name || row.student_name,
@@ -2778,7 +2790,7 @@ async function handleImportStudents(req, res, data) {
         password: row.password || row.password_hash || "Student@12345",
         parent_password: row.parent_password || row.parentpassword || "Parent@12345",
         hostel_id: resolvedHostelId,
-        student_year: row.student_year || row.studentyear || row.year || row.class || row.student_class || null,
+        student_year: normalizeStudentYear(rawYear),
       };
       if (!mapped.student_id || !mapped.name || !mapped.room_number || !mapped.mobile || !mapped.parent_mobile) {
         continue;

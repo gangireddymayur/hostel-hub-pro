@@ -80,6 +80,17 @@ function parseCsv(text: string): Record<string, string>[] {
   });
 }
 
+function normalizeStudentYear(val: string): string {
+  if (!val) return "";
+  const clean = val.trim().toLowerCase();
+  if (!clean) return "";
+  if (clean.includes("1") || clean.includes("first")) return "1st Year";
+  if (clean.includes("2") || clean.includes("second")) return "2nd Year";
+  if (clean.includes("3") || clean.includes("third")) return "3rd Year";
+  if (clean.includes("4") || clean.includes("fourth")) return "4th Year";
+  return val.trim();
+}
+
 function ImportPage() {
   const queryClient = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
@@ -126,7 +137,7 @@ function ImportPage() {
         room_number: roomNumber,
         mobile,
         parent_mobile: parentMobile,
-        student_year: studentYear,
+        student_year: normalizeStudentYear(studentYear),
         hostel_name: hostelName,
         password,
         parent_password: parentPassword,

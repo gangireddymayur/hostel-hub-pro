@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/dashboard-shell";
 import { StatCard } from "@/components/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   ResponsiveContainer,
@@ -31,6 +32,12 @@ function AdminDashboard() {
   const hostelsQuery = useQuery({ queryKey: ["active-hostels"], queryFn: getHostels });
 
   const [selectedBranch, setSelectedBranch] = useState("ALL");
+  const [timeRange, setTimeRange] = useState<"week" | "month" | "custom">("week");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+
+  const [outsideSearch, setOutsideSearch] = useState("");
+  const [reviewedFilter, setReviewedFilter] = useState<"ALL" | "APPROVED" | "REJECTED">("ALL");
 
   const students = studentsQuery.data?.data ?? [];
   const leaves = leaveQuery.data?.data ?? [];
@@ -69,22 +76,84 @@ function AdminDashboard() {
     return filteredLeaves.filter((leave) => leave.final_status === "REJECTED").length;
   }, [filteredLeaves]);
 
-  const recent = useMemo(() => {
-    return [...filteredLeaves].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, 6);
-  }, [filteredLeaves]);
+  const chartData = useMemo(() => {
+    const now = new Date();
+    let startDate = new Date();
+    let endDate = new Date();
 
-  const weeklyLeaves = useMemo(() => {
-    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    return days.map((day, index) => {
-      const dayIndex = (index + 1) % 7;
-      const dayLeaves = filteredLeaves.filter((leave) => new Date(leave.created_at).getDay() === dayIndex);
-      return {
-        day,
-        requests: dayLeaves.length,
-        approved: dayLeaves.filter((leave) => leave.final_status === "APPROVED").length,
-      };
+    if (timeRange === "week") {
+      startDate.setDate(now.getDate() - 6);
+    } else if (timeRange === "month") {
+      startDate.setDate(now.getDate() - 29);
+    } else if (timeRange === "custom") {
+      if (customFrom) startDate = new Date(customFrom);
+      if (customTo) {
+        endDate = new Date(customTo);
+      } else {
+        endDate = new Date();
+      }
+    }
+
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+
+    const buckets: { day: string; requests: number; approved: number }[] = [];
+    const current = new Date(startDate);
+    while (current <= endDate) {
+      const dateStr = current.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      buckets.push({
+        day: dateStr,
+        requests: 0,
+        approved: 0,
+      });
+      current.setDate(current.getDate() + 1);
+      if (buckets.length > 120) break;
+    }
+
+    filteredLeaves.forEach((leave) => {
+      const created = new Date(leave.created_at);
+      if (created >= startDate && created <= endDate) {
+        const dateStr = created.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        const bucket = buckets.find((b) => b.day === dateStr);
+        if (bucket) {
+          bucket.requests += 1;
+          if (leave.final_status === "APPROVED") {
+            bucket.approved += 1;
+          }
+        }
+      }
     });
-  }, [filteredLeaves]);
+
+    return buckets;
+  }, [filteredLeaves, timeRange, customFrom, customTo]);
+
+  const outsideLast24h = useMemo(() => {
+    const now = new Date();
+    const past24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const list = filteredLeaves.filter((leave) => {
+      if (leave.gatePass?.status !== "OUT") return false;
+      const outTime = leave.gatePass.out_time_actual ? new Date(leave.gatePass.out_time_actual) : null;
+      return outTime ? outTime >= past24h : true;
+    });
+
+    if (!outsideSearch.trim()) return list;
+    return list.filter((l) => 
+      l.student.name.toLowerCase().includes(outsideSearch.toLowerCase()) ||
+      l.student.student_id.toLowerCase().includes(outsideSearch.toLowerCase())
+    );
+  }, [filteredLeaves, outsideSearch]);
+
+  const reviewedRequests = useMemo(() => {
+    const list = filteredLeaves.filter((leave) => 
+      leave.final_status === "APPROVED" || leave.final_status === "REJECTED"
+    );
+
+    let filtered = list;
+    if (reviewedFilter !== "ALL") {
+      filtered = list.filter((l) => l.final_status === reviewedFilter);
+    }
+    return filtered.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, 10);
+  }, [filteredLeaves, reviewedFilter]);
 
   if (dashboardQuery.isLoading || studentsQuery.isLoading || leaveQuery.isLoading || hostelsQuery.isLoading) {
     return (
@@ -126,12 +195,57 @@ function AdminDashboard() {
         <StatCard label="Rejected Permissions" value={rejected} icon={XCircle} tone="destructive" />
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader><CardTitle>This week's permission activity</CardTitle></CardHeader>
+      <div className="mt-6 grid gap-4">
+        <Card className="w-full">
+          <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-2">
+            <CardTitle>Permission Activity</CardTitle>
+            <div className="flex flex-wrap gap-2 items-center">
+              <Button
+                size="sm"
+                variant={timeRange === "week" ? "default" : "outline"}
+                onClick={() => setTimeRange("week")}
+                className="h-8 text-xs px-3"
+              >
+                This Week
+              </Button>
+              <Button
+                size="sm"
+                variant={timeRange === "month" ? "default" : "outline"}
+                onClick={() => setTimeRange("month")}
+                className="h-8 text-xs px-3"
+              >
+                This Month
+              </Button>
+              <Button
+                size="sm"
+                variant={timeRange === "custom" ? "default" : "outline"}
+                onClick={() => setTimeRange("custom")}
+                className="h-8 text-xs px-3"
+              >
+                Custom Range
+              </Button>
+              {timeRange === "custom" && (
+                <div className="flex items-center gap-1.5 ml-2">
+                  <input
+                    type="date"
+                    value={customFrom}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                    className="h-8 rounded-md border border-input bg-background px-2.5 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  <span className="text-xs text-muted-foreground">to</span>
+                  <input
+                    type="date"
+                    value={customTo}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                    className="h-8 rounded-md border border-input bg-background px-2.5 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+              )}
+            </div>
+          </CardHeader>
           <CardContent className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={weeklyLeaves} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="requestsGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.95} />
@@ -181,28 +295,92 @@ function AdminDashboard() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
+      </div>
 
+      <div className="mt-6 grid gap-6 md:grid-cols-2">
+        {/* Table 1: Outside Students (Last 24 Hours) */}
         <Card>
-          <CardHeader><CardTitle>Recent permission requests</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            {recent.map((leave) => (
-              <div key={leave.id} className="flex items-center gap-3">
-                <Avatar className="h-9 w-9">
-                  <AvatarFallback className="bg-accent text-accent-foreground text-xs">
-                    {leave.student.name
-                      .split(" ")
-                      .map((part) => part[0])
-                      .slice(0, 2)
-                      .join("")}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{leave.student.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">{leave.reason}</p>
+          <CardHeader className="pb-3 border-b border-border/50">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="text-base font-semibold">Students Outside (Last 24h)</CardTitle>
+              <input
+                type="text"
+                placeholder="Search name/ID…"
+                value={outsideSearch}
+                onChange={(e) => setOutsideSearch(e.target.value)}
+                className="h-8 w-44 rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-medium"
+              />
+            </div>
+          </CardHeader>
+          <CardContent className="max-h-[350px] overflow-y-auto pt-4 space-y-4">
+            {outsideLast24h.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">No students currently outside within last 24h.</p>
+            ) : (
+              outsideLast24h.map((leave) => (
+                <div key={leave.id} className="flex items-center justify-between border-b border-border/40 pb-3 last:border-0 last:pb-0">
+                  <div className="flex items-center gap-3">
+                     <Avatar className="h-8 w-8">
+                       <AvatarFallback className="bg-accent text-accent-foreground text-xs font-semibold">
+                         {leave.student.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
+                       </AvatarFallback>
+                     </Avatar>
+                     <div>
+                       <p className="text-sm font-medium">{leave.student.name}</p>
+                       <p className="text-xs text-muted-foreground">{leave.student.student_id} · Room {leave.student.room_number}</p>
+                     </div>
+                  </div>
+                  <div className="text-right">
+                     <span className="inline-flex items-center rounded-full bg-warning/10 px-2 py-0.5 text-2xs font-medium text-warning border border-warning/20">OUT</span>
+                     <p className="text-[10px] text-muted-foreground mt-1">
+                       {leave.gatePass?.out_time_actual 
+                         ? new Date(leave.gatePass.out_time_actual).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                         : "N/A"
+                       }
+                     </p>
+                  </div>
                 </div>
-                <StatusBadge status={leave.final_status.toLowerCase()} />
-              </div>
-            ))}
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Table 2: Reviewed Requests (Accepted & Rejected) */}
+        <Card>
+          <CardHeader className="pb-3 border-b border-border/50">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="text-base font-semibold">Reviewed Requests</CardTitle>
+              <select
+                value={reviewedFilter}
+                onChange={(e) => setReviewedFilter(e.target.value as any)}
+                className="h-8 w-36 rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-medium"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="APPROVED">Approved</option>
+                <option value="REJECTED">Rejected</option>
+              </select>
+            </div>
+          </CardHeader>
+          <CardContent className="max-h-[350px] overflow-y-auto pt-4 space-y-4">
+            {reviewedRequests.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">No reviewed requests found.</p>
+            ) : (
+               reviewedRequests.map((leave) => (
+                 <div key={leave.id} className="flex items-center justify-between border-b border-border/40 pb-3 last:border-0 last:pb-0">
+                   <div className="flex items-center gap-3">
+                     <Avatar className="h-8 w-8">
+                       <AvatarFallback className="bg-accent text-accent-foreground text-xs font-semibold">
+                         {leave.student.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
+                       </AvatarFallback>
+                     </Avatar>
+                     <div>
+                       <p className="text-sm font-medium">{leave.student.name}</p>
+                       <p className="text-xs text-muted-foreground">{leave.reason}</p>
+                     </div>
+                   </div>
+                   <StatusBadge status={leave.final_status.toLowerCase()} />
+                 </div>
+               ))
+            )}
           </CardContent>
         </Card>
       </div>

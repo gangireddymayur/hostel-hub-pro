@@ -23,17 +23,15 @@ const superNav = [
 const adminNav = [
   { group: "Overview", items: [
     { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/admin/leaves", label: "Permission Requests", icon: ClipboardList },
+    { to: "/admin/tracking/outside", label: "Students Outside", icon: MapPin },
+    { to: "/admin/tracking/returned", label: "Students Returned", icon: CheckCircle2 },
   ]},
   { group: "Management", items: [
     { to: "/admin/students", label: "Students", icon: Users },
     { to: "/admin/students/import", label: "Import Students", icon: FileSpreadsheet },
     { to: "/admin/hostels", label: "Hostels", icon: Building2 },
     { to: "/admin/staff", label: "Staff", icon: UserCog },
-  ]},
-  { group: "Permissions", items: [
-    { to: "/admin/leaves", label: "Permission Requests", icon: ClipboardList },
-    { to: "/admin/tracking/outside", label: "Students Outside", icon: MapPin },
-    { to: "/admin/tracking/returned", label: "Students Returned", icon: CheckCircle2 },
   ]},
   { group: "Insights", items: [
     { to: "/admin/reports", label: "Reports", icon: FileBarChart },
@@ -45,7 +43,11 @@ export function AppSidebar({ role }: { role: Role }) {
   const path = useRouterState({ select: s => s.location.pathname });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const isActive = (to: string) => path === to || path.startsWith(to + "/");
+  const isActive = (to: string) => {
+    if (path === to) return true;
+    if (to === "/admin/students" && path.startsWith("/admin/students/import")) return false;
+    return path.startsWith(to + "/");
+  };
 
   return (
     <Sidebar collapsible="icon">

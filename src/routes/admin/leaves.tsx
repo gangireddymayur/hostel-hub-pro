@@ -92,38 +92,7 @@ function LeavesPage() {
             </Select>
           </div>
 
-          {selectedIds.length > 0 && (
-            <div className="mb-4 p-3 bg-accent/30 rounded-lg flex items-center justify-between gap-4 border border-border/80">
-              <span className="text-sm font-medium">
-                {selectedIds.length} request(s) selected
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  onClick={() => bulkReviewMutation.mutate("APPROVED")}
-                  disabled={bulkReviewMutation.isPending}
-                  className="bg-success text-success-foreground hover:bg-success/90"
-                >
-                  <Check className="h-4 w-4 mr-1.5" /> Approve Selected
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => bulkReviewMutation.mutate("REJECTED")}
-                  disabled={bulkReviewMutation.isPending}
-                >
-                  <X className="h-4 w-4 mr-1.5" /> Reject Selected
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setSelectedIds([])}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          )}
+
 
           <Tabs defaultValue="pending">
             <TabsList>
@@ -143,50 +112,17 @@ function LeavesPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        {tab.v === "pending" && (
-                          <TableHead className="w-12">
-                            <input
-                              type="checkbox"
-                              checked={tab.filter.length > 0 && tab.filter.every(l => selectedIds.includes(l.id))}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedIds(tab.filter.map(l => l.id));
-                                } else {
-                                  setSelectedIds([]);
-                                }
-                              }}
-                              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-                            />
-                          </TableHead>
-                        )}
                         <TableHead>Student</TableHead>
                         <TableHead>Reason</TableHead>
                         <TableHead>Dates</TableHead>
                         <TableHead>Parent</TableHead>
                         <TableHead>Hostel</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {tab.filter.map((leave) => (
                         <TableRow key={leave.id}>
-                          {tab.v === "pending" && (
-                            <TableCell>
-                              <input
-                                type="checkbox"
-                                checked={selectedIds.includes(leave.id)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedIds(prev => [...prev, leave.id]);
-                                  } else {
-                                    setSelectedIds(prev => prev.filter(id => id !== leave.id));
-                                  }
-                                }}
-                                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-                              />
-                            </TableCell>
-                          )}
                           <TableCell>
                             <div className="font-medium">{leave.student.name}</div>
                             <div className="text-xs text-muted-foreground">
@@ -206,30 +142,6 @@ function LeavesPage() {
                           <TableCell><ApprovalDot s={leave.parent_status.toLowerCase() as "pending" | "approved" | "rejected"} /></TableCell>
                           <TableCell><ApprovalDot s={leave.hostel_status.toLowerCase() as "pending" | "approved" | "rejected"} /></TableCell>
                           <TableCell><StatusBadge s={leave.final_status.toLowerCase()} /></TableCell>
-                          <TableCell className="text-right">
-                            {!leave.gatePass || (leave.gatePass.status !== "OUT" && leave.gatePass.status !== "RETURNED") ? (
-                              <div className="flex justify-end gap-1">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => reviewMutation.mutate({ id: leave.id, status: "APPROVED" })}
-                                  className="text-success border-success/30 hover:bg-success/10"
-                                >
-                                  <Check className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => reviewMutation.mutate({ id: leave.id, status: "REJECTED" })}
-                                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
-                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

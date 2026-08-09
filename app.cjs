@@ -833,6 +833,7 @@ async function hydrateDataFromDatabase() {
         parent_lng: row.parent_lng != null ? Number(row.parent_lng) : null,
         hostel_lat: row.hostel_lat != null ? Number(row.hostel_lat) : null,
         hostel_lng: row.hostel_lng != null ? Number(row.hostel_lng) : null,
+        parent_approval_photo: row.parent_approval_photo ?? null,
         created_at: normalizeDateTime(row.created_at),
       })),
       gatePasses: gatePasses.map((row) => ({
@@ -1061,11 +1062,12 @@ async function persist() {
         leave.hostel_lng ?? null,
         leave.parent_reject_reason ?? null,
         leave.hostel_reject_reason ?? null,
+        leave.parent_approval_photo ?? null,
         toSqlDateTime(leave.created_at),
         toSqlDateTime(leave.updated_at ?? leave.created_at),
       ]);
       await conn.query(
-        "INSERT INTO leave_requests (id, hostel_id, student_id, reason, from_date, to_date, out_time, return_time, request_type, parent_status, hostel_status, final_status, note, student_lat, student_lng, parent_lat, parent_lng, hostel_lat, hostel_lng, parent_reject_reason, hostel_reject_reason, created_at, updated_at) VALUES ?",
+        "INSERT INTO leave_requests (id, hostel_id, student_id, reason, from_date, to_date, out_time, return_time, request_type, parent_status, hostel_status, final_status, note, student_lat, student_lng, parent_lat, parent_lng, hostel_lat, hostel_lng, parent_reject_reason, hostel_reject_reason, parent_approval_photo, created_at, updated_at) VALUES ?",
         [values]
       );
     }
@@ -2818,9 +2820,9 @@ async function handleGetParentPhoto(req, res, studentId) {
   const student = studentById(studentId);
   if (!student) return sendJson(res, 404, { error: "Student not found" });
 
-  const parent = db.parents.find((p) => p.hostel_id === student.hostel_id && p.mobile.trim() === student.parent_mobile.trim());
-  if (parent && parent.profile_photo) {
-    return sendPhotoResponse(res, parent.profile_photo);
+  const parentPhoto = findRegisteredParentPhoto(student);
+  if (parentPhoto) {
+    return sendPhotoResponse(res, parentPhoto);
   }
   return sendJson(res, 404, { error: "Parent photo not found" });
 }

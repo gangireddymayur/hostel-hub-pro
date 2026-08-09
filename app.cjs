@@ -3256,8 +3256,11 @@ function handleGetStudentLeaveRequests(req, res) {
       const hostel = findHostelById(student.hostel_id);
       return {
         ...leave,
+        parent_approval_photo: null,
+        parent_profile_photo: null,
         student: {
           ...student,
+          parent_profile_photo: null,
           hostel_name: hostel ? hostel.hostel_name : "",
         },
         gatePass: gatePassByLeaveId(leave.id) ?? null,
@@ -3306,8 +3309,8 @@ async function handleGetParentRequests(req, res) {
         parent_lng: row.parent_lng != null ? Number(row.parent_lng) : null,
         hostel_lat: row.hostel_lat != null ? Number(row.hostel_lat) : null,
         hostel_lng: row.hostel_lng != null ? Number(row.hostel_lng) : null,
-        parent_approval_photo: row.parent_approval_photo ?? null,
-        parent_profile_photo: row.parent_profile_photo ?? null,
+        parent_approval_photo: null,
+        parent_profile_photo: null,
         student: {
           id: String(row.student_id),
           name: String(row.student_name),
@@ -3316,7 +3319,7 @@ async function handleGetParentRequests(req, res) {
           mobile: String(row.student_mobile),
           parent_mobile: String(row.parent_mobile),
           hostel_name: String(row.hostel_name ?? ""),
-          parent_profile_photo: row.parent_profile_photo ?? null,
+          parent_profile_photo: null,
         },
         gatePass: gatePassByLeaveId(String(row.id)) ?? null,
       }));
@@ -3342,11 +3345,14 @@ async function handleGetParentRequests(req, res) {
         const hostel = findHostelById(student.hostel_id);
         studentWithHostel = {
           ...student,
+          parent_profile_photo: null,
           hostel_name: hostel ? hostel.hostel_name : "",
         };
       }
       return {
         ...leave,
+        parent_approval_photo: null,
+        parent_profile_photo: null,
         student: studentWithHostel,
         gatePass: gatePassByLeaveId(leave.id) ?? null,
       };
@@ -3440,7 +3446,14 @@ function handleGuardToday(req, res) {
       const student = db.students.find((s) => s.id === leave.student_id);
       return {
         ...leave,
-        student: student ? { ...student, hostel_name: (db.hostels.find((h) => h.id === student.hostel_id)?.hostel_name ?? '') } : null, // include photo for guard scan screen
+        parent_approval_photo: null,
+        parent_profile_photo: null,
+        student: student ? { 
+          ...student, 
+          profile_photo: null,
+          parent_profile_photo: null,
+          hostel_name: (db.hostels.find((h) => h.id === student.hostel_id)?.hostel_name ?? '') 
+        } : null,
         gatePass: gatePassByLeaveId(leave.id) ?? null,
       };
     })

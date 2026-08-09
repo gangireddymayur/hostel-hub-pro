@@ -37,6 +37,9 @@ function AdminDashboard() {
   const [customTo, setCustomTo] = useState("");
 
   const [outsideSearch, setOutsideSearch] = useState("");
+  const [outsideTimeFilter, setOutsideTimeFilter] = useState<"24h" | "week" | "month" | "custom">("24h");
+  const [outsideCustomFrom, setOutsideCustomFrom] = useState("");
+  const [outsideCustomTo, setOutsideCustomTo] = useState("");
   const [reviewedFilter, setReviewedFilter] = useState<"ALL" | "APPROVED" | "REJECTED">("ALL");
 
   const students = studentsQuery.data?.data ?? [];
@@ -129,11 +132,33 @@ function AdminDashboard() {
 
   const outsideLast24h = useMemo(() => {
     const now = new Date();
-    const past24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    let startDate = new Date();
+    let endDate = new Date();
+
+    if (outsideTimeFilter === "24h") {
+      startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    } else if (outsideTimeFilter === "week") {
+      startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else if (outsideTimeFilter === "month") {
+      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    } else if (outsideTimeFilter === "custom") {
+      if (outsideCustomFrom) startDate = new Date(outsideCustomFrom);
+      if (outsideCustomTo) {
+        endDate = new Date(outsideCustomTo);
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        endDate = new Date();
+      }
+    }
+
     const list = filteredLeaves.filter((leave) => {
       if (leave.gatePass?.status !== "OUT") return false;
       const outTime = leave.gatePass.out_time_actual ? new Date(leave.gatePass.out_time_actual) : null;
-      return outTime ? outTime >= past24h : true;
+      if (!outTime) return true; // Fallback to display
+      if (outsideTimeFilter === "custom") {
+        return outTime >= startDate && outTime <= endDate;
+      }
+      return outTime >= startDate;
     });
 
     if (!outsideSearch.trim()) return list;
@@ -141,7 +166,7 @@ function AdminDashboard() {
       l.student.name.toLowerCase().includes(outsideSearch.toLowerCase()) ||
       l.student.student_id.toLowerCase().includes(outsideSearch.toLowerCase())
     );
-  }, [filteredLeaves, outsideSearch]);
+  }, [filteredLeaves, outsideSearch, outsideTimeFilter, outsideCustomFrom, outsideCustomTo]);
 
   const reviewedRequests = useMemo(() => {
     const list = filteredLeaves.filter((leave) => 
@@ -196,23 +221,52 @@ function AdminDashboard() {
       </div>
 
       <div className="mt-6 grid gap-6 md:grid-cols-2">
-        {/* Table 1: Outside Students (Last 24 Hours) */}
+        {/* Table 1: Outside Students */}
         <Card>
           <CardHeader className="pb-3 border-b border-border/50">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="text-base font-semibold">Students Outside (Last 24h)</CardTitle>
-              <input
-                type="text"
-                placeholder="Search name/ID…"
-                value={outsideSearch}
-                onChange={(e) => setOutsideSearch(e.target.value)}
-                className="h-8 w-44 rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-medium"
-              />
+              <CardTitle className="text-base font-semibold">Students Outside</CardTitle>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <input
+                  type="text"
+                  placeholder="Search name/ID…"
+                  value={outsideSearch}
+                  onChange={(e) => setOutsideSearch(e.target.value)}
+                  className="h-8 w-32 rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-medium"
+                />
+                <select
+                  value={outsideTimeFilter}
+                  onChange={(e) => setOutsideTimeFilter(e.target.value as any)}
+                  className="h-8 w-28 rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-medium"
+                >
+                  <option value="24h">Last 24h</option>
+                  <option value="week">This Week</option>
+                  <option value="month">This Month</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
             </div>
+            {outsideTimeFilter === "custom" && (
+              <div className="flex items-center gap-1.5 mt-2 justify-end">
+                <input
+                  type="date"
+                  value={outsideCustomFrom}
+                  onChange={(e) => setOutsideCustomFrom(e.target.value)}
+                  className="h-7 rounded-md border border-input bg-background px-2 text-[10px] font-medium focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+                <span className="text-[10px] text-muted-foreground">to</span>
+                <input
+                  type="date"
+                  value={outsideCustomTo}
+                  onChange={(e) => setOutsideCustomTo(e.target.value)}
+                  className="h-7 rounded-md border border-input bg-background px-2 text-[10px] font-medium focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+            )}
           </CardHeader>
           <CardContent className="h-[450px] overflow-y-auto pt-4 space-y-4">
             {outsideLast24h.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-8 text-center">No students currently outside within last 24h.</p>
+              <p className="text-sm text-muted-foreground py-8 text-center">No students currently outside within selected timeframe.</p>
             ) : (
               outsideLast24h.map((leave) => (
                 <div key={leave.id} className="flex items-center justify-between border-b border-border/40 pb-3 last:border-0 last:pb-0">
@@ -275,7 +329,17 @@ function AdminDashboard() {
                        <p className="text-xs text-muted-foreground">{leave.reason}</p>
                      </div>
                    </div>
-                   <StatusBadge status={leave.final_status.toLowerCase()} />
+                   <div className="text-right shrink-0">
+                     <StatusBadge status={leave.final_status.toLowerCase()} />
+                     <p className="text-[10px] text-muted-foreground mt-1 font-medium">
+                       {(() => {
+                         const date = leave.updated_at ? new Date(leave.updated_at) : (leave.created_at ? new Date(leave.created_at) : null);
+                         return date 
+                           ? date.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                           : "N/A";
+                       })()}
+                     </p>
+                   </div>
                  </div>
                ))
             )}

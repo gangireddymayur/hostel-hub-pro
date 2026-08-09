@@ -3120,6 +3120,7 @@ async function handleReviewLeaveRequest(req, res, leaveRequestId, body) {
   leave.hostel_status = status;
   leave.hostel_lat = hostel_lat;
   leave.hostel_lng = hostel_lng;
+  leave.updated_at = nowIso();
   if (status === "REJECTED") {
     leave.hostel_reject_reason = body.hostel_reject_reason ? String(body.hostel_reject_reason).trim() : null;
     leave.final_status = "REJECTED";

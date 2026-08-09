@@ -464,6 +464,7 @@ function ImportPage() {
                         <th className="p-3">Name</th>
                         <th className="p-3">Room</th>
                         <th className="p-3">Mobile</th>
+                        <th className="p-3">Parent Mobile</th>
                         <th className="p-3">Hostel</th>
                         <th className="p-3">Action</th>
                         <th className="p-3">Status Check</th>
@@ -472,7 +473,7 @@ function ImportPage() {
                     <tbody className="divide-y divide-border/60">
                       {filteredPreviewRows.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="p-6 text-center text-muted-foreground">
+                          <td colSpan={8} className="p-6 text-center text-muted-foreground">
                             No matching preview records found.
                           </td>
                         </tr>
@@ -483,6 +484,7 @@ function ImportPage() {
                             <td className="p-3 font-medium">{row.name || <span className="text-destructive font-medium italic">Empty</span>}</td>
                             <td className="p-3">{row.room_number || <span className="text-destructive font-medium italic">Empty</span>}</td>
                             <td className="p-3">{row.mobile || <span className="text-destructive font-medium italic">Empty</span>}</td>
+                            <td className="p-3">{row.parent_mobile || <span className="text-destructive font-medium italic">Empty</span>}</td>
                             <td className="p-3">{row.hostel_name || <span className="text-muted-foreground italic">Default</span>}</td>
                             <td className="p-3">
                               {row.action === "insert" && (
@@ -528,6 +530,18 @@ function ImportPage() {
                   </table>
                 </div>
               </CardContent>
+              <div className="p-4 border-t border-border/50 flex justify-end bg-muted/10 rounded-b-xl">
+                <Button
+                  disabled={importMutation.isPending || stats.errors === stats.total}
+                  onClick={() => {
+                    if (!file) return;
+                    importMutation.mutate(file);
+                  }}
+                  className="w-full sm:w-auto"
+                >
+                  <Upload className="h-4 w-4 mr-2" /> Confirm & Import {stats.valid + stats.warnings} Students
+                </Button>
+              </div>
             </Card>
           ) : (
             <Card className="w-full">

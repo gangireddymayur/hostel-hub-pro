@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Upload, FileSpreadsheet, Download, CheckCircle2, AlertTriangle, XCircle, Search, HelpCircle } from "lucide-react";
@@ -93,11 +93,13 @@ function normalizeStudentYear(val: string): string {
 
 function ImportPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [file, setFile] = useState<File | null>(null);
   const [previewRows, setPreviewRows] = useState<ParsedRow[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "valid" | "warning" | "error">("ALL");
   const [dragActive, setDragActive] = useState(false);
+  const [importedCount, setImportedCount] = useState<number | null>(null);
 
   const hostelsQuery = useQuery({ queryKey: ["active-hostels"], queryFn: getHostels });
   const studentsQuery = useQuery({ queryKey: ["hostel-students"], queryFn: getHostelStudents });
@@ -108,7 +110,7 @@ function ImportPage() {
   const importMutation = useMutation({
     mutationFn: importStudents,
     onSuccess: async (data) => {
-      toast.success(`Imported ${data.data.imported} students successfully!`);
+      setImportedCount(data.data.imported);
       setFile(null);
       setPreviewRows([]);
       await queryClient.invalidateQueries({ queryKey: ["hostel-students"] });
@@ -569,6 +571,43 @@ function ImportPage() {
           )}
         </div>
       </div>
+
+      {/* Importing loading overlay */}
+      {importMutation.isPending && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4 bg-card border border-border p-8 rounded-xl shadow-lg max-w-sm w-full text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+            <h3 className="font-semibold text-lg">Importing Students</h3>
+            <p className="text-sm text-muted-foreground">Uploading and creating student accounts. This may take a few moments...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Success Dialog Modal */}
+      {importedCount !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="bg-card border border-border p-6 rounded-xl shadow-lg max-w-md w-full text-center space-y-4">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-success/15 text-success">
+              <CheckCircle2 className="h-6 w-6" />
+            </div>
+            <h3 className="text-xl font-bold">Import Completed!</h3>
+            <p className="text-sm text-muted-foreground">
+              Successfully created/updated <strong className="text-foreground">{importedCount} student records</strong> and their corresponding parent accounts.
+            </p>
+            <div className="pt-2">
+              <Button
+                className="w-full"
+                onClick={() => {
+                  setImportedCount(null);
+                  navigate({ to: "/admin/students" });
+                }}
+              >
+                Go to Students List
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

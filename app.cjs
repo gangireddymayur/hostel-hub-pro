@@ -2776,6 +2776,7 @@ async function handleImportStudents(req, res, data) {
         mobile: row.mobile || row.student_mobile || row.phone || "",
         parent_mobile: row.parent_mobile || row.parentmobile || row.parent_phone || "",
         password: row.password || row.password_hash || "Student@12345",
+        parent_password: row.parent_password || row.parentpassword || "Parent@12345",
         hostel_id: resolvedHostelId,
         student_year: row.student_year || row.studentyear || row.year || row.class || row.student_class || null,
       };

@@ -3820,6 +3820,22 @@ async function handleApi(req, res, pathname) {
       return handleHostelDashboard(req, res);
     }
 
+    if (pathname === "/api/debug-parents" && req.method === "GET") {
+      return sendJson(res, 200, {
+        parents: db.parents.map(p => ({
+          id: p.id,
+          mobile: p.mobile,
+          has_photo: !!p.profile_photo,
+          photo_length: p.profile_photo ? p.profile_photo.length : 0
+        })),
+        students: db.students.map(s => ({
+          id: s.id,
+          name: s.name,
+          parent_mobile: s.parent_mobile
+        }))
+      });
+    }
+
     if (pathname === "/api/hostel-admin/students" && req.method === "GET") {
       return handleHostelStudents(req, res);
     }

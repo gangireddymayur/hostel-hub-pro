@@ -2815,7 +2815,7 @@ async function handleUploadStudentPhoto(req, res, studentId, data) {
 }
 
 async function handleGetParentPhoto(req, res, studentId) {
-  const user = requireAuth(req, res, ["HOSTEL_ADMIN", "SECURITY_GUARD", "SUPER_ADMIN", "PARENT"]);
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN", "HOSTEL_STAFF", "SECURITY_GUARD", "SUPER_ADMIN", "PARENT"]);
   if (!user) return;
   const student = studentById(studentId);
   if (!student) return sendJson(res, 404, { error: "Student not found" });

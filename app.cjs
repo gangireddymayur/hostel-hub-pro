@@ -87,7 +87,11 @@ const dbPool =
       password: DB_PASSWORD,
       database: DB_NAME,
       waitForConnections: true,
-      connectionLimit: 5,
+      connectionLimit: 10,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 10000,
+      maxIdle: 10,
+      idleTimeout: 60000,
       dateStrings: true,
     })
     : null;
@@ -919,17 +923,17 @@ async function hydrateDataFromDatabase() {
 }
 
 async function persist() {
-  if (!dbPool) {
-    try {
-      fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), "utf8");
-    } catch (error) {
-      console.error("[db] failed to write db.json:", error.message);
-    }
-    return db;
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), "utf8");
+  } catch (error) {
+    console.error("[db] failed to write db.json:", error.message);
   }
 
-  const conn = await dbPool.getConnection();
+  if (!dbPool) return db;
+
+  let conn = null;
   try {
+    conn = await dbPool.getConnection();
     await conn.beginTransaction();
 
     await conn.query("DELETE FROM refresh_tokens");
@@ -1123,13 +1127,15 @@ async function persist() {
 
     await conn.commit();
   } catch (error) {
-    await conn.rollback();
+    if (conn) {
+      try { await conn.rollback(); } catch (_) {}
+    }
     lastPersistError = error.message;
-    console.warn("[db] persist failed, resetting hydration flag:", error.message);
-    hasHydrated = false;
-    throw error;
+    console.warn("[db] MySQL persist warning:", error.message);
   } finally {
-    conn.release();
+    if (conn) {
+      try { conn.release(); } catch (_) {}
+    }
   }
   return db;
 }

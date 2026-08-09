@@ -2780,13 +2780,19 @@ async function handleImportStudents(req, res, data) {
         }
       }
 
+      const rawMobile = String(row.mobile || row.student_mobile || row.phone || "").trim();
+      const rawParentMobile = String(row.parent_mobile || row.parentmobile || row.parent_phone || "").trim();
+
+      const cleanMobile = rawMobile.replace(/\D/g, "");
+      const cleanParentMobile = rawParentMobile.replace(/\D/g, "");
+
       const rawYear = row.student_year || row.studentyear || row.year || row.class || row.student_class || null;
       const mapped = {
-        student_id: row.student_id || row.studentid || row.id || row.student || row.admission_no,
-        name: row.name || row.student_name,
-        room_number: row.room_number || row.roomno || row.room || "",
-        mobile: row.mobile || row.student_mobile || row.phone || "",
-        parent_mobile: row.parent_mobile || row.parentmobile || row.parent_phone || "",
+        student_id: String(row.student_id || row.studentid || row.id || row.student || row.admission_no || "").trim(),
+        name: String(row.name || row.student_name || "").trim(),
+        room_number: String(row.room_number || row.roomno || row.room || "").trim(),
+        mobile: cleanMobile.length === 10 ? cleanMobile : rawMobile,
+        parent_mobile: cleanParentMobile.length === 10 ? cleanParentMobile : rawParentMobile,
         password: row.password || row.password_hash || "Student@12345",
         parent_password: row.parent_password || row.parentpassword || "Parent@12345",
         hostel_id: resolvedHostelId,
@@ -2796,10 +2802,70 @@ async function handleImportStudents(req, res, data) {
         continue;
       }
       try {
-        await createStudentRecord(resolvedHostelId, mapped, user);
-        imported += 1;
+        const existingStudent = db.students.find(
+          (s) => s.hostel_id === resolvedHostelId && s.student_id.toLowerCase() === mapped.student_id.toLowerCase()
+        );
+
+        if (existingStudent) {
+          // Check for mobile number conflict with another student
+          if (mapped.mobile !== existingStudent.mobile) {
+            const conflict = db.students.some(
+              (s) => s.hostel_id === resolvedHostelId && s.mobile === mapped.mobile && s.id !== existingStudent.id
+            );
+            if (conflict) continue; // Conflict skip
+          }
+
+          existingStudent.name = mapped.name;
+          existingStudent.room_number = mapped.room_number;
+          existingStudent.mobile = mapped.mobile;
+          
+          const oldParentMobile = existingStudent.parent_mobile;
+          existingStudent.parent_mobile = mapped.parent_mobile;
+          existingStudent.student_year = mapped.student_year;
+          
+          if (row.password) {
+            existingStudent.password_hash = hashPassword(row.password);
+          }
+
+          // Parent creation / updates
+          let parentRow = db.parents.find((p) => p.hostel_id === resolvedHostelId && p.mobile === mapped.parent_mobile);
+          if (!parentRow) {
+            parentRow = {
+              id: uuid("parent"),
+              hostel_id: resolvedHostelId,
+              mobile: mapped.parent_mobile,
+              password_hash: hashPassword(mapped.parent_password),
+              created_at: nowIso(),
+            };
+            db.parents.push(parentRow);
+          } else if (row.parent_password) {
+            parentRow.password_hash = hashPassword(row.parent_password);
+          }
+
+          // Clean up old parent mobile if no longer shared
+          if (oldParentMobile !== mapped.parent_mobile) {
+            const parentMobileShared = db.students.some((s) => s.hostel_id === resolvedHostelId && s.parent_mobile === oldParentMobile);
+            if (!parentMobileShared) {
+              db.parents = db.parents.filter((p) => !(p.hostel_id === resolvedHostelId && p.mobile === oldParentMobile));
+            }
+          }
+
+          addAudit("UPDATE", "STUDENT", existingStudent.id, user, {
+            student_id: existingStudent.student_id,
+            name: existingStudent.name,
+            reason: "Import spreadsheet update"
+          });
+          imported += 1;
+        } else {
+          // Check for student mobile conflict
+          const conflict = db.students.some((s) => s.hostel_id === resolvedHostelId && s.mobile === mapped.mobile);
+          if (conflict) continue;
+
+          await createStudentRecord(resolvedHostelId, mapped, user);
+          imported += 1;
+        }
       } catch {
-        // Skip duplicates / bad rows.
+        // Skip bad rows.
       }
     }
     return sendJson(res, 200, { data: { imported } });

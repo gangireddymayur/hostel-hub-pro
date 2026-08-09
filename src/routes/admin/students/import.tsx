@@ -119,24 +119,32 @@ function ImportPage() {
   const validateRows = (rows: any[], existingStudents: any[], hostelsList: any[]) => {
     const validated: ParsedRow[] = [];
     const seenIds = new Set<string>();
+    const seenMobiles = new Set<string>();
 
     rows.forEach((row) => {
       const studentId = String(row.student_id || row.studentid || row.id || row.student || row.admission_no || "").trim();
       const name = String(row.student_name || row.name || "").trim();
       const roomNumber = String(row.room_number || row.roomno || row.room || "").trim();
-      const mobile = String(row.student_mobile || row.mobile || row.phone || "").trim();
-      const parentMobile = String(row.parent_mobile || row.parentmobile || row.parent_phone || "").trim();
+      const rawMobile = String(row.student_mobile || row.mobile || row.phone || "").trim();
+      const rawParentMobile = String(row.parent_mobile || row.parentmobile || row.parent_phone || "").trim();
       const studentYear = String(row.student_year || row.studentyear || row.year || row.class || row.student_class || "").trim();
       const hostelName = String(row.hostel || row.hostel_name || row.hostel_id || "").trim();
       const password = String(row.student_password || row.password || "").trim();
       const parentPassword = String(row.parent_password || row.parentpassword || "").trim();
 
+      // Clean phone formats
+      const cleanMobile = rawMobile.replace(/\D/g, "");
+      const cleanParentMobile = rawParentMobile.replace(/\D/g, "");
+
+      const displayMobile = cleanMobile.length === 10 ? cleanMobile : rawMobile;
+      const displayParentMobile = cleanParentMobile.length === 10 ? cleanParentMobile : rawParentMobile;
+
       const item: ParsedRow = {
         student_id: studentId,
         name,
         room_number: roomNumber,
-        mobile,
-        parent_mobile: parentMobile,
+        mobile: displayMobile,
+        parent_mobile: displayParentMobile,
         student_year: normalizeStudentYear(studentYear),
         hostel_name: hostelName,
         password,
@@ -151,8 +159,8 @@ function ImportPage() {
       if (!studentId) missing.push("Student ID");
       if (!name) missing.push("Name");
       if (!roomNumber) missing.push("Room Number");
-      if (!mobile) missing.push("Student Mobile");
-      if (!parentMobile) missing.push("Parent Mobile");
+      if (!rawMobile) missing.push("Student Mobile");
+      if (!rawParentMobile) missing.push("Parent Mobile");
 
       if (missing.length > 0) {
         item.status = "error";
@@ -160,7 +168,7 @@ function ImportPage() {
         item.messages.push(`Missing mandatory fields: ${missing.join(", ")}`);
       }
 
-      // 2. Duplicate student ID within the file
+      // 2. Duplicate Student ID within the file
       if (studentId) {
         if (seenIds.has(studentId.toLowerCase())) {
           item.status = "error";
@@ -171,17 +179,56 @@ function ImportPage() {
         }
       }
 
-      // 3. Existing Student check (Update/Overwrite vs Insert)
-      if (item.status !== "error" && studentId) {
-        const exists = existingStudents.some(s => s.student_id.toLowerCase() === studentId.toLowerCase());
-        if (exists) {
-          item.status = "warning";
-          item.action = "update";
-          item.messages.push("Matches existing student; details will be overwritten/updated");
+      // 3. Duplicate Student Mobile within the file
+      if (cleanMobile) {
+        if (seenMobiles.has(cleanMobile)) {
+          item.status = "error";
+          item.action = "skip";
+          item.messages.push(`Duplicate Student Mobile found in this file`);
+        } else {
+          seenMobiles.add(cleanMobile);
         }
       }
 
-      // 4. Hostel check
+      // 4. Phone number format validation (Warning/Error check)
+      if (rawMobile) {
+        if (cleanMobile.length !== 10) {
+          if (item.status === "valid") item.status = "warning";
+          item.messages.push(`Student mobile should be exactly 10 digits (got ${cleanMobile.length})`);
+        }
+      }
+      if (rawParentMobile) {
+        if (cleanParentMobile.length !== 10) {
+          if (item.status === "valid") item.status = "warning";
+          item.messages.push(`Parent mobile should be exactly 10 digits (got ${cleanParentMobile.length})`);
+        }
+      }
+
+      // 5. Existing Student check (Update/Overwrite vs Insert)
+      let matchesSameStudent = false;
+      if (item.status !== "error" && studentId) {
+        const matchingStudent = existingStudents.find(s => s.student_id.toLowerCase() === studentId.toLowerCase());
+        if (matchingStudent) {
+          item.status = "warning";
+          item.action = "update";
+          item.messages.push(`Matches existing student (${matchingStudent.name}); details will be overwritten`);
+          matchesSameStudent = true;
+        }
+      }
+
+      // 6. Student Mobile Duplicate Check against Database (Cross-student check)
+      if (item.status !== "error" && cleanMobile) {
+        const studentWithSameMobile = existingStudents.find(s => s.mobile === cleanMobile);
+        if (studentWithSameMobile) {
+          if (studentWithSameMobile.student_id.toLowerCase() !== studentId.toLowerCase()) {
+            item.status = "error";
+            item.action = "skip";
+            item.messages.push(`Mobile is already registered to student '${studentWithSameMobile.name}' (ID: ${studentWithSameMobile.student_id})`);
+          }
+        }
+      }
+
+      // 7. Hostel check
       if (item.status !== "error" && hostelName) {
         const hostelMatches = hostelsList.some(h =>
           h.hostel_name.toLowerCase() === hostelName.toLowerCase() ||

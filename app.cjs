@@ -514,6 +514,7 @@ async function ensureLocationColumns() {
     { table: "leave_requests", name: "hostel_lng", type: "DOUBLE NULL" },
     { table: "leave_requests", name: "request_type", type: "VARCHAR(50) NOT NULL DEFAULT 'LEAVE'" },
     { table: "leave_requests", name: "note", type: "TEXT NULL" },
+    { table: "leave_requests", name: "parent_approval_photo", type: "LONGTEXT NULL" },
     { table: "gate_passes", name: "out_guard_lat", type: "DOUBLE NULL" },
     { table: "gate_passes", name: "out_guard_lng", type: "DOUBLE NULL" },
     { table: "gate_passes", name: "in_guard_lat", type: "DOUBLE NULL" },
@@ -2960,9 +2961,15 @@ function handleLeaveRequests(req, res) {
           hostel_name: hostel ? hostel.hostel_name : "",
         };
       }
+      const parent = student ? db.parents.find((p) => p.mobile.trim() === student.parent_mobile.trim()) : null;
       return {
         ...leave,
-        student: studentWithHostel,
+        student: studentWithHostel ? {
+          ...studentWithHostel,
+          parent_profile_photo: parent ? parent.profile_photo : null,
+        } : null,
+        parent_approval_photo: leave.parent_approval_photo ?? null,
+        parent_profile_photo: parent ? parent.profile_photo : null,
         gatePass: gatePassByLeaveId(leave.id) ?? null,
       };
     });
@@ -3260,7 +3267,8 @@ async function handleGetParentRequests(req, res) {
         parent_lng: row.parent_lng != null ? Number(row.parent_lng) : null,
         hostel_lat: row.hostel_lat != null ? Number(row.hostel_lat) : null,
         hostel_lng: row.hostel_lng != null ? Number(row.hostel_lng) : null,
-        created_at: normalizeDateTime(row.created_at),
+        parent_approval_photo: row.parent_approval_photo ?? null,
+        parent_profile_photo: row.parent_profile_photo ?? null,
         student: {
           id: String(row.student_id),
           name: String(row.student_name),
@@ -3269,6 +3277,7 @@ async function handleGetParentRequests(req, res) {
           mobile: String(row.student_mobile),
           parent_mobile: String(row.parent_mobile),
           hostel_name: String(row.hostel_name ?? ""),
+          parent_profile_photo: row.parent_profile_photo ?? null,
         },
         gatePass: gatePassByLeaveId(String(row.id)) ?? null,
       }));
@@ -3332,6 +3341,9 @@ async function handleReviewParentRequest(req, res, leaveRequestId, body) {
   leave.parent_status = status;
   leave.parent_lat = parent_lat;
   leave.parent_lng = parent_lng;
+  if (body.parent_approval_photo || body.parent_photo) {
+    leave.parent_approval_photo = String(body.parent_approval_photo || body.parent_photo);
+  }
   if (body.note) {
     leave.note = String(body.note).trim();
   }

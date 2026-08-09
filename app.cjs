@@ -2540,11 +2540,11 @@ function handleHostelStudents(req, res) {
     .filter((student) => allowedHostelIds.includes(student.hostel_id))
     .map((student) => {
       const h = db.hostels.find((x) => x.id === student.hostel_id);
-      const parent = db.parents.find((p) => p.hostel_id === student.hostel_id && p.mobile === student.parent_mobile);
+      const parent = db.parents.find((p) => p.hostel_id === student.hostel_id && p.mobile.trim() === student.parent_mobile.trim());
       return {
         ...student,
         hostel_name: h ? h.hostel_name : "",
-        parent_profile_photo: parent ? parent.profile_photo : null,
+        parent_profile_photo: parent && parent.profile_photo ? `/api/profile-photo/${parent.id}` : null,
       };
     })
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
@@ -2790,6 +2790,19 @@ async function handleUploadStudentPhoto(req, res, studentId, data) {
   }
 }
 
+async function handleGetParentPhoto(req, res, studentId) {
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN", "SECURITY_GUARD", "SUPER_ADMIN", "PARENT"]);
+  if (!user) return;
+  const student = studentById(studentId);
+  if (!student) return sendJson(res, 404, { error: "Student not found" });
+
+  const parent = db.parents.find((p) => p.hostel_id === student.hostel_id && p.mobile.trim() === student.parent_mobile.trim());
+  if (parent && parent.profile_photo) {
+    return sendPhotoResponse(res, parent.profile_photo);
+  }
+  return sendJson(res, 404, { error: "Parent photo not found" });
+}
+
 async function handleUploadParentPhoto(req, res, studentId, data) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
@@ -2802,7 +2815,7 @@ async function handleUploadParentPhoto(req, res, studentId, data) {
     const mimeType = String(file.contentType ?? "image/jpeg").toLowerCase();
     const photoBase64 = `data:${mimeType};base64,${file.data.toString("base64")}`;
     
-    let parent = db.parents.find((p) => p.hostel_id === student.hostel_id && p.mobile === student.parent_mobile);
+    let parent = db.parents.find((p) => p.hostel_id === student.hostel_id && p.mobile.trim() === student.parent_mobile.trim());
     if (!parent) {
       parent = {
         id: uuid("parent"),
@@ -2818,7 +2831,7 @@ async function handleUploadParentPhoto(req, res, studentId, data) {
     parent.profile_photo = photoBase64;
     addAudit("UPDATE", "PARENT_PHOTO", parent.id, user, { profile_photo: photoBase64 });
     await persist();
-    return sendJson(res, 200, { data: parent });
+    return sendJson(res, 200, { data: { profile_photo: photoBase64, id: parent.id } });
   } catch (error) {
     return sendJson(res, 500, { error: error.message });
   }
@@ -3802,6 +3815,9 @@ async function handleApi(req, res, pathname) {
     }
 
     match = pathname.match(/^\/api\/hostel-admin\/students\/([^/]+)\/parent-photo$/);
+    if (match && req.method === "GET") {
+      return handleGetParentPhoto(req, res, decodeURIComponent(match[1]));
+    }
     if (match && req.method === "POST") {
       const data = await readRequestData(req);
       return handleUploadParentPhoto(req, res, decodeURIComponent(match[1]), data);

@@ -195,6 +195,94 @@ function AdminDashboard() {
         <StatCard label="Rejected Permissions" value={rejected} icon={XCircle} tone="destructive" />
       </div>
 
+      <div className="mt-6 grid gap-6 md:grid-cols-2">
+        {/* Table 1: Outside Students (Last 24 Hours) */}
+        <Card>
+          <CardHeader className="pb-3 border-b border-border/50">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="text-base font-semibold">Students Outside (Last 24h)</CardTitle>
+              <input
+                type="text"
+                placeholder="Search name/ID…"
+                value={outsideSearch}
+                onChange={(e) => setOutsideSearch(e.target.value)}
+                className="h-8 w-44 rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-medium"
+              />
+            </div>
+          </CardHeader>
+          <CardContent className="h-[450px] overflow-y-auto pt-4 space-y-4">
+            {outsideLast24h.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">No students currently outside within last 24h.</p>
+            ) : (
+              outsideLast24h.map((leave) => (
+                <div key={leave.id} className="flex items-center justify-between border-b border-border/40 pb-3 last:border-0 last:pb-0">
+                  <div className="flex items-center gap-3">
+                     <Avatar className="h-8 w-8">
+                       <AvatarFallback className="bg-accent text-accent-foreground text-xs font-semibold">
+                         {leave.student.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
+                       </AvatarFallback>
+                     </Avatar>
+                     <div>
+                       <p className="text-sm font-medium">{leave.student.name}</p>
+                       <p className="text-xs text-muted-foreground">{leave.student.student_id} · Room {leave.student.room_number}</p>
+                     </div>
+                  </div>
+                  <div className="text-right">
+                     <span className="inline-flex items-center rounded-full bg-warning/10 px-2 py-0.5 text-2xs font-medium text-warning border border-warning/20">OUT</span>
+                     <p className="text-[10px] text-muted-foreground mt-1">
+                       {leave.gatePass?.out_time_actual 
+                         ? new Date(leave.gatePass.out_time_actual).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                         : "N/A"
+                       }
+                     </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Table 2: Reviewed Requests (Accepted & Rejected) */}
+        <Card>
+          <CardHeader className="pb-3 border-b border-border/50">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="text-base font-semibold">Reviewed Requests</CardTitle>
+              <select
+                value={reviewedFilter}
+                onChange={(e) => setReviewedFilter(e.target.value as any)}
+                className="h-8 w-36 rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-medium"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="APPROVED">Approved</option>
+                <option value="REJECTED">Rejected</option>
+              </select>
+            </div>
+          </CardHeader>
+          <CardContent className="h-[450px] overflow-y-auto pt-4 space-y-4">
+            {reviewedRequests.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">No reviewed requests found.</p>
+            ) : (
+               reviewedRequests.map((leave) => (
+                 <div key={leave.id} className="flex items-center justify-between border-b border-border/40 pb-3 last:border-0 last:pb-0">
+                   <div className="flex items-center gap-3">
+                     <Avatar className="h-8 w-8">
+                       <AvatarFallback className="bg-accent text-accent-foreground text-xs font-semibold">
+                         {leave.student.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
+                       </AvatarFallback>
+                     </Avatar>
+                     <div>
+                       <p className="text-sm font-medium">{leave.student.name}</p>
+                       <p className="text-xs text-muted-foreground">{leave.reason}</p>
+                     </div>
+                   </div>
+                   <StatusBadge status={leave.final_status.toLowerCase()} />
+                 </div>
+               ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="mt-6 grid gap-4">
         <Card className="w-full">
           <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-2">
@@ -293,94 +381,6 @@ function AdminDashboard() {
                 <Bar dataKey="approved" fill="url(#approvedGradient)" radius={[6, 6, 0, 0]} maxBarSize={32} />
               </BarChart>
             </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="mt-6 grid gap-6 md:grid-cols-2">
-        {/* Table 1: Outside Students (Last 24 Hours) */}
-        <Card>
-          <CardHeader className="pb-3 border-b border-border/50">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="text-base font-semibold">Students Outside (Last 24h)</CardTitle>
-              <input
-                type="text"
-                placeholder="Search name/ID…"
-                value={outsideSearch}
-                onChange={(e) => setOutsideSearch(e.target.value)}
-                className="h-8 w-44 rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-medium"
-              />
-            </div>
-          </CardHeader>
-          <CardContent className="max-h-[350px] overflow-y-auto pt-4 space-y-4">
-            {outsideLast24h.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-8 text-center">No students currently outside within last 24h.</p>
-            ) : (
-              outsideLast24h.map((leave) => (
-                <div key={leave.id} className="flex items-center justify-between border-b border-border/40 pb-3 last:border-0 last:pb-0">
-                  <div className="flex items-center gap-3">
-                     <Avatar className="h-8 w-8">
-                       <AvatarFallback className="bg-accent text-accent-foreground text-xs font-semibold">
-                         {leave.student.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
-                       </AvatarFallback>
-                     </Avatar>
-                     <div>
-                       <p className="text-sm font-medium">{leave.student.name}</p>
-                       <p className="text-xs text-muted-foreground">{leave.student.student_id} · Room {leave.student.room_number}</p>
-                     </div>
-                  </div>
-                  <div className="text-right">
-                     <span className="inline-flex items-center rounded-full bg-warning/10 px-2 py-0.5 text-2xs font-medium text-warning border border-warning/20">OUT</span>
-                     <p className="text-[10px] text-muted-foreground mt-1">
-                       {leave.gatePass?.out_time_actual 
-                         ? new Date(leave.gatePass.out_time_actual).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                         : "N/A"
-                       }
-                     </p>
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Table 2: Reviewed Requests (Accepted & Rejected) */}
-        <Card>
-          <CardHeader className="pb-3 border-b border-border/50">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="text-base font-semibold">Reviewed Requests</CardTitle>
-              <select
-                value={reviewedFilter}
-                onChange={(e) => setReviewedFilter(e.target.value as any)}
-                className="h-8 w-36 rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-medium"
-              >
-                <option value="ALL">All Statuses</option>
-                <option value="APPROVED">Approved</option>
-                <option value="REJECTED">Rejected</option>
-              </select>
-            </div>
-          </CardHeader>
-          <CardContent className="max-h-[350px] overflow-y-auto pt-4 space-y-4">
-            {reviewedRequests.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-8 text-center">No reviewed requests found.</p>
-            ) : (
-               reviewedRequests.map((leave) => (
-                 <div key={leave.id} className="flex items-center justify-between border-b border-border/40 pb-3 last:border-0 last:pb-0">
-                   <div className="flex items-center gap-3">
-                     <Avatar className="h-8 w-8">
-                       <AvatarFallback className="bg-accent text-accent-foreground text-xs font-semibold">
-                         {leave.student.name.split(" ").map((n: string) => n[0]).slice(0, 2).join("")}
-                       </AvatarFallback>
-                     </Avatar>
-                     <div>
-                       <p className="text-sm font-medium">{leave.student.name}</p>
-                       <p className="text-xs text-muted-foreground">{leave.reason}</p>
-                     </div>
-                   </div>
-                   <StatusBadge status={leave.final_status.toLowerCase()} />
-                 </div>
-               ))
-            )}
           </CardContent>
         </Card>
       </div>

@@ -41,6 +41,9 @@ function AdminDashboard() {
   const [outsideCustomFrom, setOutsideCustomFrom] = useState("");
   const [outsideCustomTo, setOutsideCustomTo] = useState("");
   const [reviewedFilter, setReviewedFilter] = useState<"ALL" | "APPROVED" | "REJECTED">("ALL");
+  const [reviewedTimeFilter, setReviewedTimeFilter] = useState<"24h" | "week" | "month" | "custom">("24h");
+  const [reviewedCustomFrom, setReviewedCustomFrom] = useState("");
+  const [reviewedCustomTo, setReviewedCustomTo] = useState("");
 
   const students = studentsQuery.data?.data ?? [];
   const leaves = leaveQuery.data?.data ?? [];
@@ -169,16 +172,46 @@ function AdminDashboard() {
   }, [filteredLeaves, outsideSearch, outsideTimeFilter, outsideCustomFrom, outsideCustomTo]);
 
   const reviewedRequests = useMemo(() => {
-    const list = filteredLeaves.filter((leave) => 
-      leave.final_status === "APPROVED" || leave.final_status === "REJECTED"
-    );
+    const now = new Date();
+    let startDate = new Date();
+    let endDate = new Date();
+
+    if (reviewedTimeFilter === "24h") {
+      startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    } else if (reviewedTimeFilter === "week") {
+      startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else if (reviewedTimeFilter === "month") {
+      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    } else if (reviewedTimeFilter === "custom") {
+      if (reviewedCustomFrom) startDate = new Date(reviewedCustomFrom);
+      if (reviewedCustomTo) {
+        endDate = new Date(reviewedCustomTo);
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        endDate = new Date();
+      }
+    }
+
+    const list = filteredLeaves.filter((leave) => {
+      if (leave.final_status !== "APPROVED" && leave.final_status !== "REJECTED") return false;
+      const date = leave.updated_at ? new Date(leave.updated_at) : (leave.created_at ? new Date(leave.created_at) : null);
+      if (!date) return true; // Fallback
+      if (reviewedTimeFilter === "custom") {
+        return date >= startDate && date <= endDate;
+      }
+      return date >= startDate;
+    });
 
     let filtered = list;
     if (reviewedFilter !== "ALL") {
       filtered = list.filter((l) => l.final_status === reviewedFilter);
     }
-    return filtered.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, 10);
-  }, [filteredLeaves, reviewedFilter]);
+    return filtered.sort((a, b) => {
+      const dateA = a.updated_at || a.created_at;
+      const dateB = b.updated_at || b.created_at;
+      return String(dateB).localeCompare(String(dateA));
+    });
+  }, [filteredLeaves, reviewedFilter, reviewedTimeFilter, reviewedCustomFrom, reviewedCustomTo]);
 
   if (dashboardQuery.isLoading || studentsQuery.isLoading || leaveQuery.isLoading || hostelsQuery.isLoading) {
     return (
@@ -296,21 +329,50 @@ function AdminDashboard() {
           </CardContent>
         </Card>
 
-        {/* Table 2: Reviewed Requests (Accepted & Rejected) */}
+        {/* Table 2: Reviewed Requests */}
         <Card>
           <CardHeader className="pb-3 border-b border-border/50">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="text-base font-semibold">Reviewed Requests</CardTitle>
-              <select
-                value={reviewedFilter}
-                onChange={(e) => setReviewedFilter(e.target.value as any)}
-                className="h-8 w-36 rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-medium"
-              >
-                <option value="ALL">All Statuses</option>
-                <option value="APPROVED">Approved</option>
-                <option value="REJECTED">Rejected</option>
-              </select>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <select
+                  value={reviewedFilter}
+                  onChange={(e) => setReviewedFilter(e.target.value as any)}
+                  className="h-8 w-28 rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-medium"
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="APPROVED">Approved</option>
+                  <option value="REJECTED">Rejected</option>
+                </select>
+                <select
+                  value={reviewedTimeFilter}
+                  onChange={(e) => setReviewedTimeFilter(e.target.value as any)}
+                  className="h-8 w-28 rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring font-medium"
+                >
+                  <option value="24h">Last 24h</option>
+                  <option value="week">This Week</option>
+                  <option value="month">This Month</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
             </div>
+            {reviewedTimeFilter === "custom" && (
+              <div className="flex items-center gap-1.5 mt-2 justify-end">
+                <input
+                  type="date"
+                  value={reviewedCustomFrom}
+                  onChange={(e) => setReviewedCustomFrom(e.target.value)}
+                  className="h-7 rounded-md border border-input bg-background px-2 text-[10px] font-medium focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+                <span className="text-[10px] text-muted-foreground">to</span>
+                <input
+                  type="date"
+                  value={reviewedCustomTo}
+                  onChange={(e) => setReviewedCustomTo(e.target.value)}
+                  className="h-7 rounded-md border border-input bg-background px-2 text-[10px] font-medium focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+            )}
           </CardHeader>
           <CardContent className="h-[450px] overflow-y-auto pt-4 space-y-4">
             {reviewedRequests.length === 0 ? (

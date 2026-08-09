@@ -39,6 +39,8 @@ function StaffPage() {
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [hostelFilter, setHostelFilter] = useState("ALL");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 10;
 
   const staffQuery = useQuery({ queryKey: ["hostel-staff"], queryFn: getHostelStaff });
   const hostelsQuery = useQuery({ queryKey: ["active-hostels"], queryFn: getHostels });
@@ -70,6 +72,12 @@ function StaffPage() {
       return matchesSearch && matchesRole && matchesHostel;
     });
   }, [list, q, roleFilter, hostelFilter]);
+
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const paginated = useMemo(() => {
+    const startIndex = (page - 1) * itemsPerPage;
+    return filtered.slice(startIndex, startIndex + itemsPerPage);
+  }, [filtered, page]);
 
   const resetDialog = () => {
     setEditingStaff(null);
@@ -290,14 +298,20 @@ function StaffPage() {
               <Input
                 placeholder="Search staff by name, email…"
                 value={q}
-                onChange={(e) => setQ(e.target.value)}
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  setPage(1);
+                }}
                 className="pl-9"
               />
             </div>
             <select
               value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-              className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              onChange={(e) => {
+                setRoleFilter(e.target.value);
+                setPage(1);
+              }}
+              className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-ring"
             >
               <option value="ALL">All Roles</option>
               <option value="HOSTEL_ADMIN">Hostel Admin</option>
@@ -306,8 +320,11 @@ function StaffPage() {
             </select>
             <select
               value={hostelFilter}
-              onChange={(e) => setHostelFilter(e.target.value)}
-              className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              onChange={(e) => {
+                setHostelFilter(e.target.value);
+                setPage(1);
+              }}
+              className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-ring"
             >
               <option value="ALL">All Hostels</option>
               {hostels.map((hostel) => (
@@ -318,7 +335,7 @@ function StaffPage() {
             </select>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-border/60">
+          <div className="overflow-x-auto rounded-lg border border-border/60 bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -330,13 +347,19 @@ function StaffPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((staff) => (
+                {paginated.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-6 text-muted-foreground font-medium">
+                      No staff records found.
+                    </TableCell>
+                  </TableRow>
+                ) : paginated.map((staff) => (
                   <TableRow key={staff.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
                           {staff.profile_photo && <AvatarImage src={staff.profile_photo} alt={staff.name} className="object-cover" />}
-                          <AvatarFallback className="bg-accent text-accent-foreground text-xs">
+                          <AvatarFallback className="bg-accent text-accent-foreground text-xs font-semibold">
                             {staff.name
                               .split(" ")
                               .map((part) => part[0])
@@ -344,18 +367,18 @@ function StaffPage() {
                               .join("")}
                           </AvatarFallback>
                         </Avatar>
-                        <span className="font-medium">{staff.name}</span>
+                        <span className="font-semibold text-foreground">{staff.name}</span>
                       </div>
                     </TableCell>
-                    <TableCell>{staff.role.toLowerCase().replaceAll("_", " ")}</TableCell>
-                    <TableCell>
+                    <TableCell className="font-medium">{staff.role.toLowerCase().replaceAll("_", " ")}</TableCell>
+                    <TableCell className="font-medium">
                       {staff.role === "HOSTEL_ADMIN" || staff.hostel_id?.endsWith("_ALL") ? (
                         <span className="text-xs text-muted-foreground italic">All hostels</span>
                       ) : (
                         staff.hostel_name || "N/A"
                       )}
                     </TableCell>
-                    <TableCell className="text-xs">{staff.email}</TableCell>
+                    <TableCell className="text-xs font-medium text-muted-foreground">{staff.email}</TableCell>
                     <TableCell className="text-right">
                       <Button
                         size="icon"
@@ -363,7 +386,6 @@ function StaffPage() {
                         onClick={() => {
                           setEditingStaff(staff);
                           setSelectedRole(staff.role || "HOSTEL_STAFF");
-                          // Only pre-fill hostel for non-admin roles
                           setSelectedHostel(staff.role === "HOSTEL_ADMIN" ? "" : (staff.hostel_id ?? ""));
                           setOpen(true);
                         }}
@@ -376,6 +398,52 @@ function StaffPage() {
               </TableBody>
             </Table>
           </div>
+
+          {totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-between border-t border-border/40 pt-4">
+              <p className="text-xs text-muted-foreground">
+                Showing <strong className="text-foreground">{(page - 1) * itemsPerPage + 1}</strong> to{" "}
+                <strong className="text-foreground">
+                  {Math.min(page * itemsPerPage, filtered.length)}
+                </strong>{" "}
+                of <strong className="text-foreground">{filtered.length}</strong> staff members
+              </p>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                  disabled={page === 1}
+                  className="h-8 text-xs font-semibold"
+                >
+                  Previous
+                </Button>
+                {Array.from({ length: totalPages }).map((_, idx) => {
+                  const pNum = idx + 1;
+                  return (
+                    <Button
+                      key={pNum}
+                      variant={page === pNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setPage(pNum)}
+                      className="h-8 w-8 text-xs font-semibold p-0"
+                    >
+                      {pNum}
+                    </Button>
+                  );
+                })}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+                  disabled={page === totalPages}
+                  className="h-8 text-xs font-semibold"
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </>

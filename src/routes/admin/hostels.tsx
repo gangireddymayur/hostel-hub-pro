@@ -41,6 +41,8 @@ function HostelsPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<HostelRow | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<HostelRow | null>(null);
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 5;
 
   const hostelsQuery = useQuery({ queryKey: ["super-hostels"], queryFn: getSuperHostels });
 
@@ -95,10 +97,18 @@ function HostelsPage() {
   });
 
   const list = useMemo(() => hostelsQuery.data?.data ?? [], [hostelsQuery.data]);
-  const filtered = list.filter((hostel) =>
-    (hostel.hostel_name?.toLowerCase() ?? "").includes(q.toLowerCase()) ||
-    (hostel.email?.toLowerCase() ?? "").includes(q.toLowerCase()),
-  );
+  const filtered = useMemo(() => {
+    return list.filter((hostel) =>
+      (hostel.hostel_name?.toLowerCase() ?? "").includes(q.toLowerCase()) ||
+      (hostel.email?.toLowerCase() ?? "").includes(q.toLowerCase())
+    );
+  }, [list, q]);
+
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const paginated = useMemo(() => {
+    const startIndex = (page - 1) * itemsPerPage;
+    return filtered.slice(startIndex, startIndex + itemsPerPage);
+  }, [filtered, page]);
 
   if (hostelsQuery.isLoading) {
     return (
@@ -168,11 +178,19 @@ function HostelsPage() {
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <div className="relative max-w-sm flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Search hostels…" value={q} onChange={(e) => setQ(e.target.value)} className="pl-9" />
+              <Input 
+                placeholder="Search hostels…" 
+                value={q} 
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  setPage(1);
+                }} 
+                className="pl-9" 
+              />
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-border/60">
+          <div className="overflow-x-auto rounded-lg border border-border/60 bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -184,21 +202,21 @@ function HostelsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.length === 0 ? (
+                {paginated.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5}>
-                      <div className="py-8 text-center text-sm text-muted-foreground">
+                      <div className="py-8 text-center text-sm text-muted-foreground font-medium">
                         No branches yet. Add the first branch to get started.
                       </div>
                     </TableCell>
                   </TableRow>
-                ) : filtered.map((hostel) => (
+                ) : paginated.map((hostel) => (
                   <TableRow key={hostel.id}>
                     <TableCell>
-                      <div className="font-medium">{hostel.hostel_name}</div>
+                      <div className="font-semibold text-foreground">{hostel.hostel_name}</div>
                     </TableCell>
-                    <TableCell>{hostel._count?.students ?? 0}</TableCell>
-                    <TableCell>{hostel._count?.staff ?? 0}</TableCell>
+                    <TableCell className="font-semibold">{hostel._count?.students ?? 0}</TableCell>
+                    <TableCell className="font-semibold">{hostel._count?.staff ?? 0}</TableCell>
                     <TableCell>
                       <Badge
                         className={
@@ -242,6 +260,52 @@ function HostelsPage() {
               </TableBody>
             </Table>
           </div>
+
+          {totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-between border-t border-border/40 pt-4">
+              <p className="text-xs text-muted-foreground">
+                Showing <strong className="text-foreground">{(page - 1) * itemsPerPage + 1}</strong> to{" "}
+                <strong className="text-foreground">
+                  {Math.min(page * itemsPerPage, filtered.length)}
+                </strong>{" "}
+                of <strong className="text-foreground">{filtered.length}</strong> branches
+              </p>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                  disabled={page === 1}
+                  className="h-8 text-xs font-semibold"
+                >
+                  Previous
+                </Button>
+                {Array.from({ length: totalPages }).map((_, idx) => {
+                  const pNum = idx + 1;
+                  return (
+                    <Button
+                      key={pNum}
+                      variant={page === pNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setPage(pNum)}
+                      className="h-8 w-8 text-xs font-semibold p-0"
+                    >
+                      {pNum}
+                    </Button>
+                  );
+                })}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+                  disabled={page === totalPages}
+                  className="h-8 text-xs font-semibold"
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

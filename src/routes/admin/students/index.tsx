@@ -54,6 +54,9 @@ function StudentsPage() {
   const [parentPhotoFile, setParentPhotoFile] = useState<File | null>(null);
   const [selectedHostel, setSelectedHostel] = useState("");
   const [hostelFilter, setHostelFilter] = useState("ALL");
+  const [yearFilter, setYearFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 10;
 
   const studentsQuery = useQuery({ queryKey: ["hostel-students"], queryFn: getHostelStudents });
   const hostelsQuery = useQuery({ queryKey: ["active-hostels"], queryFn: getHostels });
@@ -67,9 +70,16 @@ function StudentsPage() {
         student.student_id.toLowerCase().includes(q.toLowerCase()) ||
         student.room_number.toLowerCase().includes(q.toLowerCase());
       const matchesHostel = hostelFilter === "ALL" || student.hostel_id === hostelFilter;
-      return matchesSearch && matchesHostel;
+      const matchesYear = yearFilter === "ALL" || student.student_year === yearFilter;
+      return matchesSearch && matchesHostel && matchesYear;
     });
-  }, [list, q, hostelFilter]);
+  }, [list, q, hostelFilter, yearFilter]);
+
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const paginated = useMemo(() => {
+    const startIndex = (page - 1) * itemsPerPage;
+    return filtered.slice(startIndex, startIndex + itemsPerPage);
+  }, [filtered, page]);
 
   const createMutation = useMutation({
     mutationFn: createStudent,
@@ -239,12 +249,23 @@ function StudentsPage() {
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <div className="relative max-w-sm flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Search by name, ID, room…" value={q} onChange={(e) => setQ(e.target.value)} className="pl-9" />
+              <Input 
+                placeholder="Search by name, ID, room…" 
+                value={q} 
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  setPage(1);
+                }} 
+                className="pl-9" 
+              />
             </div>
             <select
               value={hostelFilter}
-              onChange={(e) => setHostelFilter(e.target.value)}
-              className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              onChange={(e) => {
+                setHostelFilter(e.target.value);
+                setPage(1);
+              }}
+              className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-ring"
             >
               <option value="ALL">All Hostels</option>
               {hostels.map((hostel) => (
@@ -253,9 +274,23 @@ function StudentsPage() {
                 </option>
               ))}
             </select>
+            <select
+              value={yearFilter}
+              onChange={(e) => {
+                setYearFilter(e.target.value);
+                setPage(1);
+              }}
+              className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <option value="ALL">All Years</option>
+              <option value="1st Year">1st Year</option>
+              <option value="2nd Year">2nd Year</option>
+              <option value="3rd Year">3rd Year</option>
+              <option value="4th Year">4th Year</option>
+            </select>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-border/60">
+          <div className="overflow-x-auto rounded-lg border border-border/60 bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -269,67 +304,121 @@ function StudentsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((student) => (
-                  <TableRow key={student.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-9 w-9">
-                          {student.profile_photo && <AvatarImage src={student.profile_photo} alt={student.name} className="object-cover" />}
-                          <AvatarFallback className="bg-accent text-accent-foreground text-xs">
-                            {student.name
-                              .split(" ")
-                              .map((part) => part[0])
-                              .slice(0, 2)
-                              .join("")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <div className="font-medium">{student.name}</div>
-                          <div className="text-xs text-muted-foreground">{student.student_id}</div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>{student.hostel_name || "N/A"}</TableCell>
-                    <TableCell>{student.room_number}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          {student.parent_profile_photo && <AvatarImage src={student.parent_profile_photo} alt="Parent" className="object-cover" />}
-                          <AvatarFallback className="bg-secondary text-secondary-foreground text-xs font-semibold">
-                            P
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="font-mono text-xs">{student.parent_mobile}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{student.mobile}</TableCell>
-                    <TableCell>
-                      <Badge className={student.status === "ACTIVE" ? "bg-success text-success-foreground hover:bg-success" : "bg-warning/20 text-warning-foreground dark:text-warning hover:bg-warning/20"}>
-                        {student.status === "ACTIVE" ? "In Hostel" : "Disabled"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button size="icon" variant="ghost" onClick={() => setView(student)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => {
-                            setEditingStudent(student);
-                            setSelectedHostel(student.hostel_id ?? "");
-                          }}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </div>
+                {paginated.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
+                      No student records found.
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  paginated.map((student) => (
+                    <TableRow key={student.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-9 w-9">
+                            {student.profile_photo && <AvatarImage src={student.profile_photo} alt={student.name} className="object-cover" />}
+                            <AvatarFallback className="bg-accent text-accent-foreground text-xs font-semibold">
+                              {student.name
+                                .split(" ")
+                                .map((part) => part[0])
+                                .slice(0, 2)
+                                .join("")}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="font-semibold text-foreground">{student.name}</div>
+                            <div className="text-xs text-muted-foreground">{student.student_id} · {student.student_year || "N/A"}</div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium">{student.hostel_name || "N/A"}</TableCell>
+                      <TableCell className="font-medium">Room {student.room_number}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            {student.parent_profile_photo && <AvatarImage src={student.parent_profile_photo} alt="Parent" className="object-cover" />}
+                            <AvatarFallback className="bg-secondary text-secondary-foreground text-xs font-semibold">
+                              P
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="font-mono text-xs font-medium">{student.parent_mobile}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs font-medium">{student.mobile}</TableCell>
+                      <TableCell>
+                        <Badge className={student.status === "ACTIVE" ? "bg-success text-success-foreground hover:bg-success" : "bg-warning/20 text-warning-foreground dark:text-warning hover:bg-warning/20"}>
+                          {student.status === "ACTIVE" ? "In Hostel" : "Disabled"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button size="icon" variant="ghost" onClick={() => setView(student)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditingStudent(student);
+                              setSelectedHostel(student.hostel_id ?? "");
+                            }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
+
+          {totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-between border-t border-border/40 pt-4">
+              <p className="text-xs text-muted-foreground">
+                Showing <strong className="text-foreground">{(page - 1) * itemsPerPage + 1}</strong> to{" "}
+                <strong className="text-foreground">
+                  {Math.min(page * itemsPerPage, filtered.length)}
+                </strong>{" "}
+                of <strong className="text-foreground">{filtered.length}</strong> students
+              </p>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                  disabled={page === 1}
+                  className="h-8 text-xs font-semibold"
+                >
+                  Previous
+                </Button>
+                {Array.from({ length: totalPages }).map((_, idx) => {
+                  const pNum = idx + 1;
+                  return (
+                    <Button
+                      key={pNum}
+                      variant={page === pNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setPage(pNum)}
+                      className="h-8 w-8 text-xs font-semibold p-0"
+                    >
+                      {pNum}
+                    </Button>
+                  );
+                })}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+                  disabled={page === totalPages}
+                  className="h-8 text-xs font-semibold"
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

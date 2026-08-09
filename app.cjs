@@ -1525,10 +1525,14 @@ function sendText(res, statusCode, text, contentType = "text/plain; charset=utf-
 
 async function readBody(req) {
   const chunks = [];
-  for await (const chunk of req) {
-    if (Buffer.isBuffer(chunk)) chunks.push(chunk);
-    else if (typeof chunk === "string") chunks.push(Buffer.from(chunk));
-    else if (chunk instanceof Uint8Array) chunks.push(Buffer.from(chunk));
+  try {
+    for await (const chunk of req) {
+      if (Buffer.isBuffer(chunk)) chunks.push(chunk);
+      else if (typeof chunk === "string") chunks.push(Buffer.from(chunk));
+      else if (chunk instanceof Uint8Array) chunks.push(Buffer.from(chunk));
+    }
+  } catch (err) {
+    console.error("readBody stream handled error:", err.message);
   }
   return chunks.length ? Buffer.concat(chunks) : Buffer.alloc(0);
 }
@@ -2532,6 +2536,18 @@ function handleHostelDashboard(req, res) {
   });
 }
 
+function cleanMobileDigits(mob) {
+  return String(mob ?? "").replace(/\D/g, "").slice(-10);
+}
+
+function findRegisteredParentPhoto(student) {
+  if (!student) return null;
+  const targetMob = cleanMobileDigits(student.parent_mobile);
+  if (!targetMob) return student.parent_profile_photo ?? null;
+  const parent = db.parents.find((p) => cleanMobileDigits(p.mobile) === targetMob);
+  return parent?.profile_photo ?? student.parent_profile_photo ?? null;
+}
+
 function handleHostelStudents(req, res) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
@@ -2540,11 +2556,11 @@ function handleHostelStudents(req, res) {
     .filter((student) => allowedHostelIds.includes(student.hostel_id))
     .map((student) => {
       const h = db.hostels.find((x) => x.id === student.hostel_id);
-      const parent = db.parents.find((p) => p.hostel_id === student.hostel_id && p.mobile.trim() === student.parent_mobile.trim());
+      const parentPhoto = findRegisteredParentPhoto(student);
       return {
         ...student,
         hostel_name: h ? h.hostel_name : "",
-        parent_profile_photo: parent && parent.profile_photo ? `/api/profile-photo/${parent.id}` : null,
+        parent_profile_photo: parentPhoto,
       };
     })
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
@@ -2815,7 +2831,8 @@ async function handleUploadParentPhoto(req, res, studentId, data) {
     const mimeType = String(file.contentType ?? "image/jpeg").toLowerCase();
     const photoBase64 = `data:${mimeType};base64,${file.data.toString("base64")}`;
     
-    let parent = db.parents.find((p) => p.hostel_id === student.hostel_id && p.mobile.trim() === student.parent_mobile.trim());
+    const targetMob = cleanMobileDigits(student.parent_mobile);
+    let parent = db.parents.find((p) => cleanMobileDigits(p.mobile) === targetMob);
     if (!parent) {
       parent = {
         id: uuid("parent"),
@@ -2829,6 +2846,7 @@ async function handleUploadParentPhoto(req, res, studentId, data) {
       db.parents.push(parent);
     }
     parent.profile_photo = photoBase64;
+    student.parent_profile_photo = photoBase64;
     addAudit("UPDATE", "PARENT_PHOTO", parent.id, user, { profile_photo: photoBase64 });
     await persist();
     return sendJson(res, 200, { data: { profile_photo: photoBase64, id: parent.id } });
@@ -2974,15 +2992,15 @@ function handleLeaveRequests(req, res) {
           hostel_name: hostel ? hostel.hostel_name : "",
         };
       }
-      const parent = student ? db.parents.find((p) => p.mobile.trim() === student.parent_mobile.trim()) : null;
+      const parentPhoto = findRegisteredParentPhoto(student);
       return {
         ...leave,
         student: studentWithHostel ? {
           ...studentWithHostel,
-          parent_profile_photo: parent ? parent.profile_photo : null,
+          parent_profile_photo: parentPhoto,
         } : null,
         parent_approval_photo: leave.parent_approval_photo ?? null,
-        parent_profile_photo: parent ? parent.profile_photo : null,
+        parent_profile_photo: parentPhoto,
         gatePass: gatePassByLeaveId(leave.id) ?? null,
       };
     });

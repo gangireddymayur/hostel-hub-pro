@@ -12,7 +12,7 @@ import { getSession } from "@/lib/role";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/settings")({
-  head: () => ({ meta: [{ title: "Settings · HostelOS" }] }),
+  head: () => ({ meta: [{ title: "Settings · Hostel GATEX" }] }),
   component: AdminSettings,
 });
 

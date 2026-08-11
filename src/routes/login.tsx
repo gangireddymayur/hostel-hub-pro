@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
-import { ArrowRight, BarChart3, Building2, GraduationCap, Loader2, ShieldCheck } from "lucide-react";
+import { ArrowRight, BarChart3, Building2, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "HostelOS - Login" },
+      { title: "Hostel GATEX - Login" },
       { name: "description", content: "Secure portal for super admins and hostel admins." },
     ],
   }),
@@ -73,9 +73,9 @@ function Landing() {
       <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
         <div className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary-glow text-primary-foreground shadow">
-            <GraduationCap className="h-5 w-5" />
+            <ShieldCheck className="h-5 w-5" />
           </div>
-          <span className="text-lg font-semibold tracking-tight">HostelOS</span>
+          <span className="text-lg font-semibold tracking-widest">Hostel GATEX</span>
         </div>
         <span className="text-xs text-muted-foreground">Live backend connected</span>
       </header>
@@ -86,11 +86,11 @@ function Landing() {
             <span className="h-1.5 w-1.5 rounded-full bg-success" /> Production portal
           </span>
           <h1 className="mt-5 text-4xl font-semibold tracking-tight md:text-6xl">
-            Modern leave management for{" "}
+            Smart gate pass management for{" "}
             <span className="bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">hostels at scale</span>
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground">
-            One secure portal for super admins to onboard hostels and hostel admins to manage students, staff and leave approvals.
+            One secure portal for super admins to onboard hostels and hostel admins to manage students, gate passes and permissions.
           </p>
         </div>
 

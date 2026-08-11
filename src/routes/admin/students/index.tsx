@@ -40,7 +40,7 @@ type StudentRow = {
 };
 
 export const Route = createFileRoute("/admin/students/")({
-  head: () => ({ meta: [{ title: "Students · HostelOS" }] }),
+  head: () => ({ meta: [{ title: "Students · Hostel GATEX" }] }),
   component: StudentsPage,
 });
 

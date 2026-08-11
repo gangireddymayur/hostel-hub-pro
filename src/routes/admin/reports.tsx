@@ -18,7 +18,7 @@ import { getLeaveRequests, getHostelReports } from "@/lib/api";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/reports")({
-  head: () => ({ meta: [{ title: "Reports · HostelOS" }] }),
+  head: () => ({ meta: [{ title: "Reports · Hostel GATEX" }] }),
   component: Reports,
 });
 

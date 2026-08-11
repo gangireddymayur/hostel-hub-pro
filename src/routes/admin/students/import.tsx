@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { importStudents, getHostelStudents, getHostels } from "@/lib/api";
 
 export const Route = createFileRoute("/admin/students/import")({
-  head: () => ({ meta: [{ title: "Import Students · HostelOS" }] }),
+  head: () => ({ meta: [{ title: "Import Students · Hostel GATEX" }] }),
   component: ImportPage,
 });
 

@@ -21,7 +21,7 @@ import {
 import { getHostelDashboard, getHostelStudents, getLeaveRequests, getHostels } from "@/lib/api";
 
 export const Route = createFileRoute("/admin/dashboard")({
-  head: () => ({ meta: [{ title: "Dashboard · HostelOS" }] }),
+  head: () => ({ meta: [{ title: "Dashboard · Hostel GATEX" }] }),
   component: AdminDashboard,
 });
 

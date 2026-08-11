@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getLeaveRequests } from "@/lib/api";
 
 export const Route = createFileRoute("/admin/tracking/returned")({
-  head: () => ({ meta: [{ title: "Students Returned · HostelOS" }] }),
+  head: () => ({ meta: [{ title: "Students Returned · Hostel GATEX" }] }),
   component: Page,
 });
 

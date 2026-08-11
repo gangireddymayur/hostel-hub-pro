@@ -14,7 +14,7 @@ import { getLeaveRequests, reviewLeaveRequest, bulkReviewLeaveRequests } from "@
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/leaves")({
-  head: () => ({ meta: [{ title: "Permission Requests · HostelOS" }] }),
+  head: () => ({ meta: [{ title: "Permission Requests · Hostel GATEX" }] }),
   component: LeavesPage,
 });
 

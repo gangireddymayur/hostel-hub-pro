@@ -25,7 +25,7 @@ type StaffRow = {
 };
 
 export const Route = createFileRoute("/admin/staff")({
-  head: () => ({ meta: [{ title: "Staff · HostelOS" }] }),
+  head: () => ({ meta: [{ title: "Staff · Hostel GATEX" }] }),
   component: StaffPage,
 });
 

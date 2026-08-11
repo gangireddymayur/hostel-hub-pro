@@ -1,7 +1,7 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Building2, BarChart3, Settings, Users, BedDouble,
-  UserCog, ShieldCheck, ClipboardList, LogOut, FileSpreadsheet, MapPin,
+  UserCog, ClipboardList, LogOut, FileSpreadsheet, MapPin,
   CheckCircle2, FileBarChart,
 } from "lucide-react";
 import {
@@ -53,9 +53,11 @@ export function AppSidebar({ role }: { role: Role }) {
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border">
         <div className="flex items-center gap-2 px-2 py-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary-glow text-primary-foreground shadow">
-            <ShieldCheck className="h-5 w-5" />
-          </div>
+          <img
+            src="/gatex-logo.jpg"
+            alt="Hostel GATEX"
+            className="h-9 w-auto rounded-md object-contain shadow group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:object-cover"
+          />
           <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
             <span className="truncate font-semibold tracking-wide">Hostel GATEX</span>
             <span className="truncate text-xs text-muted-foreground">

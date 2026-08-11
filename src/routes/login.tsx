@@ -72,9 +72,11 @@ function Landing() {
 
       <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
         <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary-glow text-primary-foreground shadow">
-            <ShieldCheck className="h-5 w-5" />
-          </div>
+          <img
+            src="/gatex-logo.jpg"
+            alt="Hostel GATEX logo"
+            className="h-9 w-auto rounded-lg object-contain shadow"
+          />
           <span className="text-lg font-semibold tracking-widest">Hostel GATEX</span>
         </div>
         <span className="text-xs text-muted-foreground">Live backend connected</span>

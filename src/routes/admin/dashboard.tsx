@@ -194,7 +194,8 @@ function AdminDashboard() {
 
     const list = filteredLeaves.filter((leave) => {
       if (leave.final_status !== "APPROVED" && leave.final_status !== "REJECTED") return false;
-      const date = leave.updated_at ? new Date(leave.updated_at) : (leave.created_at ? new Date(leave.created_at) : null);
+      const rawDate = leave.updated_at || leave.created_at;
+      const date = rawDate ? new Date(String(rawDate)) : null;
       if (!date) return true; // Fallback
       if (reviewedTimeFilter === "custom") {
         return date >= startDate && date <= endDate;
@@ -393,14 +394,15 @@ function AdminDashboard() {
                    </div>
                    <div className="text-right shrink-0">
                      <StatusBadge status={leave.final_status.toLowerCase()} />
-                     <p className="text-[10px] text-muted-foreground mt-1 font-medium">
-                       {(() => {
-                         const date = leave.updated_at ? new Date(leave.updated_at) : (leave.created_at ? new Date(leave.created_at) : null);
-                         return date 
-                           ? date.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                           : "N/A";
-                       })()}
-                     </p>
+                      <p className="text-[10px] text-muted-foreground mt-1 font-medium">
+                        {(() => {
+                          const rawDate = leave.updated_at || leave.created_at;
+                          const date = rawDate ? new Date(String(rawDate)) : null;
+                          return date 
+                            ? date.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                            : "N/A";
+                        })()}
+                      </p>
                    </div>
                  </div>
                ))

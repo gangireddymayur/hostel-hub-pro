@@ -357,9 +357,107 @@ function Reports() {
     toast.success(`Exported ${filteredLeaves.length} records to CSV`);
   };
 
-  // Printable PDF Handler
+  // Printable PDF Handler (Uses isolated iframe to guarantee no blank pages or modal collision)
   const handlePrintPdf = () => {
-    window.print();
+    const printElem = document.getElementById("printable-audit-report");
+    if (!printElem) {
+      window.print();
+      return;
+    }
+
+    const printFrame = document.createElement("iframe");
+    printFrame.style.position = "fixed";
+    printFrame.style.right = "0";
+    printFrame.style.bottom = "0";
+    printFrame.style.width = "0";
+    printFrame.style.height = "0";
+    printFrame.style.border = "0";
+    document.body.appendChild(printFrame);
+
+    const doc = printFrame.contentWindow?.document;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${reportTitle} - Hostel GATEX</title>
+          <style>
+            @page { size: A4 portrait; margin: 10mm 12mm 10mm 12mm; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #fff; color: #000; padding: 8px; font-size: 12px; }
+            .page-break-avoid { break-inside: avoid; page-break-inside: avoid; margin-bottom: 14px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 10px; }
+            th, td { border: 1px solid #9ca3af; padding: 6px 8px; text-align: left; vertical-align: top; }
+            th { background: #f3f4f6; font-weight: 700; }
+            img { max-width: 100%; }
+            .flex { display: flex; }
+            .items-center { align-items: center; }
+            .justify-between { justify-content: space-between; }
+            .gap-2 { gap: 8px; }
+            .gap-3 { gap: 12px; }
+            .grid { display: grid; }
+            .grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+            .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .col-span-2 { grid-column: span 2 / span 2; }
+            .border { border: 1px solid #9ca3af; }
+            .border-b { border-bottom: 1px solid #d1d5db; }
+            .border-b-2 { border-bottom: 2px solid #000; }
+            .border-t-2 { border-top: 2px solid #000; }
+            .rounded { border-radius: 4px; }
+            .rounded-lg { border-radius: 8px; }
+            .rounded-full { border-radius: 9999px; }
+            .p-2 { padding: 8px; }
+            .p-2\\.5 { padding: 10px; }
+            .p-3 { padding: 12px; }
+            .pb-2 { padding-bottom: 8px; }
+            .pb-3 { padding-bottom: 12px; }
+            .pt-3 { padding-top: 12px; }
+            .mt-2 { margin-top: 8px; }
+            .mt-3 { margin-top: 12px; }
+            .mt-4 { margin-top: 16px; }
+            .mt-6 { margin-top: 24px; }
+            .bg-white { background-color: #ffffff; }
+            .bg-gray-50 { background-color: #f9fafb; }
+            .bg-gray-100 { background-color: #f3f4f6; }
+            .bg-black { background-color: #000000; }
+            .text-white { color: #ffffff; }
+            .text-gray-600 { color: #4b5563; }
+            .text-gray-700 { color: #374151; }
+            .text-gray-800 { color: #1f2937; }
+            .text-gray-900 { color: #111827; }
+            .font-bold { font-weight: 700; }
+            .font-extrabold { font-weight: 800; }
+            .text-xs { font-size: 12px; }
+            .text-sm { font-size: 14px; }
+            .text-lg { font-size: 18px; }
+            .text-base { font-size: 16px; }
+            .text-right { text-align: right; }
+            .text-center { text-align: center; }
+            .uppercase { text-transform: uppercase; }
+            .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+          </style>
+        </head>
+        <body>
+          ${printElem.innerHTML}
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    setTimeout(() => {
+      printFrame.contentWindow?.focus();
+      printFrame.contentWindow?.print();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(printFrame);
+        } catch (_) {}
+      }, 2000);
+    }, 300);
   };
 
   return (

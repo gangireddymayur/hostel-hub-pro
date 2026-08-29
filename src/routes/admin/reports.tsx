@@ -357,9 +357,9 @@ function Reports() {
     toast.success(`Exported ${filteredLeaves.length} records to CSV`);
   };
 
-  // Printable PDF Handler (Uses isolated iframe to guarantee no blank pages or modal collision)
+  // Printable PDF Handler (Directly prints the exact visual cards displayed on screen)
   const handlePrintPdf = () => {
-    const printElem = document.getElementById("printable-audit-report");
+    const printElem = document.getElementById("dialog-print-cards");
     if (!printElem) {
       window.print();
       return;
@@ -380,70 +380,90 @@ function Reports() {
       return;
     }
 
+    // Capture all stylesheets and fonts from main application
+    const styleSheets = Array.from(document.querySelectorAll("link[rel='stylesheet'], style"))
+      .map((node) => node.outerHTML)
+      .join("\n");
+
+    const headerHtml = `
+      <div style="border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <img src="/gatex-logo.jpg" alt="Logo" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #cbd5e1;" />
+          <div>
+            <h1 style="font-size: 16px; font-weight: 800; text-transform: uppercase; color: #0f172a; margin: 0; line-height: 1.2;">Hostel GATEX Management System</h1>
+            <h2 style="font-size: 12px; font-weight: 600; color: #475569; margin: 0;">${reportTitle}</h2>
+          </div>
+        </div>
+        <div style="text-align: right; font-size: 11px; color: #64748b; line-height: 1.3;">
+          <p style="margin: 0;"><strong>Date Range:</strong> ${fromDate} to ${toDate}</p>
+          <p style="margin: 0;"><strong>Total Requests:</strong> ${filteredLeaves.length}</p>
+        </div>
+      </div>
+    `;
+
     doc.open();
     doc.write(`
       <!DOCTYPE html>
       <html>
         <head>
           <title>${reportTitle} - Hostel GATEX</title>
+          ${styleSheets}
           <style>
-            @page { size: A4 portrait; margin: 10mm 12mm 10mm 12mm; }
-            * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #fff; color: #000; padding: 8px; font-size: 12px; }
-            .page-break-avoid { break-inside: avoid; page-break-inside: avoid; margin-bottom: 14px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 10px; }
-            th, td { border: 1px solid #9ca3af; padding: 6px 8px; text-align: left; vertical-align: top; }
-            th { background: #f3f4f6; font-weight: 700; }
-            img { max-width: 100%; }
-            .flex { display: flex; }
-            .items-center { align-items: center; }
-            .justify-between { justify-content: space-between; }
-            .gap-2 { gap: 8px; }
-            .gap-3 { gap: 12px; }
-            .grid { display: grid; }
-            .grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-            .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-            .col-span-2 { grid-column: span 2 / span 2; }
-            .border { border: 1px solid #9ca3af; }
-            .border-b { border-bottom: 1px solid #d1d5db; }
-            .border-b-2 { border-bottom: 2px solid #000; }
-            .border-t-2 { border-top: 2px solid #000; }
-            .rounded { border-radius: 4px; }
-            .rounded-lg { border-radius: 8px; }
-            .rounded-full { border-radius: 9999px; }
-            .p-2 { padding: 8px; }
-            .p-2\\.5 { padding: 10px; }
-            .p-3 { padding: 12px; }
-            .pb-2 { padding-bottom: 8px; }
-            .pb-3 { padding-bottom: 12px; }
-            .pt-3 { padding-top: 12px; }
-            .mt-2 { margin-top: 8px; }
-            .mt-3 { margin-top: 12px; }
-            .mt-4 { margin-top: 16px; }
-            .mt-6 { margin-top: 24px; }
-            .bg-white { background-color: #ffffff; }
-            .bg-gray-50 { background-color: #f9fafb; }
-            .bg-gray-100 { background-color: #f3f4f6; }
-            .bg-black { background-color: #000000; }
-            .text-white { color: #ffffff; }
-            .text-gray-600 { color: #4b5563; }
-            .text-gray-700 { color: #374151; }
-            .text-gray-800 { color: #1f2937; }
-            .text-gray-900 { color: #111827; }
-            .font-bold { font-weight: 700; }
-            .font-extrabold { font-weight: 800; }
-            .text-xs { font-size: 12px; }
-            .text-sm { font-size: 14px; }
-            .text-lg { font-size: 18px; }
-            .text-base { font-size: 16px; }
-            .text-right { text-align: right; }
-            .text-center { text-align: center; }
-            .uppercase { text-transform: uppercase; }
-            .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+            @page {
+              size: A4 portrait;
+              margin: 8mm 10mm 8mm 10mm;
+            }
+            *, *::before, *::after {
+              box-sizing: border-box !important;
+            }
+            html, body {
+              background: #ffffff !important;
+              color: #0f172a !important;
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+              font-size: 11px !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              width: 100% !important;
+            }
+            /* Remove dialog max-height and scrollbars for printing */
+            #dialog-print-cards {
+              max-height: none !important;
+              overflow: visible !important;
+              padding: 0 !important;
+              display: block !important;
+            }
+            /* Keep each request card intact without awkward page breaks */
+            #dialog-print-cards > div {
+              break-inside: avoid !important;
+              page-break-inside: avoid !important;
+              margin-bottom: 14px !important;
+              background: #ffffff !important;
+              border: 1px solid #e2e8f0 !important;
+              border-radius: 12px !important;
+              padding: 14px !important;
+              box-shadow: none !important;
+            }
+            /* Ensure images never explode in size */
+            img.student-photo {
+              width: 36px !important;
+              height: 36px !important;
+              border-radius: 9999px !important;
+              object-fit: cover !important;
+            }
+            img.live-photo {
+              width: 100% !important;
+              height: 55px !important;
+              max-height: 55px !important;
+              border-radius: 6px !important;
+              object-fit: cover !important;
+            }
           </style>
         </head>
-        <body>
-          ${printElem.innerHTML}
+        <body style="padding: 10px;">
+          ${headerHtml}
+          <div id="dialog-print-cards">
+            ${printElem.innerHTML}
+          </div>
         </body>
       </html>
     `);
@@ -457,7 +477,7 @@ function Reports() {
           document.body.removeChild(printFrame);
         } catch (_) {}
       }, 2000);
-    }, 300);
+    }, 400);
   };
 
   return (
@@ -922,8 +942,8 @@ function Reports() {
             </div>
           </div>
 
-          {/* Scrollable Records & Timeline List */}
-          <div className="max-h-[55vh] space-y-4 overflow-y-auto p-6">
+          {/* Scrollable Records & Timeline List (Printed directly in PDF with identical styling) */}
+          <div id="dialog-print-cards" className="max-h-[55vh] space-y-4 overflow-y-auto p-6">
             {filteredLeaves.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
                 <FileText className="h-10 w-10 text-muted-foreground/40" />
@@ -949,7 +969,7 @@ function Reports() {
                           <img
                             src={studentPhoto}
                             alt=""
-                            className="h-10 w-10 rounded-full border border-primary/20 object-cover shadow-sm"
+                            className="student-photo h-10 w-10 rounded-full border border-primary/20 object-cover shadow-sm"
                           />
                         ) : (
                           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 font-bold text-primary">
@@ -1021,7 +1041,7 @@ function Reports() {
                       <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                         Movement &amp; Verification Audit Trail
                       </span>
-                      <div className="mt-2 grid gap-2 sm:grid-cols-5">
+                      <div className="mt-2 grid gap-2 grid-cols-5">
                         {/* Step 1: Student Request */}
                         <div className="rounded-lg border border-border/80 bg-muted/20 p-2.5">
                           <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
@@ -1029,7 +1049,7 @@ function Reports() {
                             Student Request
                           </div>
                           <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
-                            <div>Submitted: {leave.created_at ? new Date(leave.created_at).toLocaleString() : "—"}</div>
+                            <div>Submitted: {leave.created_at ? new Date(leave.created_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "—"}</div>
                             {(leave as any).student_lat != null && (leave as any).student_lng != null ? (
                               <a
                                 href={`https://maps.google.com/?q=${(leave as any).student_lat},${(leave as any).student_lng}`}
@@ -1049,10 +1069,10 @@ function Reports() {
                         {/* Step 2: Parent Verification */}
                         <div className={`rounded-lg border p-2.5 ${
                           leave.parent_status === "APPROVED"
-                            ? "border-emerald-500/30 bg-emerald-500/5"
+                            ? "border-emerald-500/30 bg-emerald-50/50"
                             : leave.parent_status === "REJECTED"
-                            ? "border-rose-500/30 bg-rose-500/5"
-                            : "border-amber-500/30 bg-amber-500/5"
+                            ? "border-rose-500/30 bg-rose-50/50"
+                            : "border-amber-500/30 bg-amber-50/50"
                         }`}>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
@@ -1086,7 +1106,7 @@ function Reports() {
                                 <img
                                   src={parentPhoto}
                                   alt="Parent Live Verification"
-                                  className="mt-1 h-14 w-full cursor-pointer rounded border border-border object-cover transition hover:opacity-90 shadow-sm"
+                                  className="live-photo mt-1 h-14 w-full cursor-pointer rounded border border-border object-cover transition hover:opacity-90 shadow-sm"
                                   onClick={() => setZoomedPhoto({ url: parentPhoto, title: `Parent Verification Photo - ${leave.student?.name}` })}
                                 />
                               </div>
@@ -1102,10 +1122,10 @@ function Reports() {
                         {/* Step 3: Warden / Hostel Admin Approval */}
                         <div className={`rounded-lg border p-2.5 ${
                           leave.hostel_status === "APPROVED"
-                            ? "border-emerald-500/30 bg-emerald-500/5"
+                            ? "border-emerald-500/30 bg-emerald-50/50"
                             : leave.hostel_status === "REJECTED"
-                            ? "border-rose-500/30 bg-rose-500/5"
-                            : "border-amber-500/30 bg-amber-500/5"
+                            ? "border-rose-500/30 bg-rose-50/50"
+                            : "border-amber-500/30 bg-amber-50/50"
                         }`}>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
@@ -1238,249 +1258,6 @@ function Reports() {
           </DialogContent>
         </Dialog>
       )}
-
-      {/* DEDICATED OFFICIAL PRINTABLE PDF DOCUMENT (Rendered ONLY in window.print()) */}
-      <div id="printable-audit-report" className="hidden font-sans text-black">
-        {/* Official Header */}
-        <div className="border-b-2 border-black pb-3 page-break-avoid">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <img src="/gatex-logo.jpg" alt="Logo" className="h-12 w-12 rounded object-cover border border-gray-300" />
-              <div>
-                <h1 className="text-lg font-extrabold uppercase tracking-wide">Hostel GATEX Management System</h1>
-                <h2 className="text-sm font-bold text-gray-800">{reportTitle}</h2>
-              </div>
-            </div>
-            <div className="text-right text-[11px] text-gray-700 leading-tight">
-              <p><strong>Generated:</strong> {new Date().toLocaleString()}</p>
-              <p><strong>Date Filter:</strong> {fromDate} to {toDate}</p>
-              <p><strong>Total Requests:</strong> {filteredLeaves.length}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Selected Student Profile Banner (if Single Student mode) */}
-        {selectedStudentObj && (
-          <div className="mt-3 flex items-center gap-3 rounded-lg border border-gray-400 bg-gray-50 p-2.5 page-break-avoid">
-            {selectedStudentObj.profile_photo ? (
-              <img src={selectedStudentObj.profile_photo as string} alt="" className="h-14 w-14 rounded-full border border-gray-400 object-cover" />
-            ) : (
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-200 font-bold text-gray-700">
-                {selectedStudentObj.name?.slice(0, 2).toUpperCase() || "ST"}
-              </div>
-            )}
-            <div className="text-xs leading-relaxed">
-              <h3 className="text-sm font-extrabold text-gray-900">{selectedStudentObj.name}</h3>
-              <p>Roll No: <strong>{selectedStudentObj.student_id}</strong> &nbsp;|&nbsp; {formatRoom(selectedStudentObj.room_number)} &nbsp;|&nbsp; Year: <strong>{selectedStudentObj.student_year || "—"}</strong></p>
-              <p>Student Mobile: <strong>{selectedStudentObj.mobile}</strong> &nbsp;|&nbsp; Parent Mobile: <strong>{selectedStudentObj.parent_mobile}</strong></p>
-            </div>
-          </div>
-        )}
-
-        {/* Summary Statistics Box */}
-        <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs page-break-avoid">
-          <div className="rounded border border-gray-300 bg-gray-100 p-2">
-            <span className="text-gray-600 font-medium">Total Requests</span>
-            <p className="text-base font-bold text-gray-900">{counts.total}</p>
-          </div>
-          <div className="rounded border border-gray-300 bg-gray-100 p-2">
-            <span className="text-gray-600 font-medium">Returned to Hostel</span>
-            <p className="text-base font-bold text-teal-800">{counts.returned}</p>
-          </div>
-          <div className="rounded border border-gray-300 bg-gray-100 p-2">
-            <span className="text-gray-600 font-medium">Currently Outside</span>
-            <p className="text-base font-bold text-blue-800">{counts.out}</p>
-          </div>
-          <div className="rounded border border-gray-300 bg-gray-100 p-2">
-            <span className="text-gray-600 font-medium">Rejected / Cancelled</span>
-            <p className="text-base font-bold text-red-800">{counts.rejected}</p>
-          </div>
-        </div>
-
-        {/* Complete List of ALL Requests (Rendered as beautiful high-fidelity cards across pages) */}
-        <div className="mt-4 space-y-4">
-          {filteredLeaves.map((leave, index) => {
-            const parentPhoto = (leave as any).parent_approval_photo || (leave as any).parent_profile_photo;
-            const studentPhoto = leave.student?.profile_photo;
-            const isOut = leave.gatePass?.status === "OUT" || (leave.gatePass?.out_time_actual && !leave.gatePass?.in_time_actual);
-            const isReturned = Boolean(leave.gatePass?.in_time_actual || leave.gatePass?.status === "RETURNED" || leave.final_status === "RETURNED");
-
-            return (
-              <div
-                key={leave.id || index}
-                className="rounded-xl border border-gray-300 p-3.5 page-break-avoid text-xs bg-white shadow-sm"
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-gray-200 pb-2.5">
-                  <div className="flex items-center gap-3">
-                    {studentPhoto ? (
-                      <img src={studentPhoto} alt="" className="h-9 w-9 rounded-full border border-gray-300 object-cover" />
-                    ) : (
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-800 text-xs">
-                        {leave.student?.name?.slice(0, 2).toUpperCase() || "ST"}
-                      </div>
-                    )}
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-extrabold text-sm text-gray-900">{leave.student?.name || "Student"}</span>
-                        <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-gray-300 text-gray-700 bg-gray-50">
-                          {leave.student?.student_id || leave.student_id}
-                        </span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 font-medium text-gray-700">
-                          {formatRoom(leave.student?.room_number)}
-                        </span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200">
-                          Request #{index + 1}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-gray-600 mt-0.5">
-                        Hostel: {leave.student?.hostel_name || "Primary"} | Mobile: {leave.student?.mobile || "—"} | Parent: {leave.student?.parent_mobile || "—"}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    <span className={`rounded px-2.5 py-1 font-extrabold uppercase border text-[11px] ${
-                      isReturned
-                        ? "bg-teal-50 text-teal-800 border-teal-600"
-                        : isOut
-                        ? "bg-blue-50 text-blue-800 border-blue-600"
-                        : leave.final_status === "APPROVED"
-                        ? "bg-green-50 text-green-800 border-green-600"
-                        : leave.final_status === "REJECTED"
-                        ? "bg-red-50 text-red-800 border-red-600"
-                        : "bg-yellow-50 text-yellow-800 border-yellow-600"
-                    }`}>
-                      {isReturned ? "RETURNED" : isOut ? "CURRENTLY OUT" : leave.final_status}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Reason & Timing Info */}
-                <div className="mt-2.5 grid grid-cols-3 gap-2 bg-gray-50 p-2.5 rounded-lg border border-gray-200">
-                  <div className="col-span-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Reason / Destination</span>
-                    <p className="font-semibold text-gray-900 mt-0.5">{leave.reason || "No reason specified"}</p>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Scheduled Window</span>
-                    <p className="font-semibold text-gray-900 mt-0.5">{leave.from_date?.slice(0, 10)} ➔ {leave.to_date?.slice(0, 10)}</p>
-                  </div>
-                </div>
-
-                {/* 5-Step Visual Movement Audit Grid */}
-                <div className="mt-3">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                    Movement &amp; Verification Audit Trail
-                  </span>
-                  <div className="mt-1.5 grid grid-cols-5 gap-2">
-                    {/* Step 1: Student Request */}
-                    <div className="rounded-lg border border-gray-300 bg-gray-50/50 p-2 text-xs">
-                      <div className="flex items-center gap-1 font-bold text-gray-900 text-[10px]">
-                        <span className="h-3.5 w-3.5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[8px]">1</span>
-                        Student Request
-                      </div>
-                      <div className="mt-1 space-y-0.5 text-[10px] text-gray-600">
-                        <p>Time: {leave.created_at ? new Date(leave.created_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "—"}</p>
-                        {(leave as any).student_lat != null ? (
-                          <p className="text-blue-700 font-medium">GPS: {Number((leave as any).student_lat).toFixed(3)}, {Number((leave as any).student_lng).toFixed(3)}</p>
-                        ) : (
-                          <p className="italic text-gray-400">No GPS</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Step 2: Parent Verification */}
-                    <div className="rounded-lg border border-emerald-300 bg-emerald-50/40 p-2 text-xs">
-                      <div className="flex items-center justify-between font-bold text-[10px]">
-                        <div className="flex items-center gap-1 text-gray-900">
-                          <span className="h-3.5 w-3.5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[8px]">2</span>
-                          Parent
-                        </div>
-                        <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold">
-                          {leave.parent_status || "PENDING"}
-                        </span>
-                      </div>
-                      <div className="mt-1 text-[10px] text-gray-600">
-                        {(leave as any).parent_lat != null ? (
-                          <p className="text-emerald-700 font-medium">GPS: {Number((leave as any).parent_lat).toFixed(3)}, {Number((leave as any).parent_lng).toFixed(3)}</p>
-                        ) : (
-                          <p className="text-emerald-700">GPS Verified</p>
-                        )}
-                        {parentPhoto ? (
-                          <div className="mt-1">
-                            <span className="font-semibold text-[9px] text-gray-800">Live Photo:</span>
-                            <img src={parentPhoto} alt="Parent live selfie" className="h-14 w-full rounded border border-gray-400 object-cover mt-0.5" />
-                          </div>
-                        ) : (
-                          <p className="italic text-gray-400 mt-0.5">No photo uploaded</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Step 3: Warden Review */}
-                    <div className="rounded-lg border border-emerald-300 bg-emerald-50/40 p-2 text-xs">
-                      <div className="flex items-center justify-between font-bold text-[10px]">
-                        <div className="flex items-center gap-1 text-gray-900">
-                          <span className="h-3.5 w-3.5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[8px]">3</span>
-                          Warden
-                        </div>
-                        <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold">
-                          {leave.hostel_status || "PENDING"}
-                        </span>
-                      </div>
-                      <div className="mt-1 text-[10px] text-gray-600 space-y-0.5">
-                        <p className="text-emerald-700 font-medium">Warden GPS Verified</p>
-                        {(leave as any).note && <p className="italic text-gray-800">Note: {String((leave as any).note)}</p>}
-                      </div>
-                    </div>
-
-                    {/* Step 4: Gate Exit */}
-                    <div className="rounded-lg border border-gray-300 bg-gray-50/50 p-2 text-xs">
-                      <div className="flex items-center justify-between font-bold text-[10px]">
-                        <div className="flex items-center gap-1 text-gray-900">
-                          <span className="h-3.5 w-3.5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[8px]">4</span>
-                          Gate Exit
-                        </div>
-                        <span className="text-[9px] px-1 py-0.2 rounded bg-blue-100 text-blue-800 font-bold">
-                          {leave.gatePass?.out_time_actual ? "SCANNED OUT" : "PENDING"}
-                        </span>
-                      </div>
-                      <div className="mt-1 text-[10px] text-gray-600 space-y-0.5">
-                        <p>Time: {leave.gatePass?.out_time_actual ? new Date(leave.gatePass.out_time_actual).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</p>
-                        {(leave as any).gatePass?.out_guard_lat != null && <p className="text-blue-700">Gate GPS Logged</p>}
-                      </div>
-                    </div>
-
-                    {/* Step 5: Gate Return */}
-                    <div className="rounded-lg border border-teal-300 bg-teal-50/40 p-2 text-xs">
-                      <div className="flex items-center justify-between font-bold text-[10px]">
-                        <div className="flex items-center gap-1 text-gray-900">
-                          <span className="h-3.5 w-3.5 rounded-full bg-teal-600 text-white flex items-center justify-center text-[8px]">5</span>
-                          Gate Return
-                        </div>
-                        <span className="text-[9px] px-1 py-0.2 rounded bg-teal-100 text-teal-800 font-bold">
-                          {leave.gatePass?.in_time_actual ? "RETURNED" : isOut ? "OUTSIDE" : "PENDING"}
-                        </span>
-                      </div>
-                      <div className="mt-1 text-[10px] text-gray-600 space-y-0.5">
-                        <p>Time: {leave.gatePass?.in_time_actual ? new Date(leave.gatePass.in_time_actual).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</p>
-                        {(leave as any).gatePass?.in_guard_lat != null && <p className="text-teal-700">Return GPS Logged</p>}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Official Footer */}
-        <div className="mt-6 border-t-2 border-black pt-3 text-center text-xs text-gray-600 page-break-avoid">
-          <p className="font-bold">Hostel GATEX Automated Movement Audit &amp; Verification System</p>
-          <p>This is an officially certified electronic movement log.</p>
-        </div>
-      </div>
     </>
   );
 }
@@ -1495,3 +1272,4 @@ function Stat({ label, value }: { label: string; value: number }) {
     </Card>
   );
 }
+

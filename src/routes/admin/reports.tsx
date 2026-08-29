@@ -418,21 +418,13 @@ function Reports() {
                 Filter by date range or individual student to generate an official PDF dossier with complete 5-step movement audit, parent live photos, and GPS geo-points.
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2">
               <Button
-                variant="outline"
-                className="gap-2 border-primary/30 hover:bg-primary/10"
-                onClick={() => openCustomReport("student")}
-              >
-                <User className="h-4 w-4 text-primary" />
-                Student Dossier
-              </Button>
-              <Button
-                className="gap-2 bg-primary text-primary-foreground shadow hover:bg-primary/90"
+                className="gap-2 bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 px-5"
                 onClick={() => openCustomReport("general")}
               >
-                <FileText className="h-4 w-4" />
-                Generate Audit PDF
+                <Printer className="h-4 w-4" />
+                Generate Audit PDF Report
               </Button>
             </div>
           </CardContent>

@@ -262,6 +262,20 @@ export async function uploadParentPhoto(studentId: string, file: File) {
   });
 }
 
+export interface BulkPhotoItem {
+  student_id: string;
+  type: "STUDENT" | "PARENT";
+  photo_base64: string;
+  filename: string;
+}
+
+export async function bulkUploadPhotos(photos: BulkPhotoItem[]) {
+  return request<{ data: { updated: number; total: number; errors: Array<{ filename: string; student_id: string; reason: string }> } }>("/hostel-admin/students/photos/bulk", {
+    method: "POST",
+    body: { photos },
+  });
+}
+
 export async function getHostelStaff() {
   return request<{ data: Array<Record<string, unknown> & { id: string; role: string; name: string; email: string; created_at: string; profile_photo?: string | null }> }>("/hostel-admin/staff");
 }

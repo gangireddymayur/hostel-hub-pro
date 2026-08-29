@@ -2942,6 +2942,84 @@ async function handleUploadParentPhoto(req, res, studentId, data) {
   }
 }
 
+async function handleBulkUploadPhotos(req, res, payload) {
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN", "HOSTEL_STAFF", "SUPER_ADMIN"]);
+  if (!user) return;
+  const items = Array.isArray(payload.photos) ? payload.photos : [];
+  if (items.length === 0) {
+    return sendJson(res, 400, { error: "No photos provided" });
+  }
+
+  const allowedHostelIds = getAccessibleHostelIds(user);
+  let updated = 0;
+  const errors = [];
+
+  for (const item of items) {
+    const studentIdRaw = String(item.student_id || "").trim();
+    const type = String(item.type || "STUDENT").toUpperCase();
+    const photoBase64 = String(item.photo_base64 || "").trim();
+    const filename = String(item.filename || "").trim();
+
+    if (!studentIdRaw || !photoBase64) {
+      errors.push({ filename, student_id: studentIdRaw, reason: "Missing student ID or photo content" });
+      continue;
+    }
+
+    const student = db.students.find(
+      (s) => (user.role === "SUPER_ADMIN" || allowedHostelIds.includes(s.hostel_id)) &&
+             String(s.student_id || "").toLowerCase() === studentIdRaw.toLowerCase()
+    );
+
+    if (!student) {
+      errors.push({ filename, student_id: studentIdRaw, reason: `Student with Roll Number '${studentIdRaw}' not found in your hostel` });
+      continue;
+    }
+
+    try {
+      if (type === "STUDENT") {
+        student.profile_photo = photoBase64;
+        addAudit("UPDATE", "STUDENT_PHOTO", student.id, user, {
+          profile_photo: photoBase64,
+          student_id: student.student_id,
+          source: "BULK_UPLOAD",
+          filename
+        });
+        updated += 1;
+      } else if (type === "PARENT") {
+        student.parent_profile_photo = photoBase64;
+        const targetMob = cleanMobileDigits(student.parent_mobile);
+        let parent = db.parents.find((p) => cleanMobileDigits(p.mobile) === targetMob);
+        if (!parent) {
+          parent = {
+            id: uuid("parent"),
+            hostel_id: student.hostel_id,
+            mobile: student.parent_mobile,
+            password_hash: hashPassword("Parent@12345"),
+            status: "ACTIVE",
+            profile_photo: photoBase64,
+            created_at: nowIso(),
+          };
+          db.parents.push(parent);
+        } else {
+          parent.profile_photo = photoBase64;
+        }
+        addAudit("UPDATE", "PARENT_PHOTO", parent.id, user, {
+          profile_photo: photoBase64,
+          student_id: student.student_id,
+          source: "BULK_UPLOAD",
+          filename
+        });
+        updated += 1;
+      }
+    } catch (err) {
+      errors.push({ filename, student_id: studentIdRaw, reason: err.message });
+    }
+  }
+
+  await persist();
+  return sendJson(res, 200, { data: { updated, total: items.length, errors } });
+}
+
 async function handleUploadStaffPhoto(req, res, staffId, data) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
@@ -3927,6 +4005,11 @@ async function handleApi(req, res, pathname) {
     if (pathname === "/api/hostel-admin/students/import" && req.method === "POST") {
       const data = await readRequestData(req);
       return handleImportStudents(req, res, data);
+    }
+
+    if (pathname === "/api/hostel-admin/students/photos/bulk" && req.method === "POST") {
+      const data = await readRequestData(req);
+      return handleBulkUploadPhotos(req, res, data.kind === "json" ? data.value : {});
     }
 
     match = pathname.match(/^\/api\/hostel-admin\/students\/([^/]+)\/photo$/);

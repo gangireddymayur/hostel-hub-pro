@@ -1297,7 +1297,7 @@ function Reports() {
           </div>
         </div>
 
-        {/* Complete List of ALL Requests (Printed one by one across pages) */}
+        {/* Complete List of ALL Requests (Rendered as beautiful high-fidelity cards across pages) */}
         <div className="mt-4 space-y-4">
           {filteredLeaves.map((leave, index) => {
             const parentPhoto = (leave as any).parent_approval_photo || (leave as any).parent_profile_photo;
@@ -1308,21 +1308,37 @@ function Reports() {
             return (
               <div
                 key={leave.id || index}
-                className="rounded-lg border border-gray-400 p-3 page-break-avoid text-xs bg-white"
+                className="rounded-xl border border-gray-300 p-3.5 page-break-avoid text-xs bg-white shadow-sm"
               >
                 {/* Header */}
-                <div className="flex items-center justify-between border-b border-gray-300 pb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded bg-black text-white px-2 py-0.5 font-bold text-[10px]">
-                      REQUEST #{index + 1} OF {filteredLeaves.length}
-                    </span>
-                    {studentPhoto && (
-                      <img src={studentPhoto} alt="" className="h-7 w-7 rounded-full border object-cover" />
+                <div className="flex items-center justify-between border-b border-gray-200 pb-2.5">
+                  <div className="flex items-center gap-3">
+                    {studentPhoto ? (
+                      <img src={studentPhoto} alt="" className="h-9 w-9 rounded-full border border-gray-300 object-cover" />
+                    ) : (
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-800 text-xs">
+                        {leave.student?.name?.slice(0, 2).toUpperCase() || "ST"}
+                      </div>
                     )}
-                    <span className="font-bold text-sm text-gray-900">{leave.student?.name || "Student"}</span>
-                    <span className="font-mono text-gray-700">({leave.student?.student_id || leave.student_id})</span>
-                    <span className="text-gray-600">{formatRoom(leave.student?.room_number)}</span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-sm text-gray-900">{leave.student?.name || "Student"}</span>
+                        <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-gray-300 text-gray-700 bg-gray-50">
+                          {leave.student?.student_id || leave.student_id}
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 font-medium text-gray-700">
+                          {formatRoom(leave.student?.room_number)}
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200">
+                          Request #{index + 1}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-gray-600 mt-0.5">
+                        Hostel: {leave.student?.hostel_name || "Primary"} | Mobile: {leave.student?.mobile || "—"} | Parent: {leave.student?.parent_mobile || "—"}
+                      </div>
+                    </div>
                   </div>
+
                   <div className="text-right">
                     <span className={`rounded px-2.5 py-1 font-extrabold uppercase border text-[11px] ${
                       isReturned
@@ -1341,77 +1357,119 @@ function Reports() {
                 </div>
 
                 {/* Reason & Timing Info */}
-                <div className="mt-2 grid grid-cols-3 gap-2 bg-gray-50 p-2 rounded border border-gray-200">
+                <div className="mt-2.5 grid grid-cols-3 gap-2 bg-gray-50 p-2.5 rounded-lg border border-gray-200">
                   <div className="col-span-2">
-                    <p><strong>Reason / Destination:</strong> {leave.reason || "N/A"}</p>
-                    <p><strong>Scheduled Window:</strong> {leave.from_date} ➔ {leave.to_date}</p>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Reason / Destination</span>
+                    <p className="font-semibold text-gray-900 mt-0.5">{leave.reason || "No reason specified"}</p>
                   </div>
-                  <div className="text-right">
-                    <p><strong>Student Mobile:</strong> {leave.student?.mobile || "—"}</p>
-                    <p><strong>Parent Mobile:</strong> {leave.student?.parent_mobile || "—"}</p>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Scheduled Window</span>
+                    <p className="font-semibold text-gray-900 mt-0.5">{leave.from_date?.slice(0, 10)} ➔ {leave.to_date?.slice(0, 10)}</p>
                   </div>
                 </div>
 
-                {/* 5-Step Timeline Audit Table */}
-                <table className="mt-2 w-full border-collapse border border-gray-300 text-[10px]">
-                  <thead>
-                    <tr className="bg-gray-100 font-bold">
-                      <th className="border border-gray-300 p-1 text-left">1. Student Request</th>
-                      <th className="border border-gray-300 p-1 text-left">2. Parent Verification</th>
-                      <th className="border border-gray-300 p-1 text-left">3. Warden Approval</th>
-                      <th className="border border-gray-300 p-1 text-left">4. Gate Exit</th>
-                      <th className="border border-gray-300 p-1 text-left">5. Gate Return</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      {/* Step 1 */}
-                      <td className="border border-gray-300 p-1.5 align-top">
-                        <p><strong>Submitted:</strong></p>
-                        <p>{leave.created_at ? new Date(leave.created_at).toLocaleString() : "—"}</p>
-                        {(leave as any).student_lat != null && (
-                          <p className="text-gray-600 mt-1">GPS: {Number((leave as any).student_lat).toFixed(3)}, {Number((leave as any).student_lng).toFixed(3)}</p>
+                {/* 5-Step Visual Movement Audit Grid */}
+                <div className="mt-3">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                    Movement &amp; Verification Audit Trail
+                  </span>
+                  <div className="mt-1.5 grid grid-cols-5 gap-2">
+                    {/* Step 1: Student Request */}
+                    <div className="rounded-lg border border-gray-300 bg-gray-50/50 p-2 text-xs">
+                      <div className="flex items-center gap-1 font-bold text-gray-900 text-[10px]">
+                        <span className="h-3.5 w-3.5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[8px]">1</span>
+                        Student Request
+                      </div>
+                      <div className="mt-1 space-y-0.5 text-[10px] text-gray-600">
+                        <p>Time: {leave.created_at ? new Date(leave.created_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "—"}</p>
+                        {(leave as any).student_lat != null ? (
+                          <p className="text-blue-700 font-medium">GPS: {Number((leave as any).student_lat).toFixed(3)}, {Number((leave as any).student_lng).toFixed(3)}</p>
+                        ) : (
+                          <p className="italic text-gray-400">No GPS</p>
                         )}
-                      </td>
-                      {/* Step 2 */}
-                      <td className="border border-gray-300 p-1.5 align-top">
-                        <p><strong>Status:</strong> {leave.parent_status || "PENDING"}</p>
-                        {(leave as any).parent_lat != null && (
-                          <p className="text-gray-600">GPS: {Number((leave as any).parent_lat).toFixed(3)}, {Number((leave as any).parent_lng).toFixed(3)}</p>
+                      </div>
+                    </div>
+
+                    {/* Step 2: Parent Verification */}
+                    <div className="rounded-lg border border-emerald-300 bg-emerald-50/40 p-2 text-xs">
+                      <div className="flex items-center justify-between font-bold text-[10px]">
+                        <div className="flex items-center gap-1 text-gray-900">
+                          <span className="h-3.5 w-3.5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[8px]">2</span>
+                          Parent
+                        </div>
+                        <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold">
+                          {leave.parent_status || "PENDING"}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-[10px] text-gray-600">
+                        {(leave as any).parent_lat != null ? (
+                          <p className="text-emerald-700 font-medium">GPS: {Number((leave as any).parent_lat).toFixed(3)}, {Number((leave as any).parent_lng).toFixed(3)}</p>
+                        ) : (
+                          <p className="text-emerald-700">GPS Verified</p>
                         )}
                         {parentPhoto ? (
                           <div className="mt-1">
-                            <p className="font-semibold text-[9px] text-gray-700">Live Photo:</p>
-                            <img src={parentPhoto} alt="Parent live selfie" className="h-14 w-14 rounded border border-gray-400 object-cover mt-0.5" />
+                            <span className="font-semibold text-[9px] text-gray-800">Live Photo:</span>
+                            <img src={parentPhoto} alt="Parent live selfie" className="h-14 w-full rounded border border-gray-400 object-cover mt-0.5" />
                           </div>
                         ) : (
-                          <p className="italic text-gray-500 mt-1">No photo</p>
+                          <p className="italic text-gray-400 mt-0.5">No photo uploaded</p>
                         )}
-                      </td>
-                      {/* Step 3 */}
-                      <td className="border border-gray-300 p-1.5 align-top">
-                        <p><strong>Status:</strong> {leave.hostel_status || "PENDING"}</p>
-                        {(leave as any).hostel_lat != null && (
-                          <p className="text-gray-600">Warden GPS verified</p>
-                        )}
-                        {(leave as any).note && <p className="italic mt-1 text-gray-700">Note: {String((leave as any).note)}</p>}
-                      </td>
-                      {/* Step 4 */}
-                      <td className="border border-gray-300 p-1.5 align-top">
-                        <p><strong>Status:</strong> {leave.gatePass?.out_time_actual ? "Scanned Out" : "Pending"}</p>
-                        <p>{leave.gatePass?.out_time_actual ? new Date(leave.gatePass.out_time_actual).toLocaleTimeString() : "—"}</p>
-                        {(leave as any).gatePass?.out_guard_lat != null && (
-                          <p className="text-gray-600">Gate GPS recorded</p>
-                        )}
-                      </td>
-                      {/* Step 5 */}
-                      <td className="border border-gray-300 p-1.5 align-top">
-                        <p><strong>Status:</strong> {leave.gatePass?.in_time_actual ? "Returned" : isOut ? "Currently Out" : "Pending"}</p>
-                        <p>{leave.gatePass?.in_time_actual ? new Date(leave.gatePass.in_time_actual).toLocaleTimeString() : "—"}</p>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                      </div>
+                    </div>
+
+                    {/* Step 3: Warden Review */}
+                    <div className="rounded-lg border border-emerald-300 bg-emerald-50/40 p-2 text-xs">
+                      <div className="flex items-center justify-between font-bold text-[10px]">
+                        <div className="flex items-center gap-1 text-gray-900">
+                          <span className="h-3.5 w-3.5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[8px]">3</span>
+                          Warden
+                        </div>
+                        <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 font-bold">
+                          {leave.hostel_status || "PENDING"}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-[10px] text-gray-600 space-y-0.5">
+                        <p className="text-emerald-700 font-medium">Warden GPS Verified</p>
+                        {(leave as any).note && <p className="italic text-gray-800">Note: {String((leave as any).note)}</p>}
+                      </div>
+                    </div>
+
+                    {/* Step 4: Gate Exit */}
+                    <div className="rounded-lg border border-gray-300 bg-gray-50/50 p-2 text-xs">
+                      <div className="flex items-center justify-between font-bold text-[10px]">
+                        <div className="flex items-center gap-1 text-gray-900">
+                          <span className="h-3.5 w-3.5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[8px]">4</span>
+                          Gate Exit
+                        </div>
+                        <span className="text-[9px] px-1 py-0.2 rounded bg-blue-100 text-blue-800 font-bold">
+                          {leave.gatePass?.out_time_actual ? "SCANNED OUT" : "PENDING"}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-[10px] text-gray-600 space-y-0.5">
+                        <p>Time: {leave.gatePass?.out_time_actual ? new Date(leave.gatePass.out_time_actual).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</p>
+                        {(leave as any).gatePass?.out_guard_lat != null && <p className="text-blue-700">Gate GPS Logged</p>}
+                      </div>
+                    </div>
+
+                    {/* Step 5: Gate Return */}
+                    <div className="rounded-lg border border-teal-300 bg-teal-50/40 p-2 text-xs">
+                      <div className="flex items-center justify-between font-bold text-[10px]">
+                        <div className="flex items-center gap-1 text-gray-900">
+                          <span className="h-3.5 w-3.5 rounded-full bg-teal-600 text-white flex items-center justify-center text-[8px]">5</span>
+                          Gate Return
+                        </div>
+                        <span className="text-[9px] px-1 py-0.2 rounded bg-teal-100 text-teal-800 font-bold">
+                          {leave.gatePass?.in_time_actual ? "RETURNED" : isOut ? "OUTSIDE" : "PENDING"}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-[10px] text-gray-600 space-y-0.5">
+                        <p>Time: {leave.gatePass?.in_time_actual ? new Date(leave.gatePass.in_time_actual).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</p>
+                        {(leave as any).gatePass?.in_guard_lat != null && <p className="text-teal-700">Return GPS Logged</p>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             );
           })}

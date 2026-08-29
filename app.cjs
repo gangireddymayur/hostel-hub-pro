@@ -3420,7 +3420,6 @@ function handleGetStudentLeaveRequests(req, res) {
   const student = db.students.find((s) => s.id === user.id);
   if (!student) return sendJson(res, 404, { error: "Student not found" });
 
-  const parentPhoto = findRegisteredParentPhoto(student);
   const leaves = db.leaveRequests
     .filter((leave) => leave.student_id === student.id)
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -3428,12 +3427,11 @@ function handleGetStudentLeaveRequests(req, res) {
       const hostel = findHostelById(student.hostel_id);
       return {
         ...leave,
-        parent_approval_photo: leave.parent_approval_photo ?? null,
-        parent_profile_photo: parentPhoto,
+        parent_approval_photo: null,
+        parent_profile_photo: null,
         student: {
           ...student,
-          profile_photo: student.profile_photo ?? null,
-          parent_profile_photo: parentPhoto,
+          parent_profile_photo: null,
           hostel_name: hostel ? hostel.hostel_name : "",
         },
         gatePass: gatePassByLeaveId(leave.id) ?? null,
@@ -3448,60 +3446,54 @@ async function handleGetParentRequests(req, res) {
   if (!user) return;
 
   const parentMobile = String(user.email ?? "").trim();
-  const cleanParentMob = cleanMobileDigits(parentMobile);
 
   if (dbPool) {
     try {
       const [rows] = await dbPool.query(
-        `SELECT lr.*, s.name as student_name, s.room_number, s.student_id as student_code, s.mobile as student_mobile, s.parent_mobile, s.hostel_id, s.profile_photo as student_profile_photo, h.hostel_name
+        `SELECT lr.*, s.name as student_name, s.room_number, s.student_id as student_code, s.mobile as student_mobile, s.parent_mobile, s.hostel_id, h.hostel_name
          FROM leave_requests lr
          JOIN students s ON lr.student_id = s.id
          LEFT JOIN hostels h ON s.hostel_id = h.id
-         WHERE s.parent_mobile = ? OR RIGHT(REGEXP_REPLACE(s.parent_mobile, '[^0-9]', ''), 10) = ?
+         WHERE s.parent_mobile = ?
          ORDER BY lr.created_at DESC`,
-        [parentMobile, cleanParentMob || parentMobile]
+        [parentMobile]
       );
-      const leaves = rows.map((row) => {
-        const dummyStudent = { parent_mobile: row.parent_mobile };
-        const parentPhoto = findRegisteredParentPhoto(dummyStudent);
-        return {
-          id: String(row.id),
-          hostel_id: String(row.hostel_id ?? ""),
-          student_id: String(row.student_id ?? ""),
-          reason: String(row.reason ?? ""),
-          from_date: normalizeDateTime(row.from_date),
-          to_date: normalizeDateTime(row.to_date),
-          out_time: normalizeDateTime(row.out_time),
-          return_time: normalizeDateTime(row.return_time),
-          parent_status: String(row.parent_status ?? "PENDING"),
-          hostel_status: String(row.hostel_status ?? "PENDING"),
-          final_status: String(row.final_status ?? "PENDING"),
-          request_type: String(row.request_type ?? "LEAVE"),
-          note: row.note ?? null,
-          parent_reject_reason: row.parent_reject_reason ? String(row.parent_reject_reason) : null,
-          hostel_reject_reason: row.hostel_reject_reason ? String(row.hostel_reject_reason) : null,
-          student_lat: row.student_lat != null ? Number(row.student_lat) : null,
-          student_lng: row.student_lng != null ? Number(row.student_lng) : null,
-          parent_lat: row.parent_lat != null ? Number(row.parent_lat) : null,
-          parent_lng: row.parent_lng != null ? Number(row.parent_lng) : null,
-          hostel_lat: row.hostel_lat != null ? Number(row.hostel_lat) : null,
-          hostel_lng: row.hostel_lng != null ? Number(row.hostel_lng) : null,
-          parent_approval_photo: row.parent_approval_photo ?? null,
-          parent_profile_photo: parentPhoto,
-          student: {
-            id: String(row.student_id),
-            name: String(row.student_name),
-            room_number: String(row.room_number),
-            student_id: String(row.student_code),
-            mobile: String(row.student_mobile),
-            parent_mobile: String(row.parent_mobile),
-            profile_photo: row.student_profile_photo ?? null,
-            hostel_name: String(row.hostel_name ?? ""),
-            parent_profile_photo: parentPhoto,
-          },
-          gatePass: gatePassByLeaveId(String(row.id)) ?? null,
-        };
-      });
+      const leaves = rows.map((row) => ({
+        id: String(row.id),
+        hostel_id: String(row.hostel_id ?? ""),
+        student_id: String(row.student_id ?? ""),
+        reason: String(row.reason ?? ""),
+        from_date: normalizeDateTime(row.from_date),
+        to_date: normalizeDateTime(row.to_date),
+        out_time: normalizeDateTime(row.out_time),
+        return_time: normalizeDateTime(row.return_time),
+        parent_status: String(row.parent_status ?? "PENDING"),
+        hostel_status: String(row.hostel_status ?? "PENDING"),
+        final_status: String(row.final_status ?? "PENDING"),
+        request_type: String(row.request_type ?? "LEAVE"),
+        note: row.note ?? null,
+        parent_reject_reason: row.parent_reject_reason ? String(row.parent_reject_reason) : null,
+        hostel_reject_reason: row.hostel_reject_reason ? String(row.hostel_reject_reason) : null,
+        student_lat: row.student_lat != null ? Number(row.student_lat) : null,
+        student_lng: row.student_lng != null ? Number(row.student_lng) : null,
+        parent_lat: row.parent_lat != null ? Number(row.parent_lat) : null,
+        parent_lng: row.parent_lng != null ? Number(row.parent_lng) : null,
+        hostel_lat: row.hostel_lat != null ? Number(row.hostel_lat) : null,
+        hostel_lng: row.hostel_lng != null ? Number(row.hostel_lng) : null,
+        parent_approval_photo: null,
+        parent_profile_photo: null,
+        student: {
+          id: String(row.student_id),
+          name: String(row.student_name),
+          room_number: String(row.room_number),
+          student_id: String(row.student_code),
+          mobile: String(row.student_mobile),
+          parent_mobile: String(row.parent_mobile),
+          hostel_name: String(row.hostel_name ?? ""),
+          parent_profile_photo: null,
+        },
+        gatePass: gatePassByLeaveId(String(row.id)) ?? null,
+      }));
       return sendJson(res, 200, { data: leaves });
     } catch (err) {
       console.error("Error fetching parent requests from dbPool:", err.message);
@@ -3510,7 +3502,7 @@ async function handleGetParentRequests(req, res) {
 
   const studentIds = new Set(
     db.students
-      .filter((s) => s.parent_mobile.trim() === parentMobile || (cleanParentMob && cleanMobileDigits(s.parent_mobile) === cleanParentMob))
+      .filter((s) => s.parent_mobile.trim() === parentMobile)
       .map((s) => s.id)
   );
 
@@ -3519,21 +3511,19 @@ async function handleGetParentRequests(req, res) {
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .map((leave) => {
       const student = db.students.find((s) => s.id === leave.student_id);
-      const parentPhoto = student ? findRegisteredParentPhoto(student) : null;
       let studentWithHostel = null;
       if (student) {
         const hostel = findHostelById(student.hostel_id);
         studentWithHostel = {
           ...student,
-          profile_photo: student.profile_photo ?? null,
-          parent_profile_photo: parentPhoto,
+          parent_profile_photo: null,
           hostel_name: hostel ? hostel.hostel_name : "",
         };
       }
       return {
         ...leave,
-        parent_approval_photo: leave.parent_approval_photo ?? null,
-        parent_profile_photo: parentPhoto,
+        parent_approval_photo: null,
+        parent_profile_photo: null,
         student: studentWithHostel,
         gatePass: gatePassByLeaveId(leave.id) ?? null,
       };
@@ -3625,15 +3615,14 @@ function handleGuardToday(req, res) {
     .filter((leave) => studentIds.has(leave.student_id))
     .map((leave) => {
       const student = db.students.find((s) => s.id === leave.student_id);
-      const parentPhoto = student ? findRegisteredParentPhoto(student) : null;
       return {
         ...leave,
-        parent_approval_photo: leave.parent_approval_photo ?? null,
-        parent_profile_photo: parentPhoto,
+        parent_approval_photo: null,
+        parent_profile_photo: null,
         student: student ? { 
           ...student, 
-          profile_photo: student.profile_photo ?? null,
-          parent_profile_photo: parentPhoto,
+          profile_photo: null,
+          parent_profile_photo: null,
           hostel_name: (db.hostels.find((h) => h.id === student.hostel_id)?.hostel_name ?? '') 
         } : null,
         gatePass: gatePassByLeaveId(leave.id) ?? null,

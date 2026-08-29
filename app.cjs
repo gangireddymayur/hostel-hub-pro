@@ -2782,6 +2782,67 @@ async function handleDeleteStudent(req, res, studentId) {
   }
 }
 
+async function handleBulkDeleteStudents(req, res, body) {
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
+  if (!user) return;
+  try {
+    const studentIds = Array.isArray(body?.studentIds) ? body.studentIds : [];
+    if (studentIds.length === 0) {
+      return sendJson(res, 400, { error: "No student IDs provided for bulk deletion" });
+    }
+
+    const allowedHostelIds = getAccessibleHostelIds(user);
+    const idSet = new Set(studentIds);
+
+    // Identify target students that user has permission to delete
+    const targetStudents = db.students.filter(
+      (s) => idSet.has(s.id) && allowedHostelIds.includes(s.hostel_id)
+    );
+
+    if (targetStudents.length === 0) {
+      return sendJson(res, 404, { error: "No matching authorized students found to delete" });
+    }
+
+    const validStudentIds = new Set(targetStudents.map((s) => s.id));
+    const targetLeaveRequests = db.leaveRequests.filter((l) => validStudentIds.has(l.student_id));
+    const targetLeaveIds = new Set(targetLeaveRequests.map((l) => l.id));
+
+    // Delete associated gate passes, leave requests, and students
+    db.gatePasses = db.gatePasses.filter((gp) => !targetLeaveIds.has(gp.leave_request_id));
+    db.leaveRequests = db.leaveRequests.filter((l) => !validStudentIds.has(l.student_id));
+    db.students = db.students.filter((s) => !validStudentIds.has(s.id));
+
+    // Clean up unshared parent records
+    for (const student of targetStudents) {
+      const parentMobile = student.parent_mobile;
+      const parentMobileShared = db.students.some(
+        (s) => s.hostel_id === student.hostel_id && s.parent_mobile === parentMobile
+      );
+      if (!parentMobileShared) {
+        db.parents = db.parents.filter(
+          (p) => !(p.hostel_id === student.hostel_id && p.mobile === parentMobile)
+        );
+      }
+    }
+
+    // Clean up tokens
+    db.refreshTokens = db.refreshTokens.filter((token) => !validStudentIds.has(token.userId));
+
+    addAudit("DELETE", "STUDENTS_BULK", `${validStudentIds.size}_students`, user, {
+      count: validStudentIds.size,
+      student_ids: targetStudents.map((s) => s.student_id),
+    });
+
+    await persist();
+    return sendJson(res, 200, {
+      message: `Successfully deleted ${validStudentIds.size} student(s)`,
+      deletedCount: validStudentIds.size,
+    });
+  } catch (error) {
+    return sendJson(res, 500, { error: error.message });
+  }
+}
+
 async function handleDeleteStaff(req, res, staffId) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
@@ -4077,6 +4138,11 @@ async function handleApi(req, res, pathname) {
     if (pathname === "/api/hostel-admin/students/photos/bulk" && req.method === "POST") {
       const data = await readRequestData(req);
       return handleBulkUploadPhotos(req, res, data.kind === "json" ? data.value : {});
+    }
+
+    if (pathname === "/api/hostel-admin/students/bulk-delete" && req.method === "POST") {
+      const data = await readRequestData(req);
+      return handleBulkDeleteStudents(req, res, data.kind === "json" ? data.value : {});
     }
 
     match = pathname.match(/^\/api\/hostel-admin\/students\/([^/]+)\/photo$/);

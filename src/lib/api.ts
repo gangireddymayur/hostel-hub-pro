@@ -235,6 +235,13 @@ export async function deleteStudent(studentId: string) {
   });
 }
 
+export async function bulkDeleteStudents(studentIds: string[]) {
+  return request<{ message: string; deletedCount: number }>("/hostel-admin/students/bulk-delete", {
+    method: "POST",
+    body: { studentIds },
+  });
+}
+
 export async function importStudents(file: File) {
   const formData = new FormData();
   formData.append("file", file);

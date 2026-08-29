@@ -4178,13 +4178,17 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (pathname.startsWith("/assets/")) {
-      const relative = pathname.replace(/^\/assets\//, "");
-      const filePath = path.resolve(CLIENT_ASSETS_DIR, relative);
-      if (filePath.startsWith(CLIENT_ASSETS_DIR) && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-        serveStaticFile(res, filePath);
-        return;
-      }
+    // Serve static client assets (both in /assets/ and in the root of dist/client or public)
+    const clientFilePath = path.resolve(CLIENT_DIR, pathname.replace(/^\/+/, ""));
+    if (clientFilePath.startsWith(CLIENT_DIR) && fs.existsSync(clientFilePath) && fs.statSync(clientFilePath).isFile()) {
+      serveStaticFile(res, clientFilePath);
+      return;
+    }
+
+    const publicFilePath = path.resolve(ROOT, "public", pathname.replace(/^\/+/, ""));
+    if (publicFilePath.startsWith(path.resolve(ROOT, "public")) && fs.existsSync(publicFilePath) && fs.statSync(publicFilePath).isFile()) {
+      serveStaticFile(res, publicFilePath);
+      return;
     }
 
     if (fs.existsSync(path.join(ROOT, "dist", "server", "server.mjs"))) {

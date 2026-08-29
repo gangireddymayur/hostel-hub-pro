@@ -52,11 +52,11 @@ export function AppSidebar({ role }: { role: Role }) {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border">
-        <div className="flex items-center gap-2 px-2 py-2">
+        <div className="flex items-center gap-2.5 px-2 py-2">
           <img
             src="/gatex-logo.jpg"
-            alt="Hostel GATEX"
-            className="h-9 w-auto rounded-md object-contain shadow group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:object-cover"
+            alt="Logo"
+            className="h-8 w-8 rounded-lg object-cover shadow-sm group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8"
           />
           <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
             <span className="truncate font-semibold tracking-wide">Hostel GATEX</span>

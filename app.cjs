@@ -3425,13 +3425,15 @@ function handleGetStudentLeaveRequests(req, res) {
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .map((leave) => {
       const hostel = findHostelById(student.hostel_id);
+      const parentPhoto = findRegisteredParentPhoto(student);
       return {
         ...leave,
-        parent_approval_photo: null,
-        parent_profile_photo: null,
+        parent_approval_photo: leave.parent_approval_photo ?? null,
+        parent_profile_photo: parentPhoto,
         student: {
           ...student,
-          parent_profile_photo: null,
+          profile_photo: student.profile_photo ?? null,
+          parent_profile_photo: parentPhoto,
           hostel_name: hostel ? hostel.hostel_name : "",
         },
         gatePass: gatePassByLeaveId(leave.id) ?? null,
@@ -3446,17 +3448,19 @@ async function handleGetParentRequests(req, res) {
   if (!user) return;
 
   const parentMobile = String(user.email ?? "").trim();
+  const cleanParentMob = cleanMobileDigits(parentMobile);
 
   if (dbPool) {
     try {
       const [rows] = await dbPool.query(
-        `SELECT lr.*, s.name as student_name, s.room_number, s.student_id as student_code, s.mobile as student_mobile, s.parent_mobile, s.hostel_id, h.hostel_name
+        `SELECT lr.*, s.name as student_name, s.room_number, s.student_id as student_code, s.mobile as student_mobile, s.parent_mobile, s.profile_photo as student_photo, s.hostel_id, h.hostel_name, p.profile_photo as parent_photo
          FROM leave_requests lr
          JOIN students s ON lr.student_id = s.id
          LEFT JOIN hostels h ON s.hostel_id = h.id
-         WHERE s.parent_mobile = ?
+         LEFT JOIN parents p ON p.mobile = s.parent_mobile
+         WHERE s.parent_mobile = ? OR RIGHT(REGEXP_REPLACE(s.parent_mobile, '[^0-9]', ''), 10) = ?
          ORDER BY lr.created_at DESC`,
-        [parentMobile]
+        [parentMobile, cleanParentMob || parentMobile]
       );
       const leaves = rows.map((row) => ({
         id: String(row.id),
@@ -3480,8 +3484,8 @@ async function handleGetParentRequests(req, res) {
         parent_lng: row.parent_lng != null ? Number(row.parent_lng) : null,
         hostel_lat: row.hostel_lat != null ? Number(row.hostel_lat) : null,
         hostel_lng: row.hostel_lng != null ? Number(row.hostel_lng) : null,
-        parent_approval_photo: null,
-        parent_profile_photo: null,
+        parent_approval_photo: row.parent_approval_photo ?? null,
+        parent_profile_photo: row.parent_photo ?? null,
         student: {
           id: String(row.student_id),
           name: String(row.student_name),
@@ -3489,8 +3493,9 @@ async function handleGetParentRequests(req, res) {
           student_id: String(row.student_code),
           mobile: String(row.student_mobile),
           parent_mobile: String(row.parent_mobile),
+          profile_photo: row.student_photo ?? null,
           hostel_name: String(row.hostel_name ?? ""),
-          parent_profile_photo: null,
+          parent_profile_photo: row.parent_photo ?? null,
         },
         gatePass: gatePassByLeaveId(String(row.id)) ?? null,
       }));
@@ -3502,7 +3507,7 @@ async function handleGetParentRequests(req, res) {
 
   const studentIds = new Set(
     db.students
-      .filter((s) => s.parent_mobile.trim() === parentMobile)
+      .filter((s) => s.parent_mobile.trim() === parentMobile || (cleanParentMob && cleanMobileDigits(s.parent_mobile) === cleanParentMob))
       .map((s) => s.id)
   );
 
@@ -3511,19 +3516,21 @@ async function handleGetParentRequests(req, res) {
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .map((leave) => {
       const student = db.students.find((s) => s.id === leave.student_id);
+      const parentPhoto = student ? findRegisteredParentPhoto(student) : null;
       let studentWithHostel = null;
       if (student) {
         const hostel = findHostelById(student.hostel_id);
         studentWithHostel = {
           ...student,
-          parent_profile_photo: null,
+          profile_photo: student.profile_photo ?? null,
+          parent_profile_photo: parentPhoto,
           hostel_name: hostel ? hostel.hostel_name : "",
         };
       }
       return {
         ...leave,
-        parent_approval_photo: null,
-        parent_profile_photo: null,
+        parent_approval_photo: leave.parent_approval_photo ?? null,
+        parent_profile_photo: parentPhoto,
         student: studentWithHostel,
         gatePass: gatePassByLeaveId(leave.id) ?? null,
       };

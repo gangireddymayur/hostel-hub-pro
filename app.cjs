@@ -3615,14 +3615,15 @@ function handleGuardToday(req, res) {
     .filter((leave) => studentIds.has(leave.student_id))
     .map((leave) => {
       const student = db.students.find((s) => s.id === leave.student_id);
+      const parentPhoto = student ? findRegisteredParentPhoto(student) : null;
       return {
         ...leave,
-        parent_approval_photo: null,
-        parent_profile_photo: null,
+        parent_approval_photo: leave.parent_approval_photo ?? null,
+        parent_profile_photo: parentPhoto,
         student: student ? { 
           ...student, 
-          profile_photo: null,
-          parent_profile_photo: null,
+          profile_photo: student.profile_photo ?? null,
+          parent_profile_photo: parentPhoto,
           hostel_name: (db.hostels.find((h) => h.id === student.hostel_id)?.hostel_name ?? '') 
         } : null,
         gatePass: gatePassByLeaveId(leave.id) ?? null,

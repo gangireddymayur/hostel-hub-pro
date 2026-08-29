@@ -1660,14 +1660,17 @@ function parseCsvLine(line) {
 }
 
 function parseCsv(text) {
-  const lines = String(text)
+  const cleanText = String(text ?? "").replace(/^\uFEFF/, "");
+  const lines = cleanText
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
 
   if (lines.length === 0) return [];
 
-  const headers = parseCsvLine(lines[0]).map((header) => header.toLowerCase().replace(/\s+/g, "_"));
+  const headers = parseCsvLine(lines[0]).map((header) =>
+    header.toLowerCase().replace(/["']/g, "").replace(/[\s\-_]+/g, "_").trim()
+  );
   return lines.slice(1).map((line) => {
     const values = parseCsvLine(line);
     const row = {};
@@ -2209,10 +2212,11 @@ async function handleLogin(req, res, body) {
   }
 
   // 3. Try Student (by student_id or mobile)
+  const cleanId = cleanMobileDigits(identifier);
   if (dbPool) {
     const [rows] = await dbPool.query(
-      "SELECT * FROM students WHERE student_id = ? OR mobile = ? LIMIT 1",
-      [identifier, identifier]
+      "SELECT * FROM students WHERE LOWER(student_id) = LOWER(?) OR mobile = ? OR RIGHT(REGEXP_REPLACE(mobile, '[^0-9]', ''), 10) = ? LIMIT 1",
+      [identifier, identifier, cleanId || identifier]
     );
     if (rows[0] && verifyPassword(password, String(rows[0].password_hash))) {
       user = {
@@ -2223,12 +2227,18 @@ async function handleLogin(req, res, body) {
         email: String(rows[0].mobile),
         passwordHash: String(rows[0].password_hash),
         status: String(rows[0].status),
+        profile_photo: rows[0].profile_photo ?? null,
         tokenVersion: 0,
         created_at: nowIso(),
       };
     }
   } else {
-    const student = db.students.find((s) => s.student_id === identifier || s.mobile === identifier);
+    const student = db.students.find(
+      (s) =>
+        (s.student_id && s.student_id.toLowerCase() === identifier.toLowerCase()) ||
+        s.mobile === identifier ||
+        (cleanId && cleanMobileDigits(s.mobile) === cleanId)
+    );
     if (student && verifyPassword(password, student.password_hash)) {
       user = {
         id: student.id,
@@ -2238,6 +2248,7 @@ async function handleLogin(req, res, body) {
         email: student.mobile,
         passwordHash: student.password_hash,
         status: student.status,
+        profile_photo: student.profile_photo ?? null,
         tokenVersion: 0,
         created_at: student.created_at,
       };
@@ -2254,8 +2265,8 @@ async function handleLogin(req, res, body) {
   // 4. Try Parent (by mobile)
   if (dbPool) {
     const [rows] = await dbPool.query(
-      "SELECT * FROM parents WHERE mobile = ? ORDER BY created_at ASC",
-      [identifier]
+      "SELECT * FROM parents WHERE mobile = ? OR RIGHT(REGEXP_REPLACE(mobile, '[^0-9]', ''), 10) = ? ORDER BY created_at ASC",
+      [identifier, cleanId || identifier]
     );
     const parentRow = rows.find((r) => verifyPassword(password, String(r.password_hash)));
     if (parentRow) {
@@ -2273,7 +2284,9 @@ async function handleLogin(req, res, body) {
       };
     }
   } else {
-    const parentList = db.parents.filter((p) => p.mobile === identifier);
+    const parentList = db.parents.filter(
+      (p) => p.mobile === identifier || (cleanId && cleanMobileDigits(p.mobile) === cleanId)
+    );
     const parent = parentList.find((p) => verifyPassword(password, p.password_hash));
     if (parent) {
       user = {
@@ -2545,7 +2558,7 @@ function handleHostelDashboard(req, res) {
 }
 
 function cleanMobileDigits(mob) {
-  return String(mob ?? "").replace(/\D/g, "").slice(-10);
+  return String(mob ?? "").replace(/\.0+$/, "").replace(/\D/g, "").slice(-10);
 }
 
 function findRegisteredParentPhoto(student) {
@@ -2783,8 +2796,8 @@ async function handleImportStudents(req, res, data) {
       const rawMobile = String(row.mobile || row.student_mobile || row.phone || "").trim();
       const rawParentMobile = String(row.parent_mobile || row.parentmobile || row.parent_phone || "").trim();
 
-      const cleanMobile = rawMobile.replace(/\D/g, "");
-      const cleanParentMobile = rawParentMobile.replace(/\D/g, "");
+      const cleanMobile = cleanMobileDigits(rawMobile);
+      const cleanParentMobile = cleanMobileDigits(rawParentMobile);
 
       const rawYear = row.student_year || row.studentyear || row.year || row.class || row.student_class || null;
       const mapped = {
@@ -2793,7 +2806,7 @@ async function handleImportStudents(req, res, data) {
         room_number: String(row.room_number || row.roomno || row.room || "").trim(),
         mobile: cleanMobile.length === 10 ? cleanMobile : rawMobile,
         parent_mobile: cleanParentMobile.length === 10 ? cleanParentMobile : rawParentMobile,
-        password: row.password || row.password_hash || "Student@12345",
+        password: row.student_password || row.password || row.password_hash || "Student@12345",
         parent_password: row.parent_password || row.parentpassword || "Parent@12345",
         hostel_id: resolvedHostelId,
         student_year: normalizeStudentYear(rawYear),
@@ -2823,12 +2836,12 @@ async function handleImportStudents(req, res, data) {
           existingStudent.parent_mobile = mapped.parent_mobile;
           existingStudent.student_year = mapped.student_year;
           
-          if (row.password) {
-            existingStudent.password_hash = hashPassword(row.password);
+          if (mapped.password) {
+            existingStudent.password_hash = hashPassword(mapped.password);
           }
 
           // Parent creation / updates
-          let parentRow = db.parents.find((p) => p.hostel_id === resolvedHostelId && p.mobile === mapped.parent_mobile);
+          let parentRow = db.parents.find((p) => p.hostel_id === resolvedHostelId && cleanMobileDigits(p.mobile) === cleanMobileDigits(mapped.parent_mobile));
           if (!parentRow) {
             parentRow = {
               id: uuid("parent"),
@@ -2838,8 +2851,8 @@ async function handleImportStudents(req, res, data) {
               created_at: nowIso(),
             };
             db.parents.push(parentRow);
-          } else if (row.parent_password) {
-            parentRow.password_hash = hashPassword(row.parent_password);
+          } else if (mapped.parent_password) {
+            parentRow.password_hash = hashPassword(mapped.parent_password);
           }
 
           // Clean up old parent mobile if no longer shared

@@ -62,14 +62,17 @@ function parseCsvLine(line: string): string[] {
 }
 
 function parseCsv(text: string): Record<string, string>[] {
-  const lines = String(text)
+  const cleanText = String(text).replace(/^\uFEFF/, ""); // Strip UTF-8 Byte Order Mark (BOM)
+  const lines = cleanText
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
 
   if (lines.length === 0) return [];
 
-  const headers = parseCsvLine(lines[0]).map((header) => header.toLowerCase().replace(/\s+/g, "_"));
+  const headers = parseCsvLine(lines[0]).map((header) =>
+    header.toLowerCase().replace(/["']/g, "").replace(/[\s\-_]+/g, "_").trim()
+  );
   return lines.slice(1).map((line) => {
     const values = parseCsvLine(line);
     const row: Record<string, string> = {};
@@ -118,7 +121,7 @@ function ImportPage() {
     onError: (error) => toast.error(error instanceof Error ? error.message : "Import failed"),
   });
 
-  const validateRows = (rows: any[], existingStudents: any[], hostelsList: any[]) => {
+  const validateRows = (rows: any[], existingStudents: any[] = [], hostelsList: any[] = []) => {
     const validated: ParsedRow[] = [];
     const seenIds = new Set<string>();
     const seenMobiles = new Set<string>();
@@ -207,36 +210,43 @@ function ImportPage() {
       }
 
       // 5. Existing Student check (Update/Overwrite vs Insert)
-      let matchesSameStudent = false;
       if (item.status !== "error" && studentId) {
-        const matchingStudent = existingStudents.find(s => s.student_id.toLowerCase() === studentId.toLowerCase());
+        const matchingStudent = (existingStudents || []).find(
+          (s) => s && s.student_id && String(s.student_id).toLowerCase() === studentId.toLowerCase()
+        );
         if (matchingStudent) {
           item.status = "warning";
           item.action = "update";
-          item.messages.push(`Matches existing student (${matchingStudent.name}); details will be overwritten`);
-          matchesSameStudent = true;
+          item.messages.push(`Matches existing student (${matchingStudent.name || 'Existing'}); details will be overwritten`);
         }
       }
 
       // 6. Student Mobile Duplicate Check against Database (Cross-student check)
       if (item.status !== "error" && cleanMobile) {
-        const studentWithSameMobile = existingStudents.find(s => s.mobile === cleanMobile);
+        const studentWithSameMobile = (existingStudents || []).find(
+          (s) => s && s.mobile && String(s.mobile) === cleanMobile
+        );
         if (studentWithSameMobile) {
-          if (studentWithSameMobile.student_id.toLowerCase() !== studentId.toLowerCase()) {
+          const existingId = String(studentWithSameMobile.student_id || "");
+          if (existingId.toLowerCase() !== studentId.toLowerCase()) {
             item.status = "error";
             item.action = "skip";
-            item.messages.push(`Mobile is already registered to student '${studentWithSameMobile.name}' (ID: ${studentWithSameMobile.student_id})`);
+            item.messages.push(
+              `Mobile is already registered to student '${studentWithSameMobile.name || 'Unknown'}' (ID: ${existingId})`
+            );
           }
         }
       }
 
       // 7. Hostel check
       if (item.status !== "error" && hostelName) {
-        const hostelMatches = hostelsList.some(h =>
-          h.hostel_name.toLowerCase() === hostelName.toLowerCase() ||
-          h.id === hostelName ||
-          h.email.toLowerCase() === hostelName.toLowerCase()
-        );
+        const hostelMatches = (hostelsList || []).some((h) => {
+          if (!h) return false;
+          const nameMatch = h.hostel_name ? String(h.hostel_name).toLowerCase() === hostelName.toLowerCase() : false;
+          const idMatch = h.id ? String(h.id) === hostelName : false;
+          const emailMatch = h.email ? String(h.email).toLowerCase() === hostelName.toLowerCase() : false;
+          return nameMatch || idMatch || emailMatch;
+        });
         if (!hostelMatches) {
           if (item.status === "valid") {
             item.status = "warning";
@@ -256,13 +266,20 @@ function ImportPage() {
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const text = event.target?.result as string;
+        const text = String(event.target?.result ?? "");
         const rawRows = parseCsv(text);
+        if (rawRows.length === 0) {
+          toast.error("CSV file is empty or has no data rows.");
+          setPreviewRows([]);
+          return;
+        }
         const validated = validateRows(rawRows, students, hostels);
         setPreviewRows(validated);
         toast.info(`Successfully parsed ${validated.length} rows. Please review below.`);
       } catch (err) {
-        toast.error("Failed to parse file. Please upload a valid CSV.");
+        console.error("CSV Parse / Validation Error:", err);
+        const errMsg = err instanceof Error ? err.message : "Failed to parse file. Please upload a valid CSV.";
+        toast.error(errMsg);
         setPreviewRows([]);
       }
     };

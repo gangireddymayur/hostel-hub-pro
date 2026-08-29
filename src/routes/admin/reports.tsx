@@ -58,7 +58,7 @@ type DatePreset = "today" | "yesterday" | "last7" | "thisMonth" | "last30" | "al
 type StatusFilter = "ALL" | "APPROVED" | "PENDING" | "REJECTED" | "OUT" | "RETURNED";
 type ScopeMode = "ALL" | "SINGLE";
 
-export default function Reports() {
+function Reports() {
   const reportsQuery = useQuery({ queryKey: ["hostel-reports"], queryFn: getHostelReports });
   const leavesQuery = useQuery({ queryKey: ["hostel-leaves"], queryFn: getLeaveRequests });
   const studentsQuery = useQuery({ queryKey: ["hostel-students"], queryFn: getHostelStudents });

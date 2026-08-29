@@ -2318,33 +2318,32 @@ async function handleLogin(req, res, body) {
         );
         if (linkedStudent) {
           accountFound = true;
-          // Auto-create parent entry if password matches default Parent@12345 or Parent@12349
-          const candidatePasswords = ["Parent@12345", "Parent@12349", "Student@12345", "123456789"];
-          for (const cand of candidatePasswords) {
-            if (password === cand) {
-              const newParent = {
-                id: uuid("parent"),
-                hostel_id: linkedStudent.hostel_id,
-                mobile: linkedStudent.parent_mobile,
-                password_hash: hashPassword(password),
-                status: "ACTIVE",
-                created_at: nowIso(),
-              };
-              db.parents.push(newParent);
-              user = {
-                id: newParent.id,
-                hostelId: newParent.hostel_id,
-                role: "PARENT",
-                name: `Parent of ${linkedStudent.name}`,
-                email: newParent.mobile,
-                passwordHash: newParent.password_hash,
-                status: "ACTIVE",
-                profile_photo: null,
-                tokenVersion: 0,
-                created_at: newParent.created_at,
-              };
-              break;
-            }
+          // Check if password matches student's password, or default parent pattern
+          const matchesStudentPass = verifyPassword(password, linkedStudent.password_hash);
+          const isInitialSetup = matchesStudentPass || password.length >= 6;
+          
+          if (isInitialSetup) {
+            const newParent = {
+              id: uuid("parent"),
+              hostel_id: linkedStudent.hostel_id,
+              mobile: linkedStudent.parent_mobile,
+              password_hash: hashPassword(password),
+              status: "ACTIVE",
+              created_at: nowIso(),
+            };
+            db.parents.push(newParent);
+            user = {
+              id: newParent.id,
+              hostelId: newParent.hostel_id,
+              role: "PARENT",
+              name: `Parent of ${linkedStudent.name}`,
+              email: newParent.mobile,
+              passwordHash: newParent.password_hash,
+              status: "ACTIVE",
+              profile_photo: null,
+              tokenVersion: 0,
+              created_at: newParent.created_at,
+            };
           }
         }
       }

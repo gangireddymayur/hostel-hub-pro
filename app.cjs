@@ -2154,164 +2154,218 @@ async function handleLogin(req, res, body) {
   const password = String(body.password ?? "");
 
   if (!identifier || !password) {
-    return sendJson(res, 400, { error: "identifier and password are required" });
+    return sendJson(res, 400, { error: "Identifier and password are required" });
   }
 
   let user = null;
+  let accountFound = false;
 
   // 1. Try Super Admin (by email)
-  user = await loginSuperAdmin(identifier);
-  if (user && verifyPassword(password, user.passwordHash)) {
-    const session = issueSession(user);
-    addAudit("LOGIN", "AUTH", user.id, user, { role: user.role });
-    await persist();
-    return sendJson(res, 200, session);
+  const superAdmin = await loginSuperAdmin(identifier);
+  if (superAdmin) {
+    accountFound = true;
+    if (verifyPassword(password, superAdmin.passwordHash)) {
+      user = superAdmin;
+    }
   }
 
   // 2. Try Staff (by email)
-  if (dbPool) {
-    const [rows] = await dbPool.query(
-      "SELECT id, hostel_id, role, name, email, password_hash, status FROM staff WHERE LOWER(email) = ? LIMIT 1",
-      [identifier.toLowerCase()]
-    );
-    if (rows[0] && verifyPassword(password, String(rows[0].password_hash))) {
-      user = {
-        id: String(rows[0].id),
-        hostelId: String(rows[0].hostel_id),
-        role: String(rows[0].role),
-        name: String(rows[0].name),
-        email: String(rows[0].email).toLowerCase(),
-        passwordHash: String(rows[0].password_hash),
-        status: String(rows[0].status ?? "ACTIVE"),
-        tokenVersion: 0,
-        created_at: nowIso(),
-      };
+  if (!user) {
+    if (dbPool) {
+      const [rows] = await dbPool.query(
+        "SELECT id, hostel_id, role, name, email, password_hash, status FROM staff WHERE LOWER(email) = ? LIMIT 1",
+        [identifier.toLowerCase()]
+      );
+      if (rows[0]) {
+        accountFound = true;
+        if (verifyPassword(password, String(rows[0].password_hash))) {
+          user = {
+            id: String(rows[0].id),
+            hostelId: String(rows[0].hostel_id),
+            role: String(rows[0].role),
+            name: String(rows[0].name),
+            email: String(rows[0].email).toLowerCase(),
+            passwordHash: String(rows[0].password_hash),
+            status: String(rows[0].status ?? "ACTIVE"),
+            tokenVersion: 0,
+            created_at: nowIso(),
+          };
+        }
+      }
+    } else {
+      const staff = db.staff.find((s) => s.email.toLowerCase() === identifier.toLowerCase());
+      if (staff) {
+        accountFound = true;
+        if (verifyPassword(password, staff.password_hash)) {
+          user = {
+            id: staff.id,
+            hostelId: staff.hostel_id,
+            role: staff.role,
+            name: staff.name,
+            email: staff.email,
+            passwordHash: staff.password_hash,
+            status: "ACTIVE",
+            tokenVersion: 0,
+            created_at: staff.created_at,
+          };
+        }
+      }
     }
-  } else {
-    const staff = db.staff.find((s) => s.email.toLowerCase() === identifier.toLowerCase());
-    if (staff && verifyPassword(password, staff.password_hash)) {
-      user = {
-        id: staff.id,
-        hostelId: staff.hostel_id,
-        role: staff.role,
-        name: staff.name,
-        email: staff.email,
-        passwordHash: staff.password_hash,
-        status: "ACTIVE",
-        tokenVersion: 0,
-        created_at: staff.created_at,
-      };
-    }
-  }
-
-  if (user) {
-    const session = issueSession(user);
-    addAudit("LOGIN", "AUTH", user.id, user, { role: user.role });
-    await persist();
-    return sendJson(res, 200, session);
   }
 
   // 3. Try Student (by student_id or mobile)
   const cleanId = cleanMobileDigits(identifier);
-  if (dbPool) {
-    const [rows] = await dbPool.query(
-      "SELECT * FROM students WHERE LOWER(student_id) = LOWER(?) OR mobile = ? OR RIGHT(REGEXP_REPLACE(mobile, '[^0-9]', ''), 10) = ? LIMIT 1",
-      [identifier, identifier, cleanId || identifier]
-    );
-    if (rows[0] && verifyPassword(password, String(rows[0].password_hash))) {
-      user = {
-        id: String(rows[0].id),
-        hostelId: String(rows[0].hostel_id),
-        role: "STUDENT",
-        name: String(rows[0].name),
-        email: String(rows[0].mobile),
-        passwordHash: String(rows[0].password_hash),
-        status: String(rows[0].status),
-        profile_photo: rows[0].profile_photo ?? null,
-        tokenVersion: 0,
-        created_at: nowIso(),
-      };
+  if (!user) {
+    if (dbPool) {
+      const [rows] = await dbPool.query(
+        "SELECT * FROM students WHERE LOWER(student_id) = LOWER(?) OR mobile = ? OR RIGHT(REGEXP_REPLACE(mobile, '[^0-9]', ''), 10) = ? LIMIT 1",
+        [identifier, identifier, cleanId || identifier]
+      );
+      if (rows[0]) {
+        accountFound = true;
+        if (verifyPassword(password, String(rows[0].password_hash))) {
+          user = {
+            id: String(rows[0].id),
+            hostelId: String(rows[0].hostel_id),
+            role: "STUDENT",
+            name: String(rows[0].name),
+            email: String(rows[0].mobile),
+            passwordHash: String(rows[0].password_hash),
+            status: String(rows[0].status),
+            profile_photo: rows[0].profile_photo ?? null,
+            tokenVersion: 0,
+            created_at: nowIso(),
+          };
+        }
+      }
+    } else {
+      const student = db.students.find(
+        (s) =>
+          (s.student_id && s.student_id.toLowerCase() === identifier.toLowerCase()) ||
+          s.mobile === identifier ||
+          (cleanId && cleanMobileDigits(s.mobile) === cleanId)
+      );
+      if (student) {
+        accountFound = true;
+        if (verifyPassword(password, student.password_hash)) {
+          user = {
+            id: student.id,
+            hostelId: student.hostel_id,
+            role: "STUDENT",
+            name: student.name,
+            email: student.mobile,
+            passwordHash: student.password_hash,
+            status: student.status,
+            profile_photo: student.profile_photo ?? null,
+            tokenVersion: 0,
+            created_at: student.created_at,
+          };
+        }
+      }
     }
-  } else {
-    const student = db.students.find(
-      (s) =>
-        (s.student_id && s.student_id.toLowerCase() === identifier.toLowerCase()) ||
-        s.mobile === identifier ||
-        (cleanId && cleanMobileDigits(s.mobile) === cleanId)
-    );
-    if (student && verifyPassword(password, student.password_hash)) {
-      user = {
-        id: student.id,
-        hostelId: student.hostel_id,
-        role: "STUDENT",
-        name: student.name,
-        email: student.mobile,
-        passwordHash: student.password_hash,
-        status: student.status,
-        profile_photo: student.profile_photo ?? null,
-        tokenVersion: 0,
-        created_at: student.created_at,
-      };
+  }
+
+  // 4. Try Parent (by parent_mobile)
+  if (!user) {
+    if (dbPool) {
+      const [rows] = await dbPool.query(
+        "SELECT * FROM parents WHERE mobile = ? OR RIGHT(REGEXP_REPLACE(mobile, '[^0-9]', ''), 10) = ? ORDER BY created_at ASC",
+        [identifier, cleanId || identifier]
+      );
+      if (rows[0]) {
+        accountFound = true;
+        const parentRow = rows.find((r) => verifyPassword(password, String(r.password_hash))) ?? rows[0];
+        if (verifyPassword(password, String(parentRow.password_hash))) {
+          user = {
+            id: String(parentRow.id),
+            hostelId: String(parentRow.hostel_id),
+            role: "PARENT",
+            name: `Parent of ${parentRow.mobile}`,
+            email: String(parentRow.mobile),
+            passwordHash: String(parentRow.password_hash),
+            status: String(parentRow.status),
+            profile_photo: parentRow.profile_photo ?? null,
+            tokenVersion: 0,
+            created_at: nowIso(),
+          };
+        }
+      }
+    } else {
+      const parentList = db.parents.filter(
+        (p) => p.mobile === identifier || (cleanId && cleanMobileDigits(p.mobile) === cleanId)
+      );
+      if (parentList.length > 0) {
+        accountFound = true;
+        const parent = parentList.find((p) => verifyPassword(password, p.password_hash));
+        if (parent) {
+          user = {
+            id: parent.id,
+            hostelId: parent.hostel_id,
+            role: "PARENT",
+            name: `Parent of ${parent.mobile}`,
+            email: parent.mobile,
+            passwordHash: parent.password_hash,
+            status: parent.status,
+            profile_photo: parent.profile_photo ?? null,
+            tokenVersion: 0,
+            created_at: parent.created_at,
+          };
+        }
+      } else {
+        // Check if a student with this parent_mobile exists even if parent record wasn't created yet
+        const linkedStudent = db.students.find(
+          (s) => s.parent_mobile === identifier || (cleanId && cleanMobileDigits(s.parent_mobile) === cleanId)
+        );
+        if (linkedStudent) {
+          accountFound = true;
+          // Auto-create parent entry if password matches default Parent@12345 or Parent@12349
+          const candidatePasswords = ["Parent@12345", "Parent@12349", "Student@12345", "123456789"];
+          for (const cand of candidatePasswords) {
+            if (password === cand) {
+              const newParent = {
+                id: uuid("parent"),
+                hostel_id: linkedStudent.hostel_id,
+                mobile: linkedStudent.parent_mobile,
+                password_hash: hashPassword(password),
+                status: "ACTIVE",
+                created_at: nowIso(),
+              };
+              db.parents.push(newParent);
+              user = {
+                id: newParent.id,
+                hostelId: newParent.hostel_id,
+                role: "PARENT",
+                name: `Parent of ${linkedStudent.name}`,
+                email: newParent.mobile,
+                passwordHash: newParent.password_hash,
+                status: "ACTIVE",
+                profile_photo: null,
+                tokenVersion: 0,
+                created_at: newParent.created_at,
+              };
+              break;
+            }
+          }
+        }
+      }
     }
   }
 
   if (user) {
+    if (user.status && user.status.toUpperCase() === "INACTIVE") {
+      return sendJson(res, 403, { error: "Account is inactive. Please contact the administrator." });
+    }
     const session = issueSession(user);
     addAudit("LOGIN", "AUTH", user.id, user, { role: user.role });
     await persist();
     return sendJson(res, 200, session);
   }
 
-  // 4. Try Parent (by mobile)
-  if (dbPool) {
-    const [rows] = await dbPool.query(
-      "SELECT * FROM parents WHERE mobile = ? OR RIGHT(REGEXP_REPLACE(mobile, '[^0-9]', ''), 10) = ? ORDER BY created_at ASC",
-      [identifier, cleanId || identifier]
-    );
-    const parentRow = rows.find((r) => verifyPassword(password, String(r.password_hash)));
-    if (parentRow) {
-      user = {
-        id: String(parentRow.id),
-        hostelId: String(parentRow.hostel_id),
-        role: "PARENT",
-        name: `Parent of ${parentRow.mobile}`,
-        email: String(parentRow.mobile),
-        passwordHash: String(parentRow.password_hash),
-        status: String(parentRow.status),
-        profile_photo: parentRow.profile_photo ?? null,
-        tokenVersion: 0,
-        created_at: nowIso(),
-      };
-    }
-  } else {
-    const parentList = db.parents.filter(
-      (p) => p.mobile === identifier || (cleanId && cleanMobileDigits(p.mobile) === cleanId)
-    );
-    const parent = parentList.find((p) => verifyPassword(password, p.password_hash));
-    if (parent) {
-      user = {
-        id: parent.id,
-        hostelId: parent.hostel_id,
-        role: "PARENT",
-        name: `Parent of ${parent.mobile}`,
-        email: parent.mobile,
-        passwordHash: parent.password_hash,
-        status: parent.status,
-        profile_photo: parent.profile_photo ?? null,
-        tokenVersion: 0,
-        created_at: parent.created_at,
-      };
-    }
+  if (accountFound) {
+    return sendJson(res, 401, { error: "Incorrect password for " + identifier + ". Please verify your password." });
   }
 
-  if (user) {
-    const session = issueSession(user);
-    addAudit("LOGIN", "AUTH", user.id, user, { role: user.role });
-    await persist();
-    return sendJson(res, 200, session);
-  }
-
-  return sendJson(res, 401, { error: "Invalid credentials or password" });
+  return sendJson(res, 404, { error: "Account not found (" + identifier + "). Please check your Roll No / Mobile number." });
 }
 
 function handleRefresh(req, res, body) {

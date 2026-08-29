@@ -6,23 +6,16 @@ import {
   Printer,
   FileBarChart,
   Calendar,
-  Filter,
   User,
-  Users,
   MapPin,
   Clock,
   ShieldCheck,
   Camera,
   CheckCircle2,
   XCircle,
-  AlertCircle,
-  ExternalLink,
   FileText,
   Search,
-  Building2,
   ArrowRight,
-  Eye,
-  Sparkles,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard-shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -57,6 +50,13 @@ export const Route = createFileRoute("/admin/reports")({
 type DatePreset = "today" | "yesterday" | "last7" | "thisMonth" | "last30" | "all" | "custom";
 type StatusFilter = "ALL" | "APPROVED" | "PENDING" | "REJECTED" | "OUT" | "RETURNED";
 type ScopeMode = "ALL" | "SINGLE";
+
+function formatRoom(raw?: string) {
+  if (!raw) return "—";
+  const trimmed = raw.trim();
+  if (/^room\s*/i.test(trimmed)) return trimmed;
+  return `Room ${trimmed}`;
+}
 
 function Reports() {
   const reportsQuery = useQuery({ queryKey: ["hostel-reports"], queryFn: getHostelReports });
@@ -152,7 +152,11 @@ function Reports() {
     } else if (type === "student") {
       setReportTitle("Individual Student Permission & Audit Dossier");
       setScopeMode("SINGLE");
-      if (studentId) setSelectedStudentId(studentId);
+      if (studentId) {
+        setSelectedStudentId(studentId);
+      } else if (students[0]) {
+        setSelectedStudentId(students[0].student_id || students[0].id);
+      }
       handlePresetChange("all");
       setStatusFilter("ALL");
     } else {
@@ -179,7 +183,7 @@ function Reports() {
 
   const selectedStudentObj = useMemo(() => {
     if (!selectedStudentId) return null;
-    return students.find((s) => s.id === selectedStudentId || s.student_id === selectedStudentId) ?? null;
+    return students.find((s) => s.id === selectedStudentId || (s.student_id && s.student_id.toLowerCase() === selectedStudentId.toLowerCase())) ?? null;
   }, [students, selectedStudentId]);
 
   // Filtered Leave Records
@@ -190,8 +194,8 @@ function Reports() {
         if (selectedStudentId) {
           const matchId =
             leave.student?.id === selectedStudentId ||
-            leave.student?.student_id?.toLowerCase() === selectedStudentId.toLowerCase() ||
-            leave.student_id === selectedStudentId;
+            (leave.student?.student_id && leave.student.student_id.toLowerCase() === selectedStudentId.toLowerCase()) ||
+            (leave.student_id && leave.student_id.toLowerCase() === selectedStudentId.toLowerCase());
           if (!matchId) return false;
         }
       }
@@ -202,21 +206,45 @@ function Reports() {
       if (toDate && leaveDate && leaveDate > toDate) return false;
 
       // Status Filter
-      if (statusFilter === "APPROVED" && leave.final_status !== "APPROVED") return false;
+      if (statusFilter === "APPROVED" && leave.final_status !== "APPROVED" && leave.hostel_status !== "APPROVED" && !leave.gatePass) return false;
       if (statusFilter === "PENDING" && leave.final_status !== "PENDING") return false;
-      if (statusFilter === "REJECTED" && leave.final_status !== "REJECTED") return false;
+      if (statusFilter === "REJECTED" && leave.final_status !== "REJECTED" && leave.hostel_status !== "REJECTED" && leave.parent_status !== "REJECTED") return false;
       if (statusFilter === "OUT") {
         const isOut = leave.gatePass?.status === "OUT" || (leave.gatePass?.out_time_actual && !leave.gatePass?.in_time_actual);
         if (!isOut) return false;
       }
       if (statusFilter === "RETURNED") {
-        const isReturned = Boolean(leave.gatePass?.in_time_actual);
+        const isReturned = Boolean(leave.gatePass?.in_time_actual || leave.gatePass?.status === "RETURNED" || leave.final_status === "RETURNED");
         if (!isReturned) return false;
       }
 
       return true;
     });
   }, [leaves, scopeMode, selectedStudentId, fromDate, toDate, statusFilter]);
+
+  // Calculated Status Counters
+  const counts = useMemo(() => {
+    let approved = 0;
+    let out = 0;
+    let returned = 0;
+    let rejected = 0;
+    let pending = 0;
+
+    for (const l of filteredLeaves) {
+      const isOut = l.gatePass?.status === "OUT" || (l.gatePass?.out_time_actual && !l.gatePass?.in_time_actual);
+      const isRet = Boolean(l.gatePass?.in_time_actual || l.gatePass?.status === "RETURNED" || l.final_status === "RETURNED");
+      const isRej = l.final_status === "REJECTED" || l.hostel_status === "REJECTED" || l.parent_status === "REJECTED";
+      const isApp = l.final_status === "APPROVED" || l.hostel_status === "APPROVED" || Boolean(l.gatePass);
+
+      if (isRet) returned++;
+      else if (isOut) out++;
+      else if (isRej) rejected++;
+      else if (isApp) approved++;
+      else pending++;
+    }
+
+    return { approved, out, returned, rejected, pending, total: filteredLeaves.length };
+  }, [filteredLeaves]);
 
   // Chart data
   const chartData = useMemo(() => {
@@ -226,7 +254,7 @@ function Reports() {
       const dayLeaves = leaves.filter((leave) => new Date(leave.created_at).getDay() === dayIndex);
       return {
         day,
-        approved: dayLeaves.filter((leave) => leave.final_status === "APPROVED").length,
+        approved: dayLeaves.filter((leave) => leave.final_status === "APPROVED" || leave.gatePass != null).length,
       };
     });
   }, [leaves]);
@@ -336,6 +364,40 @@ function Reports() {
 
   return (
     <>
+      {/* GLOBAL PRINT STYLES: Hides the modal UI and prints ONLY the clean certified PDF document */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          body, html {
+            background: #ffffff !important;
+            color: #000000 !important;
+          }
+          /* Hide app shell, sidebar, and radix modal portals */
+          [data-radix-portal],
+          [role="dialog"],
+          .print\\:hidden {
+            display: none !important;
+          }
+          /* Display only the dedicated printable container */
+          #printable-audit-report {
+            display: block !important;
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 10px !important;
+          }
+          @page {
+            size: A4 portrait;
+            margin: 10mm 12mm 10mm 12mm;
+          }
+          .page-break-avoid {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+        }
+      ` }} />
+
       <div className="print:hidden">
         <PageHeader
           title="Reports & Audit Logs"
@@ -654,8 +716,8 @@ function Reports() {
                   onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
                   className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                 >
-                  <option value="ALL">All Statuses ({leaves.length})</option>
-                  <option value="APPROVED">Approved Only</option>
+                  <option value="ALL">All Statuses ({filteredLeaves.length})</option>
+                  <option value="APPROVED">Approved / Out / Returned</option>
                   <option value="PENDING">Pending Only</option>
                   <option value="REJECTED">Rejected Only</option>
                   <option value="OUT">Currently Outside (OUT)</option>
@@ -697,7 +759,7 @@ function Reports() {
                   <div className="relative flex-1">
                     <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                     <Input
-                      placeholder="Search student by Name, Roll No (e.g. 21N81A66G4), or Room..."
+                      placeholder="Search student by Name, Roll No (e.g. 21N81A66G8), or Room..."
                       value={studentSearchTerm}
                       onChange={(e) => setStudentSearchTerm(e.target.value)}
                       className="h-8 pl-8 text-xs"
@@ -714,7 +776,7 @@ function Reports() {
                       ) : (
                         filteredStudentsList.map((s) => (
                           <option key={s.id} value={s.student_id || s.id}>
-                            {s.student_id} - {s.name} ({s.room_number || "No Room"})
+                            {s.student_id} - {s.name} ({formatRoom(s.room_number)})
                           </option>
                         ))
                       )}
@@ -739,7 +801,7 @@ function Reports() {
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-foreground">{selectedStudentObj.name}</span>
                         <Badge variant="outline" className="text-[10px]">{selectedStudentObj.student_id}</Badge>
-                        <Badge variant="secondary" className="text-[10px]">{selectedStudentObj.room_number}</Badge>
+                        <Badge variant="secondary" className="text-[10px]">{formatRoom(selectedStudentObj.room_number)}</Badge>
                       </div>
                       <div className="text-[11px] text-muted-foreground">
                         Phone: {selectedStudentObj.mobile} | Parent: {selectedStudentObj.parent_mobile}
@@ -759,16 +821,13 @@ function Reports() {
             </span>
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1 text-emerald-600">
-                <CheckCircle2 className="h-3.5 w-3.5" /> Approved:{" "}
-                {filteredLeaves.filter((l) => l.final_status === "APPROVED").length}
+                <CheckCircle2 className="h-3.5 w-3.5" /> Returned / Approved: {counts.returned + counts.approved}
               </span>
               <span className="flex items-center gap-1 text-amber-600">
-                <Clock className="h-3.5 w-3.5" /> Out:{" "}
-                {filteredLeaves.filter((l) => l.gatePass?.status === "OUT").length}
+                <Clock className="h-3.5 w-3.5" /> Outside: {counts.out}
               </span>
               <span className="flex items-center gap-1 text-rose-600">
-                <XCircle className="h-3.5 w-3.5" /> Rejected:{" "}
-                {filteredLeaves.filter((l) => l.final_status === "REJECTED").length}
+                <XCircle className="h-3.5 w-3.5" /> Rejected: {counts.rejected}
               </span>
             </div>
           </div>
@@ -784,7 +843,7 @@ function Reports() {
             ) : (
               filteredLeaves.map((leave, idx) => {
                 const isOut = leave.gatePass?.status === "OUT" || (leave.gatePass?.out_time_actual && !leave.gatePass?.in_time_actual);
-                const isReturned = Boolean(leave.gatePass?.in_time_actual);
+                const isReturned = Boolean(leave.gatePass?.in_time_actual || leave.gatePass?.status === "RETURNED" || leave.final_status === "RETURNED");
                 const parentPhoto = (leave as any).parent_approval_photo || (leave as any).parent_profile_photo;
                 const studentPhoto = leave.student?.profile_photo;
 
@@ -814,7 +873,10 @@ function Reports() {
                               {leave.student?.student_id || leave.student_id}
                             </Badge>
                             <Badge variant="secondary" className="text-[10px]">
-                              Room {leave.student?.room_number || "—"}
+                              {formatRoom(leave.student?.room_number)}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px] bg-muted/60">
+                              Request #{idx + 1}
                             </Badge>
                           </div>
                           <div className="text-[11px] text-muted-foreground">
@@ -824,19 +886,23 @@ function Reports() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <Badge
-                          className={
-                            leave.final_status === "APPROVED"
-                              ? "bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20"
-                              : leave.final_status === "REJECTED"
-                              ? "bg-rose-500/15 text-rose-700 hover:bg-rose-500/20"
-                              : "bg-amber-500/15 text-amber-700 hover:bg-amber-500/20"
-                          }
-                        >
-                          {leave.final_status}
-                        </Badge>
-                        {isOut && <Badge className="bg-blue-600 text-white animate-pulse">CURRENTLY OUT</Badge>}
-                        {isReturned && <Badge className="bg-teal-600 text-white">RETURNED</Badge>}
+                        {isReturned ? (
+                          <Badge className="bg-teal-600 text-white font-semibold">RETURNED</Badge>
+                        ) : isOut ? (
+                          <Badge className="bg-blue-600 text-white font-semibold animate-pulse">CURRENTLY OUT</Badge>
+                        ) : (
+                          <Badge
+                            className={
+                              leave.final_status === "APPROVED"
+                                ? "bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20"
+                                : leave.final_status === "REJECTED"
+                                ? "bg-rose-500/15 text-rose-700 hover:bg-rose-500/20"
+                                : "bg-amber-500/15 text-amber-700 hover:bg-amber-500/20"
+                            }
+                          >
+                            {leave.final_status}
+                          </Badge>
+                        )}
                       </div>
                     </div>
 
@@ -1083,158 +1149,175 @@ function Reports() {
         </Dialog>
       )}
 
-      {/* DEDICATED PRINTABLE PDF STYLESHEET VIEW (Visible ONLY when printing) */}
-      <div className="hidden print:block font-sans text-black">
-        <style dangerouslySetInnerHTML={{ __html: `
-          @media print {
-            @page { size: A4 portrait; margin: 12mm 12mm 12mm 12mm; }
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #fff !important; color: #000 !important; }
-            .print-break-inside-avoid { break-inside: avoid; page-break-inside: avoid; }
-          }
-        ` }} />
-
+      {/* DEDICATED OFFICIAL PRINTABLE PDF DOCUMENT (Rendered ONLY in window.print()) */}
+      <div id="printable-audit-report" className="hidden font-sans text-black">
         {/* Official Header */}
-        <div className="border-b-2 border-black pb-4">
+        <div className="border-b-2 border-black pb-3 page-break-avoid">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <img src="/gatex-logo.jpg" alt="Logo" className="h-12 w-12 rounded object-cover" />
+              <img src="/gatex-logo.jpg" alt="Logo" className="h-12 w-12 rounded object-cover border border-gray-300" />
               <div>
-                <h1 className="text-xl font-extrabold uppercase tracking-wide">Hostel GATEX Management System</h1>
-                <h2 className="text-sm font-semibold text-gray-700">{reportTitle}</h2>
+                <h1 className="text-lg font-extrabold uppercase tracking-wide">Hostel GATEX Management System</h1>
+                <h2 className="text-sm font-bold text-gray-800">{reportTitle}</h2>
               </div>
             </div>
-            <div className="text-right text-xs text-gray-600">
-              <p>Generated: {new Date().toLocaleString()}</p>
-              <p>Date Range: {fromDate} to {toDate}</p>
-              <p>Total Records: {filteredLeaves.length}</p>
+            <div className="text-right text-[11px] text-gray-700 leading-tight">
+              <p><strong>Generated:</strong> {new Date().toLocaleString()}</p>
+              <p><strong>Date Filter:</strong> {fromDate} to {toDate}</p>
+              <p><strong>Total Requests:</strong> {filteredLeaves.length}</p>
             </div>
           </div>
         </div>
 
         {/* Selected Student Profile Banner (if Single Student mode) */}
         {selectedStudentObj && (
-          <div className="mt-4 flex items-center gap-4 rounded-lg border border-gray-400 bg-gray-50 p-3 print-break-inside-avoid">
-            {selectedStudentObj.profile_photo && (
-              <img src={selectedStudentObj.profile_photo as string} alt="" className="h-16 w-16 rounded border object-cover" />
+          <div className="mt-3 flex items-center gap-3 rounded-lg border border-gray-400 bg-gray-50 p-2.5 page-break-avoid">
+            {selectedStudentObj.profile_photo ? (
+              <img src={selectedStudentObj.profile_photo as string} alt="" className="h-14 w-14 rounded-full border border-gray-400 object-cover" />
+            ) : (
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-200 font-bold text-gray-700">
+                {selectedStudentObj.name?.slice(0, 2).toUpperCase() || "ST"}
+              </div>
             )}
-            <div className="text-xs">
-              <h3 className="text-sm font-bold text-gray-900">{selectedStudentObj.name}</h3>
-              <p>Student Roll No: <strong>{selectedStudentObj.student_id}</strong> | Room: <strong>{selectedStudentObj.room_number}</strong></p>
-              <p>Student Mobile: <strong>{selectedStudentObj.mobile}</strong> | Parent Mobile: <strong>{selectedStudentObj.parent_mobile}</strong></p>
+            <div className="text-xs leading-relaxed">
+              <h3 className="text-sm font-extrabold text-gray-900">{selectedStudentObj.name}</h3>
+              <p>Roll No: <strong>{selectedStudentObj.student_id}</strong> &nbsp;|&nbsp; {formatRoom(selectedStudentObj.room_number)} &nbsp;|&nbsp; Year: <strong>{selectedStudentObj.student_year || "—"}</strong></p>
+              <p>Student Mobile: <strong>{selectedStudentObj.mobile}</strong> &nbsp;|&nbsp; Parent Mobile: <strong>{selectedStudentObj.parent_mobile}</strong></p>
             </div>
           </div>
         )}
 
         {/* Summary Statistics Box */}
-        <div className="mt-4 grid grid-cols-4 gap-2 text-center text-xs print-break-inside-avoid">
+        <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs page-break-avoid">
           <div className="rounded border border-gray-300 bg-gray-100 p-2">
-            <span className="text-gray-600">Total Requests</span>
-            <p className="text-base font-bold">{filteredLeaves.length}</p>
+            <span className="text-gray-600 font-medium">Total Requests</span>
+            <p className="text-base font-bold text-gray-900">{counts.total}</p>
           </div>
           <div className="rounded border border-gray-300 bg-gray-100 p-2">
-            <span className="text-gray-600">Approved</span>
-            <p className="text-base font-bold text-green-700">
-              {filteredLeaves.filter((l) => l.final_status === "APPROVED").length}
-            </p>
+            <span className="text-gray-600 font-medium">Returned to Hostel</span>
+            <p className="text-base font-bold text-teal-800">{counts.returned}</p>
           </div>
           <div className="rounded border border-gray-300 bg-gray-100 p-2">
-            <span className="text-gray-600">Currently Outside</span>
-            <p className="text-base font-bold text-blue-700">
-              {filteredLeaves.filter((l) => l.gatePass?.status === "OUT").length}
-            </p>
+            <span className="text-gray-600 font-medium">Currently Outside</span>
+            <p className="text-base font-bold text-blue-800">{counts.out}</p>
           </div>
           <div className="rounded border border-gray-300 bg-gray-100 p-2">
-            <span className="text-gray-600">Rejected</span>
-            <p className="text-base font-bold text-red-700">
-              {filteredLeaves.filter((l) => l.final_status === "REJECTED").length}
-            </p>
+            <span className="text-gray-600 font-medium">Rejected / Cancelled</span>
+            <p className="text-base font-bold text-red-800">{counts.rejected}</p>
           </div>
         </div>
 
-        {/* Records Listing */}
-        <div className="mt-6 space-y-4">
+        {/* Complete List of ALL Requests (Printed one by one across pages) */}
+        <div className="mt-4 space-y-4">
           {filteredLeaves.map((leave, index) => {
             const parentPhoto = (leave as any).parent_approval_photo || (leave as any).parent_profile_photo;
             const studentPhoto = leave.student?.profile_photo;
+            const isOut = leave.gatePass?.status === "OUT" || (leave.gatePass?.out_time_actual && !leave.gatePass?.in_time_actual);
+            const isReturned = Boolean(leave.gatePass?.in_time_actual || leave.gatePass?.status === "RETURNED" || leave.final_status === "RETURNED");
 
             return (
               <div
                 key={leave.id || index}
-                className="rounded-lg border border-gray-400 p-3 print-break-inside-avoid text-xs"
+                className="rounded-lg border border-gray-400 p-3 page-break-avoid text-xs bg-white"
               >
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-gray-300 pb-2">
                   <div className="flex items-center gap-2">
+                    <span className="rounded bg-black text-white px-2 py-0.5 font-bold text-[10px]">
+                      REQUEST #{index + 1} OF {filteredLeaves.length}
+                    </span>
                     {studentPhoto && (
-                      <img src={studentPhoto} alt="" className="h-8 w-8 rounded-full border object-cover" />
+                      <img src={studentPhoto} alt="" className="h-7 w-7 rounded-full border object-cover" />
                     )}
-                    <div>
-                      <span className="font-bold text-sm text-gray-900">{leave.student?.name}</span>
-                      <span className="ml-2 font-mono text-gray-700">({leave.student?.student_id})</span>
-                      <span className="ml-2 text-gray-600">Room: {leave.student?.room_number}</span>
-                    </div>
+                    <span className="font-bold text-sm text-gray-900">{leave.student?.name || "Student"}</span>
+                    <span className="font-mono text-gray-700">({leave.student?.student_id || leave.student_id})</span>
+                    <span className="text-gray-600">{formatRoom(leave.student?.room_number)}</span>
                   </div>
                   <div className="text-right">
-                    <span className="rounded px-2 py-0.5 font-bold uppercase border border-gray-700">
-                      {leave.final_status}
+                    <span className={`rounded px-2.5 py-1 font-extrabold uppercase border text-[11px] ${
+                      isReturned
+                        ? "bg-teal-50 text-teal-800 border-teal-600"
+                        : isOut
+                        ? "bg-blue-50 text-blue-800 border-blue-600"
+                        : leave.final_status === "APPROVED"
+                        ? "bg-green-50 text-green-800 border-green-600"
+                        : leave.final_status === "REJECTED"
+                        ? "bg-red-50 text-red-800 border-red-600"
+                        : "bg-yellow-50 text-yellow-800 border-yellow-600"
+                    }`}>
+                      {isReturned ? "RETURNED" : isOut ? "CURRENTLY OUT" : leave.final_status}
                     </span>
                   </div>
                 </div>
 
-                {/* Info */}
-                <div className="mt-2 grid grid-cols-3 gap-2">
+                {/* Reason & Timing Info */}
+                <div className="mt-2 grid grid-cols-3 gap-2 bg-gray-50 p-2 rounded border border-gray-200">
                   <div className="col-span-2">
-                    <p><strong>Reason:</strong> {leave.reason || "N/A"}</p>
-                    <p><strong>Timing:</strong> {leave.from_date} ➔ {leave.to_date}</p>
+                    <p><strong>Reason / Destination:</strong> {leave.reason || "N/A"}</p>
+                    <p><strong>Scheduled Window:</strong> {leave.from_date} ➔ {leave.to_date}</p>
                   </div>
                   <div className="text-right">
-                    <p><strong>Student Mobile:</strong> {leave.student?.mobile}</p>
-                    <p><strong>Parent Mobile:</strong> {leave.student?.parent_mobile}</p>
+                    <p><strong>Student Mobile:</strong> {leave.student?.mobile || "—"}</p>
+                    <p><strong>Parent Mobile:</strong> {leave.student?.parent_mobile || "—"}</p>
                   </div>
                 </div>
 
-                {/* 5-Step Timeline Table */}
+                {/* 5-Step Timeline Audit Table */}
                 <table className="mt-2 w-full border-collapse border border-gray-300 text-[10px]">
                   <thead>
-                    <tr className="bg-gray-100">
-                      <th className="border border-gray-300 p-1">1. Student Request</th>
-                      <th className="border border-gray-300 p-1">2. Parent Verification</th>
-                      <th className="border border-gray-300 p-1">3. Warden Approval</th>
-                      <th className="border border-gray-300 p-1">4. Gate Exit</th>
-                      <th className="border border-gray-300 p-1">5. Gate Return</th>
+                    <tr className="bg-gray-100 font-bold">
+                      <th className="border border-gray-300 p-1 text-left">1. Student Request</th>
+                      <th className="border border-gray-300 p-1 text-left">2. Parent Verification</th>
+                      <th className="border border-gray-300 p-1 text-left">3. Warden Approval</th>
+                      <th className="border border-gray-300 p-1 text-left">4. Gate Exit</th>
+                      <th className="border border-gray-300 p-1 text-left">5. Gate Return</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
+                      {/* Step 1 */}
                       <td className="border border-gray-300 p-1.5 align-top">
+                        <p><strong>Submitted:</strong></p>
                         <p>{leave.created_at ? new Date(leave.created_at).toLocaleString() : "—"}</p>
                         {(leave as any).student_lat != null && (
-                          <p className="text-gray-600">GPS: {Number((leave as any).student_lat).toFixed(3)}, {Number((leave as any).student_lng).toFixed(3)}</p>
+                          <p className="text-gray-600 mt-1">GPS: {Number((leave as any).student_lat).toFixed(3)}, {Number((leave as any).student_lng).toFixed(3)}</p>
                         )}
                       </td>
+                      {/* Step 2 */}
                       <td className="border border-gray-300 p-1.5 align-top">
                         <p><strong>Status:</strong> {leave.parent_status || "PENDING"}</p>
                         {(leave as any).parent_lat != null && (
                           <p className="text-gray-600">GPS: {Number((leave as any).parent_lat).toFixed(3)}, {Number((leave as any).parent_lng).toFixed(3)}</p>
                         )}
-                        {parentPhoto && (
+                        {parentPhoto ? (
                           <div className="mt-1">
-                            <img src={parentPhoto} alt="Parent live photo" className="h-12 w-12 rounded border object-cover" />
+                            <p className="font-semibold text-[9px] text-gray-700">Live Photo:</p>
+                            <img src={parentPhoto} alt="Parent live selfie" className="h-14 w-14 rounded border border-gray-400 object-cover mt-0.5" />
                           </div>
+                        ) : (
+                          <p className="italic text-gray-500 mt-1">No photo</p>
                         )}
                       </td>
+                      {/* Step 3 */}
                       <td className="border border-gray-300 p-1.5 align-top">
                         <p><strong>Status:</strong> {leave.hostel_status || "PENDING"}</p>
-                        {(leave as any).note && <p className="italic">{String((leave as any).note)}</p>}
+                        {(leave as any).hostel_lat != null && (
+                          <p className="text-gray-600">Warden GPS verified</p>
+                        )}
+                        {(leave as any).note && <p className="italic mt-1 text-gray-700">Note: {String((leave as any).note)}</p>}
                       </td>
+                      {/* Step 4 */}
                       <td className="border border-gray-300 p-1.5 align-top">
-                        <p>{leave.gatePass?.out_time_actual ? new Date(leave.gatePass.out_time_actual).toLocaleTimeString() : "Not Scanned"}</p>
+                        <p><strong>Status:</strong> {leave.gatePass?.out_time_actual ? "Scanned Out" : "Pending"}</p>
+                        <p>{leave.gatePass?.out_time_actual ? new Date(leave.gatePass.out_time_actual).toLocaleTimeString() : "—"}</p>
                         {(leave as any).gatePass?.out_guard_lat != null && (
                           <p className="text-gray-600">Gate GPS recorded</p>
                         )}
                       </td>
+                      {/* Step 5 */}
                       <td className="border border-gray-300 p-1.5 align-top">
-                        <p>{leave.gatePass?.in_time_actual ? new Date(leave.gatePass.in_time_actual).toLocaleTimeString() : "Not Returned"}</p>
+                        <p><strong>Status:</strong> {leave.gatePass?.in_time_actual ? "Returned" : isOut ? "Currently Out" : "Pending"}</p>
+                        <p>{leave.gatePass?.in_time_actual ? new Date(leave.gatePass.in_time_actual).toLocaleTimeString() : "—"}</p>
                       </td>
                     </tr>
                   </tbody>
@@ -1245,9 +1328,9 @@ function Reports() {
         </div>
 
         {/* Official Footer */}
-        <div className="mt-8 border-t border-gray-400 pt-4 text-center text-xs text-gray-500">
-          <p>Hostel GATEX Automated Multi-Point Movement Verification &amp; Security Compliance Report</p>
-          <p>This is an officially certified electronic audit report.</p>
+        <div className="mt-6 border-t-2 border-black pt-3 text-center text-xs text-gray-600 page-break-avoid">
+          <p className="font-bold">Hostel GATEX Automated Movement Audit &amp; Verification System</p>
+          <p>This is an officially certified electronic movement log.</p>
         </div>
       </div>
     </>

@@ -14,7 +14,7 @@ import { createStaff, getHostelStaff, updateStaff, uploadStaffPhoto, deleteStaff
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/guards")({
-  head: () => ({ meta: [{ title: "Security Guards · Hostel GATEX" }] }),
+  head: () => ({ meta: [{ title: "Security Guards · GATEX" }] }),
   component: GuardsPage,
 });
 

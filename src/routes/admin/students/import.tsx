@@ -32,7 +32,7 @@ import {
 } from "@/lib/api";
 
 export const Route = createFileRoute("/admin/students/import")({
-  head: () => ({ meta: [{ title: "Import & Bulk Photos · Hostel GATEX" }] }),
+  head: () => ({ meta: [{ title: "Import & Bulk Photos · GATEX" }] }),
   component: ImportPage,
 });
 

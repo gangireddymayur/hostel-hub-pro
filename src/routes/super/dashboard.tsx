@@ -20,7 +20,7 @@ import {
 import { getSuperAnalytics, getSuperHostels } from "@/lib/api";
 
 export const Route = createFileRoute("/super/dashboard")({
-  head: () => ({ meta: [{ title: "Super Admin Dashboard · Hostel GATEX" }] }),
+  head: () => ({ meta: [{ title: "Super Admin Dashboard · GATEX" }] }),
   component: SuperDashboard,
 });
 

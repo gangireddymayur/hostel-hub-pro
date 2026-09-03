@@ -31,7 +31,7 @@ type HostelRow = {
 };
 
 export const Route = createFileRoute("/admin/hostels")({
-  head: () => ({ meta: [{ title: "Hostel Management · Hostel GATEX" }] }),
+  head: () => ({ meta: [{ title: "Hostel Management · GATEX" }] }),
   component: HostelsPage,
 });
 

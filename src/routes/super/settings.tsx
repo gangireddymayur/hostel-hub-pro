@@ -11,7 +11,7 @@ import { getSession } from "@/lib/role";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/super/settings")({
-  head: () => ({ meta: [{ title: "Settings · Hostel GATEX" }] }),
+  head: () => ({ meta: [{ title: "Settings · GATEX" }] }),
   component: SuperSettings,
 });
 
@@ -25,7 +25,7 @@ function SuperSettings() {
 
   return (
     <>
-      <PageHeader title="Platform settings" description="Configure your Hostel GATEX workspace." />
+      <PageHeader title="Platform settings" description="Configure your GATEX workspace." />
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>Account</CardTitle></CardHeader>

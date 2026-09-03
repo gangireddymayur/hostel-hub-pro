@@ -43,7 +43,7 @@ import { getLeaveRequests, getHostelReports, getHostelStudents } from "@/lib/api
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/reports")({
-  head: () => ({ meta: [{ title: "Reports · Hostel GATEX" }] }),
+  head: () => ({ meta: [{ title: "Reports · GATEX" }] }),
   component: Reports,
 });
 
@@ -390,7 +390,7 @@ function Reports() {
         <div style="display: flex; align-items: center; gap: 10px;">
           <img src="/gatex-logo.jpg" alt="Logo" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #cbd5e1;" />
           <div>
-            <h1 style="font-size: 16px; font-weight: 800; text-transform: uppercase; color: #0f172a; margin: 0; line-height: 1.2;">Hostel GATEX Management System</h1>
+            <h1 style="font-size: 16px; font-weight: 800; text-transform: uppercase; color: #0f172a; margin: 0; line-height: 1.2;">GATEX Management System</h1>
             <h2 style="font-size: 12px; font-weight: 600; color: #475569; margin: 0;">${reportTitle}</h2>
           </div>
         </div>
@@ -406,7 +406,7 @@ function Reports() {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>${reportTitle} - Hostel GATEX</title>
+          <title>${reportTitle} - GATEX</title>
           ${styleSheets}
           <style>
             @page {
@@ -1225,7 +1225,7 @@ function Reports() {
           <DialogFooter className="border-t bg-muted/30 px-6 py-3">
             <div className="flex w-full items-center justify-between">
               <span className="text-xs text-muted-foreground">
-                Hostel GATEX Automated Audit &amp; Movement Logging System
+                GATEX Automated Audit &amp; Movement Logging System
               </span>
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => setModalOpen(false)}>

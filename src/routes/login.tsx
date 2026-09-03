@@ -8,11 +8,12 @@ import { Label } from "@/components/ui/label";
 import { login } from "@/lib/api";
 import { getSession, initTheme, setSession } from "@/lib/role";
 import { toast } from "sonner";
+import { AdvaithaBranding } from "@/components/AdvaithaBranding";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Hostel GATEX - Login" },
+      { title: "GATEX - Login" },
       { name: "description", content: "Secure portal for super admins and hostel admins." },
     ],
   }),
@@ -74,18 +75,21 @@ function Landing() {
         <div className="flex items-center gap-2">
           <img
             src="/gatex-logo.jpg"
-            alt="Hostel GATEX logo"
+            alt="GATEX logo"
             className="h-9 w-auto rounded-lg object-contain shadow"
           />
-          <span className="text-lg font-semibold tracking-widest">Hostel GATEX</span>
+          <span className="text-lg font-semibold tracking-widest">GATEX</span>
         </div>
-        <span className="text-xs text-muted-foreground">Live backend connected</span>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Powered by</span>
+          <span className="font-semibold text-foreground">ADVAITHA Automations</span>
+        </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 pb-20 pt-10">
+      <main className="mx-auto max-w-6xl px-6 pb-20 pt-8">
         <div className="mx-auto max-w-3xl text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground">
-            <span className="h-1.5 w-1.5 rounded-full bg-success" /> Production portal
+          <span className="inline-flex items-center gap-2 rounded-full border border-sky-300/80 bg-sky-50 px-3.5 py-1 text-xs font-semibold text-sky-800 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300">
+            Enterprise Management System
           </span>
           <h1 className="mt-5 text-4xl font-semibold tracking-tight md:text-6xl">
             Smart gate pass management for{" "}
@@ -143,6 +147,8 @@ function Landing() {
             </CardContent>
           </Card>
         </div>
+
+        <AdvaithaBranding />
       </main>
     </div>
   );

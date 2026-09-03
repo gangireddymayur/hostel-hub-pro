@@ -59,7 +59,7 @@ export function AppSidebar({ role }: { role: Role }) {
             className="h-8 w-8 rounded-lg object-cover shadow-sm group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8"
           />
           <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-            <span className="truncate font-semibold tracking-wide">Hostel GATEX</span>
+            <span className="truncate font-semibold tracking-wide">GATEX</span>
             <span className="truncate text-xs text-muted-foreground">
               {role === "super" ? "Super Admin" : "Hostel Admin"}
             </span>

@@ -3605,9 +3605,9 @@ function handleGetHostelInfo(req, res) {
     data: {
       id: hostel.id,
       hostel_name: hostel.hostel_name,
-      email: hostel.email,
-      phone: hostel.phone || "+91 9876543210",
-      address: hostel.address || "Campus Hostel Block, Main Gate",
+      email: hostel.email || null,
+      phone: hostel.phone || null,
+      address: hostel.address || null,
       logo: hostel.logo ? `/api/hostel-logo/${hostel.id}` : null,
     },
   });

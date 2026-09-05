@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Pencil, Eye, Upload, Trash2, AlertTriangle, CheckSquare } from "lucide-react";
+import { Plus, Search, Pencil, Eye, EyeOff, Upload, Trash2, AlertTriangle, CheckSquare, KeyRound } from "lucide-react";
 import { PageHeader } from "@/components/dashboard-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +66,10 @@ function StudentsPage() {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<StudentRow | null>(null);
   const [editingStudent, setEditingStudent] = useState<StudentRow | null>(null);
+  const [passwordStudent, setPasswordStudent] = useState<StudentRow | null>(null);
+  const [activePasswordTab, setActivePasswordTab] = useState<"STUDENT" | "PARENT">("STUDENT");
+  const [newPassword, setNewPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [parentPhotoFile, setParentPhotoFile] = useState<File | null>(null);
   const [selectedHostel, setSelectedHostel] = useState("");
@@ -522,6 +526,20 @@ function StudentsPage() {
                             <Button
                               size="icon"
                               variant="ghost"
+                              className="text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
+                              title="Change passwords"
+                              onClick={() => {
+                                setPasswordStudent(student);
+                                setActivePasswordTab("STUDENT");
+                                setNewPassword("");
+                                setShowPassword(false);
+                              }}
+                            >
+                              <KeyRound className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
                               className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
                               title="Delete student"
                               onClick={() => {
@@ -837,15 +855,24 @@ function StudentsPage() {
                   <option value="DISABLED">DISABLED</option>
                 </select>
               </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="password">Student Password (Optional)</Label>
-                <Input id="password" name="password" type="password" />
-                <p className="text-xs text-muted-foreground">Leave blank to keep current student password.</p>
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="parent_password">Parent Password (Optional)</Label>
-                <Input id="parent_password" name="parent_password" type="password" />
-                <p className="text-xs text-muted-foreground">Leave blank to keep current parent password.</p>
+              <div className="md:col-span-2 rounded-lg border border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground flex items-center justify-between">
+                <span>🔐 Need to update student or parent login password?</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-xs text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+                  onClick={() => {
+                    const st = editingStudent;
+                    setEditingStudent(null);
+                    setPasswordStudent(st);
+                    setActivePasswordTab("STUDENT");
+                    setNewPassword("");
+                    setShowPassword(false);
+                  }}
+                >
+                  <KeyRound className="h-3.5 w-3.5" /> Manage Passwords
+                </Button>
               </div>
               <DialogFooter className="md:col-span-2 flex flex-col-reverse sm:flex-row sm:justify-between items-center gap-2">
                 <Button
@@ -866,6 +893,134 @@ function StudentsPage() {
                 </div>
               </DialogFooter>
             </form>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dedicated Password Management Dialog */}
+      <Dialog open={!!passwordStudent} onOpenChange={(isOpen) => !isOpen && setPasswordStudent(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/15 text-amber-500">
+                <KeyRound className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold">Manage Passwords</DialogTitle>
+                <DialogDescription className="text-xs">
+                  {passwordStudent ? `${passwordStudent.name} (${passwordStudent.student_id})` : "Reset login credentials"}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {passwordStudent ? (
+            <div className="space-y-4 py-2">
+              {/* Slider / Segmented Switch */}
+              <div className="flex rounded-lg bg-muted p-1 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActivePasswordTab("STUDENT");
+                    setNewPassword("");
+                  }}
+                  className={`flex-1 rounded-md py-1.5 transition-all ${
+                    activePasswordTab === "STUDENT"
+                      ? "bg-background text-foreground shadow-sm font-bold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Student Password
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActivePasswordTab("PARENT");
+                    setNewPassword("");
+                  }}
+                  className={`flex-1 rounded-md py-1.5 transition-all ${
+                    activePasswordTab === "PARENT"
+                      ? "bg-background text-foreground shadow-sm font-bold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Parent Password
+                </button>
+              </div>
+
+              {/* Context info box */}
+              <div className="rounded-lg border border-border/80 bg-muted/30 p-3 text-xs space-y-1">
+                <div className="text-muted-foreground">
+                  {activePasswordTab === "STUDENT" ? "Account Identifier:" : "Parent Mobile Number:"}
+                </div>
+                <div className="font-mono font-semibold text-foreground">
+                  {activePasswordTab === "STUDENT"
+                    ? `${passwordStudent.student_id} / ${passwordStudent.mobile}`
+                    : passwordStudent.parent_mobile}
+                </div>
+              </div>
+
+              {/* Password Input */}
+              <div className="space-y-1.5">
+                <Label htmlFor="new_password_input">
+                  {activePasswordTab === "STUDENT" ? "New Student Password" : "New Parent Password"}
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="new_password_input"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter new password (min 4 characters)"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="pr-10"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                    title={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {newPassword.length > 0 && newPassword.length < 4 && (
+                  <p className="text-[11px] text-amber-500 font-medium">Password must be at least 4 characters.</p>
+                )}
+              </div>
+
+              <DialogFooter className="pt-2 gap-2">
+                <Button type="button" variant="ghost" onClick={() => setPasswordStudent(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  disabled={newPassword.trim().length < 4 || updateMutation.isPending}
+                  className="bg-primary text-primary-foreground font-semibold"
+                  onClick={() => {
+                    const payload =
+                      activePasswordTab === "STUDENT"
+                        ? { password: newPassword.trim() }
+                        : { parent_password: newPassword.trim() };
+
+                    updateMutation.mutate(
+                      { studentId: passwordStudent.id, payload },
+                      {
+                        onSuccess: () => {
+                          toast.success(
+                            `${activePasswordTab === "STUDENT" ? "Student" : "Parent"} password updated successfully`
+                          );
+                          setPasswordStudent(null);
+                          setNewPassword("");
+                        },
+                      }
+                    );
+                  }}
+                >
+                  {updateMutation.isPending ? "Updating..." : "Update Password"}
+                </Button>
+              </DialogFooter>
+            </div>
           ) : null}
         </DialogContent>
       </Dialog>

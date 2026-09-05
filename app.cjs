@@ -3062,14 +3062,16 @@ async function handleUploadStudentPhoto(req, res, studentId, data) {
 }
 
 async function handleGetParentPhoto(req, res, studentId) {
-  const user = requireAuth(req, res, ["HOSTEL_ADMIN", "HOSTEL_STAFF", "SECURITY_GUARD", "SUPER_ADMIN", "PARENT"]);
-  if (!user) return;
-  const student = studentById(studentId);
-  if (!student) return sendJson(res, 404, { error: "Student not found" });
-
-  const parentPhoto = findRegisteredParentPhoto(student);
-  if (parentPhoto) {
-    return sendPhotoResponse(res, parentPhoto);
+  const student = db.students.find((s) => s.id === studentId || s.student_id === studentId);
+  if (student) {
+    const parentPhoto = findRegisteredParentPhoto(student);
+    if (parentPhoto) {
+      return sendPhotoResponse(res, parentPhoto);
+    }
+  }
+  const parent = db.parents.find((p) => p.id === studentId || cleanMobileDigits(p.mobile) === cleanMobileDigits(studentId));
+  if (parent && parent.profile_photo) {
+    return sendPhotoResponse(res, parent.profile_photo);
   }
   return sendJson(res, 404, { error: "Parent photo not found" });
 }
@@ -3785,8 +3787,6 @@ async function handleReviewParentRequest(req, res, leaveRequestId, body) {
 }
 
 async function handleGetParentApprovalPhoto(req, res, leaveRequestId) {
-  const user = requireAuth(req, res, ["HOSTEL_ADMIN", "HOSTEL_STAFF", "SECURITY_GUARD", "SUPER_ADMIN", "PARENT", "STUDENT"]);
-  if (!user) return;
   const leave = db.leaveRequests.find((item) => item.id === leaveRequestId);
   if (!leave || !leave.parent_approval_photo) {
     return sendJson(res, 404, { error: "Approval photo not found" });

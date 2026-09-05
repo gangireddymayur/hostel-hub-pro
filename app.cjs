@@ -677,6 +677,28 @@ async function ensureRejectReasonColumns() {
   }
 }
 
+async function ensurePerformanceIndexes() {
+  if (!dbPool) return;
+  const indexes = [
+    { table: "leave_requests", name: "idx_lr_student", query: "CREATE INDEX idx_lr_student ON leave_requests (student_id)" },
+    { table: "leave_requests", name: "idx_lr_status_created", query: "CREATE INDEX idx_lr_status_created ON leave_requests (final_status, created_at)" },
+    { table: "students", name: "idx_s_parent_mob", query: "CREATE INDEX idx_s_parent_mob ON students (parent_mobile)" },
+    { table: "students", name: "idx_s_hostel", query: "CREATE INDEX idx_s_hostel ON students (hostel_id)" },
+    { table: "gate_passes", name: "idx_gp_qr", query: "CREATE INDEX idx_gp_qr ON gate_passes (qr_code)" },
+    { table: "gate_passes", name: "idx_gp_leave_id", query: "CREATE INDEX idx_gp_leave_id ON gate_passes (leave_request_id)" },
+  ];
+
+  for (const idx of indexes) {
+    try {
+      const [rows] = await dbPool.query(`SHOW INDEX FROM ${idx.table} WHERE Key_name = '${idx.name}'`);
+      if (rows.length === 0) {
+        console.log(`Auto-Migration: Adding index '${idx.name}' on '${idx.table}'...`);
+        await dbPool.query(idx.query);
+      }
+    } catch (_) {}
+  }
+}
+
 let migrationsRun = false;
 let hasHydrated = false;
 let lastHydrateAttemptTime = 0;
@@ -695,6 +717,7 @@ async function runMigrations() {
     ensureParentHostelIdColumn(),
     ensureStudentYearColumn(),
     ensureRejectReasonColumns(),
+    ensurePerformanceIndexes(),
   ]);
   migrationsRun = true;
 }
@@ -923,12 +946,20 @@ async function hydrateDataFromDatabase() {
   }
 }
 
+let persistTimeout = null;
+function queueFilePersist() {
+  if (persistTimeout) clearTimeout(persistTimeout);
+  persistTimeout = setTimeout(async () => {
+    try {
+      await fs.promises.writeFile(DB_FILE, JSON.stringify(db, null, 2), "utf8");
+    } catch (error) {
+      console.error("[db] failed to async write db.json:", error.message);
+    }
+  }, 100);
+}
+
 async function persist() {
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), "utf8");
-  } catch (error) {
-    console.error("[db] failed to write db.json:", error.message);
-  }
+  queueFilePersist();
 
   if (!dbPool) return db;
 
@@ -1508,18 +1539,27 @@ function sendJson(res, statusCode, payload) {
 
 function sendPhotoResponse(res, base64String) {
   try {
-    const matches = base64String.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
-    if (matches) {
-      const mimeType = matches[1];
-      const buffer = Buffer.from(matches[2], "base64");
-      res.writeHead(200, {
-        "Content-Type": mimeType,
-        "Content-Length": buffer.length,
-        "Cache-Control": "public, max-age=86400", // Cache for 1 day
-      });
-      res.end(buffer);
-      return;
+    if (!base64String || typeof base64String !== "string") {
+      return sendJson(res, 404, { error: "Photo not found" });
     }
+    let mimeType = "image/jpeg";
+    let rawBase64 = base64String.trim();
+    const matches = rawBase64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+    if (matches) {
+      mimeType = matches[1];
+      rawBase64 = matches[2];
+    }
+    const buffer = Buffer.from(rawBase64, "base64");
+    if (buffer.length === 0) {
+      return sendJson(res, 404, { error: "Photo empty" });
+    }
+    res.writeHead(200, {
+      "Content-Type": mimeType,
+      "Content-Length": buffer.length,
+      "Cache-Control": "public, max-age=86400, immutable", // Cache for 1 day
+    });
+    res.end(buffer);
+    return;
   } catch (e) {
     console.error("Error sending photo response", e);
   }
@@ -2633,8 +2673,9 @@ function handleHostelStudents(req, res) {
       const parentPhoto = findRegisteredParentPhoto(student);
       return {
         ...student,
+        profile_photo: student.profile_photo ? `/api/profile-photo/${student.id}` : null,
+        parent_profile_photo: parentPhoto ? `/api/hostel-admin/students/${student.id}/parent-photo` : null,
         hostel_name: h ? h.hostel_name : "",
-        parent_profile_photo: parentPhoto,
       };
     })
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
@@ -3271,9 +3312,20 @@ function handleLeaveRequests(req, res) {
     });
   }
 
-  const leaveRequests = baseRequests
+  const urlObj = new URL(req.url, "http://localhost");
+  const limit = parseInt(urlObj.searchParams.get("limit"), 10);
+  const page = parseInt(urlObj.searchParams.get("page"), 10) || 1;
+
+  let sortedRequests = baseRequests
     .slice()
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+
+  if (!Number.isNaN(limit) && limit > 0) {
+    const offset = Math.max(0, (page - 1) * limit);
+    sortedRequests = sortedRequests.slice(offset, offset + limit);
+  }
+
+  const leaveRequests = sortedRequests
     .map((leave) => {
       const student = db.students.find((student) => student.id === leave.student_id) ?? null;
       let studentWithHostel = null;
@@ -3285,18 +3337,23 @@ function handleLeaveRequests(req, res) {
         };
       }
       const parentPhoto = findRegisteredParentPhoto(student);
+      const studentPhotoUrl = student && student.profile_photo ? `/api/profile-photo/${student.id}` : null;
+      const parentPhotoUrl = parentPhoto ? `/api/hostel-admin/students/${student.id}/parent-photo` : null;
+      const approvalPhotoUrl = leave.parent_approval_photo ? `/api/leave-requests/${leave.id}/parent-approval-photo` : null;
+
       return {
         ...leave,
         student: studentWithHostel ? {
           ...studentWithHostel,
-          parent_profile_photo: parentPhoto,
+          profile_photo: studentPhotoUrl,
+          parent_profile_photo: parentPhotoUrl,
         } : null,
-        parent_approval_photo: leave.parent_approval_photo ?? null,
-        parent_profile_photo: parentPhoto,
+        parent_approval_photo: approvalPhotoUrl,
+        parent_profile_photo: parentPhotoUrl,
         gatePass: gatePassByLeaveId(leave.id) ?? null,
       };
     });
-  return sendJson(res, 200, { data: leaveRequests });
+  return sendJson(res, 200, { data: leaveRequests, total: baseRequests.length });
 }
 
 async function handleReviewLeaveRequest(req, res, leaveRequestId, body) {
@@ -3534,17 +3591,30 @@ function handleGetStudentLeaveRequests(req, res) {
   const student = db.students.find((s) => s.id === user.id);
   if (!student) return sendJson(res, 404, { error: "Student not found" });
 
-  const leaves = db.leaveRequests
+  const urlObj = new URL(req.url, "http://localhost");
+  const limit = parseInt(urlObj.searchParams.get("limit"), 10);
+  const page = parseInt(urlObj.searchParams.get("page"), 10) || 1;
+
+  let sortedLeaves = db.leaveRequests
     .filter((leave) => leave.student_id === student.id)
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+
+  const total = sortedLeaves.length;
+  if (!Number.isNaN(limit) && limit > 0) {
+    const offset = Math.max(0, (page - 1) * limit);
+    sortedLeaves = sortedLeaves.slice(offset, offset + limit);
+  }
+
+  const leaves = sortedLeaves
     .map((leave) => {
       const hostel = findHostelById(student.hostel_id);
       return {
         ...leave,
-        parent_approval_photo: null,
+        parent_approval_photo: leave.parent_approval_photo ? `/api/leave-requests/${leave.id}/parent-approval-photo` : null,
         parent_profile_photo: null,
         student: {
           ...student,
+          profile_photo: student.profile_photo ? `/api/profile-photo/${student.id}` : null,
           parent_profile_photo: null,
           hostel_name: hostel ? hostel.hostel_name : "",
         },
@@ -3552,7 +3622,7 @@ function handleGetStudentLeaveRequests(req, res) {
       };
     });
 
-  return sendJson(res, 200, { data: leaves });
+  return sendJson(res, 200, { data: leaves, total });
 }
 
 async function handleGetParentRequests(req, res) {
@@ -3594,7 +3664,7 @@ async function handleGetParentRequests(req, res) {
         parent_lng: row.parent_lng != null ? Number(row.parent_lng) : null,
         hostel_lat: row.hostel_lat != null ? Number(row.hostel_lat) : null,
         hostel_lng: row.hostel_lng != null ? Number(row.hostel_lng) : null,
-        parent_approval_photo: null,
+        parent_approval_photo: row.parent_approval_photo ? `/api/leave-requests/${row.id}/parent-approval-photo` : null,
         parent_profile_photo: null,
         student: {
           id: String(row.student_id),
@@ -3604,6 +3674,7 @@ async function handleGetParentRequests(req, res) {
           mobile: String(row.student_mobile),
           parent_mobile: String(row.parent_mobile),
           hostel_name: String(row.hostel_name ?? ""),
+          profile_photo: `/api/profile-photo/${row.student_id}`,
           parent_profile_photo: null,
         },
         gatePass: gatePassByLeaveId(String(row.id)) ?? null,
@@ -3630,13 +3701,14 @@ async function handleGetParentRequests(req, res) {
         const hostel = findHostelById(student.hostel_id);
         studentWithHostel = {
           ...student,
+          profile_photo: student.profile_photo ? `/api/profile-photo/${student.id}` : null,
           parent_profile_photo: null,
           hostel_name: hostel ? hostel.hostel_name : "",
         };
       }
       return {
         ...leave,
-        parent_approval_photo: null,
+        parent_approval_photo: leave.parent_approval_photo ? `/api/leave-requests/${leave.id}/parent-approval-photo` : null,
         parent_profile_photo: null,
         student: studentWithHostel,
         gatePass: gatePassByLeaveId(leave.id) ?? null,
@@ -3712,6 +3784,16 @@ async function handleReviewParentRequest(req, res, leaveRequestId, body) {
   });
 }
 
+async function handleGetParentApprovalPhoto(req, res, leaveRequestId) {
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN", "HOSTEL_STAFF", "SECURITY_GUARD", "SUPER_ADMIN", "PARENT", "STUDENT"]);
+  if (!user) return;
+  const leave = db.leaveRequests.find((item) => item.id === leaveRequestId);
+  if (!leave || !leave.parent_approval_photo) {
+    return sendJson(res, 404, { error: "Approval photo not found" });
+  }
+  return sendPhotoResponse(res, leave.parent_approval_photo);
+}
+
 function handleGuardToday(req, res) {
   const user = requireAuth(req, res, ["SECURITY_GUARD"]);
   if (!user) return;
@@ -3730,14 +3812,18 @@ function handleGuardToday(req, res) {
     .map((leave) => {
       const student = db.students.find((s) => s.id === leave.student_id);
       const parentPhoto = student ? findRegisteredParentPhoto(student) : null;
+      const studentPhotoUrl = student && student.profile_photo ? `/api/profile-photo/${student.id}` : null;
+      const parentPhotoUrl = parentPhoto ? `/api/hostel-admin/students/${student.id}/parent-photo` : null;
+      const approvalPhotoUrl = leave.parent_approval_photo ? `/api/leave-requests/${leave.id}/parent-approval-photo` : null;
+
       return {
         ...leave,
-        parent_approval_photo: leave.parent_approval_photo ?? null,
-        parent_profile_photo: parentPhoto,
+        parent_approval_photo: approvalPhotoUrl,
+        parent_profile_photo: parentPhotoUrl,
         student: student ? { 
           ...student, 
-          profile_photo: student.profile_photo ?? null,
-          parent_profile_photo: parentPhoto,
+          profile_photo: studentPhotoUrl,
+          parent_profile_photo: parentPhotoUrl,
           hostel_name: (db.hostels.find((h) => h.id === student.hostel_id)?.hostel_name ?? '') 
         } : null,
         gatePass: gatePassByLeaveId(leave.id) ?? null,
@@ -4283,6 +4369,11 @@ async function handleApi(req, res, pathname) {
     if (match && req.method === "PATCH") {
       const data = await readRequestData(req);
       return handleReviewParentRequest(req, res, decodeURIComponent(match[1]), data.kind === "json" ? data.value : {});
+    }
+
+    match = pathname.match(/^\/api\/leave-requests\/([^/]+)\/parent-approval-photo$/);
+    if (match && req.method === "GET") {
+      return handleGetParentApprovalPhoto(req, res, decodeURIComponent(match[1]));
     }
 
     if (pathname === "/api/guards/today" && req.method === "GET") {

@@ -378,3 +378,38 @@ export async function getHostels() {
 export async function getHostelReports() {
   return request<{ data: { totalRequests: number; approved: number; rejected: number; returned: number; pending: number; gatePasses: number } }>("/hostel-admin/reports");
 }
+
+export type HostelSettings = {
+  id: string;
+  hostel_name: string;
+  email: string;
+  phone: string;
+  address: string;
+  logo: string | null;
+};
+
+export async function getHostelSettings() {
+  return request<{ data: HostelSettings }>("/hostel-admin/settings");
+}
+
+export async function updateHostelSettings(payload: {
+  hostel_name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+}) {
+  return request<{ data: HostelSettings }>("/hostel-admin/settings", {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export async function uploadHostelLogo(file: File) {
+  const form = new FormData();
+  form.append("logo", file);
+  return request<{ data: { logo: string; id: string } }>("/hostel-admin/settings/logo", {
+    method: "POST",
+    body: form,
+  });
+}
+

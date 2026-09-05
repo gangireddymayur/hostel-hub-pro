@@ -482,7 +482,6 @@ function toSqlDateTime(value) {
   return `${parsed.getUTCFullYear()}-${pad(parsed.getUTCMonth() + 1)}-${pad(parsed.getUTCDate())} ${pad(parsed.getUTCHours())}:${pad(parsed.getUTCMinutes())}:${pad(parsed.getUTCSeconds())}`;
 }
 
-
 function parseJsonMaybe(value) {
   if (value == null || value === "") return null;
   if (typeof value === "object") return value;
@@ -699,6 +698,28 @@ async function ensurePerformanceIndexes() {
   }
 }
 
+async function ensureHostelColumns() {
+  if (!dbPool) return;
+  try {
+    const [cols] = await dbPool.query("SHOW COLUMNS FROM hostels");
+    const existing = new Set(cols.map((c) => c.Field.toLowerCase()));
+    if (!existing.has("phone")) {
+      console.log("Auto-Migration: Adding 'phone' column to 'hostels' table...");
+      await dbPool.query("ALTER TABLE hostels ADD COLUMN phone VARCHAR(50) NULL");
+    }
+    if (!existing.has("address")) {
+      console.log("Auto-Migration: Adding 'address' column to 'hostels' table...");
+      await dbPool.query("ALTER TABLE hostels ADD COLUMN address TEXT NULL");
+    }
+    if (!existing.has("logo")) {
+      console.log("Auto-Migration: Adding 'logo' column to 'hostels' table...");
+      await dbPool.query("ALTER TABLE hostels ADD COLUMN logo LONGTEXT NULL");
+    }
+  } catch (error) {
+    console.error("Auto-Migration Error: Failed to check or add hostel extra columns:", error.message);
+  }
+}
+
 let migrationsRun = false;
 let hasHydrated = false;
 let lastHydrateAttemptTime = 0;
@@ -718,6 +739,7 @@ async function runMigrations() {
     ensureStudentYearColumn(),
     ensureRejectReasonColumns(),
     ensurePerformanceIndexes(),
+    ensureHostelColumns(),
   ]);
   migrationsRun = true;
 }
@@ -798,6 +820,9 @@ async function hydrateDataFromDatabase() {
         password_hash: String(row.password_hash ?? ""),
         status: String(row.status ?? "ACTIVE"),
         parent_hostel_id: row.parent_hostel_id ? String(row.parent_hostel_id) : null,
+        phone: row.phone ? String(row.phone) : null,
+        address: row.address ? String(row.address) : null,
+        logo: row.logo ?? null,
         created_at: normalizeDateTime(row.created_at),
       })),
       users,
@@ -986,11 +1011,14 @@ async function persist() {
         h.password_hash,
         h.status ?? "ACTIVE",
         h.parent_hostel_id ?? null,
+        h.phone ?? null,
+        h.address ?? null,
+        h.logo ?? null,
         toSqlDateTime(h.created_at),
         toSqlDateTime(h.updated_at ?? h.created_at),
       ]);
       await conn.query(
-        "INSERT INTO hostels (id, hostel_name, email, password_hash, status, parent_hostel_id, created_at, updated_at) VALUES ?",
+        "INSERT INTO hostels (id, hostel_name, email, password_hash, status, parent_hostel_id, phone, address, logo, created_at, updated_at) VALUES ?",
         [values]
       );
     }
@@ -3477,6 +3505,114 @@ async function handleBulkReviewLeaveRequests(req, res, body) {
   return sendJson(res, 200, { message: `Successfully updated ${updatedCount} request(s)` });
 }
 
+function handleGetHostelSettings(req, res) {
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN", "SUPER_ADMIN"]);
+  if (!user) return;
+  const hostelId = user.hostelId || getAccessibleHostelIds(user)[0];
+  const hostel = db.hostels.find((h) => h.id === hostelId) || db.hostels[0];
+  if (!hostel) return sendJson(res, 404, { error: "Hostel not found" });
+  return sendJson(res, 200, {
+    data: {
+      id: hostel.id,
+      hostel_name: hostel.hostel_name,
+      email: hostel.email,
+      phone: hostel.phone ?? "",
+      address: hostel.address ?? "",
+      logo: hostel.logo ? `/api/hostel-logo/${hostel.id}` : null,
+    },
+  });
+}
+
+async function handleUpdateHostelSettings(req, res, body) {
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN", "SUPER_ADMIN"]);
+  if (!user) return;
+  const hostelId = user.hostelId || getAccessibleHostelIds(user)[0];
+  const hostel = db.hostels.find((h) => h.id === hostelId) || db.hostels[0];
+  if (!hostel) return sendJson(res, 404, { error: "Hostel not found" });
+
+  if (body.hostel_name !== undefined) hostel.hostel_name = String(body.hostel_name).trim();
+  if (body.email !== undefined) hostel.email = String(body.email).trim().toLowerCase();
+  if (body.phone !== undefined) hostel.phone = String(body.phone).trim();
+  if (body.address !== undefined) hostel.address = String(body.address).trim();
+  if (body.logo !== undefined) hostel.logo = body.logo;
+
+  addAudit("UPDATE", "HOSTEL_SETTINGS", hostel.id, user, {
+    hostel_name: hostel.hostel_name,
+    email: hostel.email,
+    phone: hostel.phone,
+  });
+  await persist();
+  return sendJson(res, 200, {
+    data: {
+      id: hostel.id,
+      hostel_name: hostel.hostel_name,
+      email: hostel.email,
+      phone: hostel.phone ?? "",
+      address: hostel.address ?? "",
+      logo: hostel.logo ? `/api/hostel-logo/${hostel.id}` : null,
+    },
+  });
+}
+
+async function handleUploadHostelLogo(req, res, data) {
+  const user = requireAuth(req, res, ["HOSTEL_ADMIN", "SUPER_ADMIN"]);
+  if (!user) return;
+  const hostelId = user.hostelId || getAccessibleHostelIds(user)[0];
+  const hostel = db.hostels.find((h) => h.id === hostelId) || db.hostels[0];
+  if (!hostel) return sendJson(res, 404, { error: "Hostel not found" });
+
+  if (data.kind !== "multipart" || !data.value.files.logo) {
+    return sendJson(res, 400, { error: "Logo file is required" });
+  }
+
+  try {
+    const file = data.value.files.logo;
+    const mimeType = String(file.contentType ?? "image/jpeg").toLowerCase();
+    const photoBase64 = `data:${mimeType};base64,${file.data.toString("base64")}`;
+    hostel.logo = photoBase64;
+    addAudit("UPDATE", "HOSTEL_LOGO", hostel.id, user, { logo: "uploaded" });
+    await persist();
+    return sendJson(res, 200, {
+      data: {
+        logo: `/api/hostel-logo/${hostel.id}`,
+        id: hostel.id,
+      },
+    });
+  } catch (error) {
+    return sendJson(res, 500, { error: error.message });
+  }
+}
+
+function handleGetHostelInfo(req, res) {
+  const user = requireAuth(req, res, ["STUDENT", "PARENT", "SECURITY_GUARD", "HOSTEL_STAFF", "HOSTEL_ADMIN", "SUPER_ADMIN"]);
+  if (!user) return;
+  let hostel = null;
+  if (user.role === "STUDENT") {
+    const student = db.students.find((s) => s.id === user.id);
+    if (student) hostel = db.hostels.find((h) => h.id === student.hostel_id);
+  } else if (user.role === "PARENT") {
+    const parentMobile = cleanMobileDigits(user.email);
+    const student = db.students.find((s) => cleanMobileDigits(s.parent_mobile) === parentMobile);
+    if (student) hostel = db.hostels.find((h) => h.id === student.hostel_id);
+  } else if (user.hostelId) {
+    hostel = db.hostels.find((h) => h.id === user.hostelId);
+  }
+  if (!hostel && db.hostels.length > 0) {
+    hostel = db.hostels.find((h) => !h.id.endsWith("_ALL")) || db.hostels[0];
+  }
+  if (!hostel) return sendJson(res, 404, { error: "Hostel info not found" });
+  return sendJson(res, 200, {
+    data: {
+      id: hostel.id,
+      hostel_name: hostel.hostel_name,
+      email: hostel.email,
+      phone: hostel.phone || "+91 9876543210",
+      address: hostel.address || "Campus Hostel Block, Main Gate",
+      logo: hostel.logo ? `/api/hostel-logo/${hostel.id}` : null,
+    },
+  });
+}
+
 function handleReports(req, res) {
   const user = requireAuth(req, res, ["HOSTEL_ADMIN"]);
   if (!user) return;
@@ -4091,6 +4227,18 @@ async function handleApi(req, res, pathname) {
       return;
     }
 
+    if (pathname.startsWith("/api/hostel-logo/") && req.method === "GET") {
+      const match = pathname.match(/^\/api\/hostel-logo\/([^/]+)$/);
+      if (match) {
+        const hostelId = decodeURIComponent(match[1]);
+        const hostel = db.hostels.find((h) => h.id === hostelId);
+        if (hostel && hostel.logo) {
+          return sendPhotoResponse(res, hostel.logo);
+        }
+        return sendJson(res, 404, { error: "Hostel logo not found" });
+      }
+    }
+
     if (pathname.startsWith("/api/profile-photo/") && req.method === "GET") {
       const match = pathname.match(/^\/api\/profile-photo\/([^/]+)$/);
       if (match) {
@@ -4293,6 +4441,24 @@ async function handleApi(req, res, pathname) {
 
     if (pathname === "/api/hostel-admin/reports" && req.method === "GET") {
       return handleReports(req, res);
+    }
+
+    if (pathname === "/api/hostel-admin/settings" && req.method === "GET") {
+      return handleGetHostelSettings(req, res);
+    }
+
+    if (pathname === "/api/hostel-admin/settings" && req.method === "PATCH") {
+      const data = await readRequestData(req);
+      return handleUpdateHostelSettings(req, res, data.kind === "json" ? data.value : {});
+    }
+
+    if (pathname === "/api/hostel-admin/settings/logo" && req.method === "POST") {
+      const data = await readRequestData(req);
+      return handleUploadHostelLogo(req, res, data);
+    }
+
+    if (pathname === "/api/hostel-info" && req.method === "GET") {
+      return handleGetHostelInfo(req, res);
     }
 
     if (pathname === "/api/hostels" && req.method === "GET") {

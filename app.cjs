@@ -627,7 +627,7 @@ async function ensureBaseTables() {
           .split(";")
           .map((q) => q.trim())
           .filter((q) => q.length > 0 && !q.startsWith("CREATE DATABASE") && !q.startsWith("USE"));
-        
+
         for (const query of queries) {
           const cleaned = query
             .split("\n")
@@ -694,7 +694,7 @@ async function ensurePerformanceIndexes() {
         console.log(`Auto-Migration: Adding index '${idx.name}' on '${idx.table}'...`);
         await dbPool.query(idx.query);
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 }
 
@@ -1189,13 +1189,13 @@ async function persist() {
     await conn.commit();
   } catch (error) {
     if (conn) {
-      try { await conn.rollback(); } catch (_) {}
+      try { await conn.rollback(); } catch (_) { }
     }
     lastPersistError = error.message;
     console.warn("[db] MySQL persist warning:", error.message);
   } finally {
     if (conn) {
-      try { conn.release(); } catch (_) {}
+      try { conn.release(); } catch (_) { }
     }
   }
   return db;
@@ -2390,7 +2390,7 @@ async function handleLogin(req, res, body) {
           // Check if password matches student's password, or default parent pattern
           const matchesStudentPass = verifyPassword(password, linkedStudent.password_hash);
           const isInitialSetup = matchesStudentPass || password.length >= 6;
-          
+
           if (isInitialSetup) {
             const newParent = {
               id: uuid("parent"),
@@ -2661,11 +2661,11 @@ function handleHostelDashboard(req, res) {
   if (!user) return;
   const allowedHostelIds = getAccessibleHostelIds(user);
   const allowedSet = new Set(allowedHostelIds);
-  
+
   const students = db.students.filter((student) => allowedSet.has(student.hostel_id));
   const parents = db.parents.filter((parent) => allowedSet.has(parent.hostel_id));
   const staff = db.staff.filter((item) => allowedSet.has(item.hostel_id));
-  
+
   const studentIds = new Set(students.map((student) => student.id));
   const leaveCounts = computeStudentLeaveCounts(studentIds);
   return sendJson(res, 200, {
@@ -3015,11 +3015,11 @@ async function handleImportStudents(req, res, data) {
           existingStudent.name = mapped.name;
           existingStudent.room_number = mapped.room_number;
           existingStudent.mobile = mapped.mobile;
-          
+
           const oldParentMobile = existingStudent.parent_mobile;
           existingStudent.parent_mobile = mapped.parent_mobile;
           existingStudent.student_year = mapped.student_year;
-          
+
           if (mapped.password) {
             existingStudent.password_hash = hashPassword(mapped.password);
           }
@@ -3116,7 +3116,7 @@ async function handleUploadParentPhoto(req, res, studentId, data) {
     const file = data.value.files.photo;
     const mimeType = String(file.contentType ?? "image/jpeg").toLowerCase();
     const photoBase64 = `data:${mimeType};base64,${file.data.toString("base64")}`;
-    
+
     const targetMob = cleanMobileDigits(student.parent_mobile);
     let parent = db.parents.find((p) => cleanMobileDigits(p.mobile) === targetMob);
     if (!parent) {
@@ -3166,7 +3166,7 @@ async function handleBulkUploadPhotos(req, res, payload) {
 
     const student = db.students.find(
       (s) => (user.role === "SUPER_ADMIN" || allowedHostelIds.includes(s.hostel_id)) &&
-             String(s.student_id || "").toLowerCase() === studentIdRaw.toLowerCase()
+        String(s.student_id || "").toLowerCase() === studentIdRaw.toLowerCase()
     );
 
     if (!student) {
@@ -3957,11 +3957,11 @@ function handleGuardToday(req, res) {
         ...leave,
         parent_approval_photo: approvalPhotoUrl,
         parent_profile_photo: parentPhotoUrl,
-        student: student ? { 
-          ...student, 
+        student: student ? {
+          ...student,
           profile_photo: studentPhotoUrl,
           parent_profile_photo: parentPhotoUrl,
-          hostel_name: (db.hostels.find((h) => h.id === student.hostel_id)?.hostel_name ?? '') 
+          hostel_name: (db.hostels.find((h) => h.id === student.hostel_id)?.hostel_name ?? '')
         } : null,
         gatePass: gatePassByLeaveId(leave.id) ?? null,
       };
@@ -3998,7 +3998,7 @@ function getCombinedDateTime(dateVal, timeVal) {
     if (!isNaN(parsed.getTime())) {
       return parsed;
     }
-  } catch (_) {}
+  } catch (_) { }
   return null;
 }
 
@@ -4092,7 +4092,7 @@ async function handleGuardScan(req, res, body) {
     if (client.studentId === student.id) {
       try {
         client.res.write(`data: ${JSON.stringify(sseData)}\n\n`);
-      } catch (_) {}
+      } catch (_) { }
     }
   }
 
@@ -4186,12 +4186,12 @@ function handleCaretakerStudents(req, res) {
         presence_status: isOut ? "OUT" : "IN",
         active_pass: isOut
           ? {
-              out_time_actual: activeOutPass.out_time_actual,
-              expected_return_date: activeLeave?.to_date,
-              expected_return_time: activeLeave?.return_time,
-              reason: activeLeave?.reason,
-              request_type: activeLeave?.request_type || "LEAVE",
-            }
+            out_time_actual: activeOutPass.out_time_actual,
+            expected_return_date: activeLeave?.to_date,
+            expected_return_time: activeLeave?.return_time,
+            reason: activeLeave?.reason,
+            request_type: activeLeave?.request_type || "LEAVE",
+          }
           : null,
       };
     })
@@ -4226,11 +4226,11 @@ function handleCaretakerRequests(req, res) {
         parent_profile_photo: parentPhotoUrl,
         student: student
           ? {
-              ...student,
-              profile_photo: studentPhotoUrl,
-              parent_profile_photo: parentPhotoUrl,
-              hostel_name: db.hostels.find((h) => h.id === student.hostel_id)?.hostel_name ?? "",
-            }
+            ...student,
+            profile_photo: studentPhotoUrl,
+            parent_profile_photo: parentPhotoUrl,
+            hostel_name: db.hostels.find((h) => h.id === student.hostel_id)?.hostel_name ?? "",
+          }
           : null,
         gatePass: gatePassByLeaveId(leave.id) ?? null,
       };
@@ -4348,7 +4348,7 @@ async function handleApi(req, res, pathname) {
     if (pathname === "/api/leave-requests/events" && req.method === "GET") {
       const url = new URL(req.url ?? "/", "http://localhost");
       const studentId = url.searchParams.get("studentId");
-      
+
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
@@ -4357,12 +4357,12 @@ async function handleApi(req, res, pathname) {
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
         "Access-Control-Allow-Methods": "GET, OPTIONS"
       });
-      
+
       const client = { res, studentId };
       sseClients.add(client);
-      
+
       res.write("data: connected\n\n");
-      
+
       req.on("close", () => {
         sseClients.delete(client);
       });

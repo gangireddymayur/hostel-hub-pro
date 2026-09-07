@@ -99,7 +99,7 @@ function StaffPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, ...payload }: { id: string; role: "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF"; name: string; email: string; password?: string; hostel_id?: string }) =>
+    mutationFn: ({ id, ...payload }: { id: string; role: "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF" | "CARETAKER"; name: string; email: string; password?: string; hostel_id?: string }) =>
       updateStaff(id, payload),
     onSuccess: async () => {
       toast.success("Staff updated");
@@ -154,7 +154,7 @@ function StaffPage() {
 
                   const form = new FormData(event.currentTarget);
                   const payload = {
-                    role: selectedRole as "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF",
+                    role: selectedRole as "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF" | "CARETAKER",
                     name: String(form.get("name")),
                     email: String(form.get("email")),
                     password: String(form.get("password") ?? "") || undefined,
@@ -185,8 +185,9 @@ function StaffPage() {
                     className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                   >
                     <option value="HOSTEL_ADMIN">Hostel Admin</option>
+                    <option value="HOSTEL_STAFF">Hostel Staff / Warden</option>
+                    <option value="CARETAKER">Caretaker</option>
                     <option value="SECURITY_GUARD">Security Guard</option>
-                    <option value="HOSTEL_STAFF">Hostel Staff</option>
                   </select>
                   <p className="text-xs text-muted-foreground">
                     {selectedRole === "HOSTEL_ADMIN"
@@ -315,8 +316,9 @@ function StaffPage() {
             >
               <option value="ALL">All Roles</option>
               <option value="HOSTEL_ADMIN">Hostel Admin</option>
-              <option value="SECURITY_GUARD">Security Guard</option>
               <option value="HOSTEL_STAFF">Hostel Staff</option>
+              <option value="CARETAKER">Caretaker</option>
+              <option value="SECURITY_GUARD">Security Guard</option>
             </select>
             <select
               value={hostelFilter}

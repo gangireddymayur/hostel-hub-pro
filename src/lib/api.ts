@@ -296,14 +296,14 @@ export async function uploadStaffPhoto(id: string, file: File) {
   });
 }
 
-export async function createStaff(payload: { role: "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF"; name: string; email: string; password?: string; hostel_id?: string }) {
+export async function createStaff(payload: { role: "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF" | "CARETAKER"; name: string; email: string; password?: string; hostel_id?: string }) {
   return request<{ data: unknown }>("/hostel-admin/staff", {
     method: "POST",
     body: payload,
   });
 }
 
-export async function updateStaff(id: string, payload: { role?: "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF"; name?: string; email?: string; password?: string; hostel_id?: string }) {
+export async function updateStaff(id: string, payload: { role?: "HOSTEL_ADMIN" | "SECURITY_GUARD" | "HOSTEL_STAFF" | "CARETAKER"; name?: string; email?: string; password?: string; hostel_id?: string }) {
   return request<{ data: unknown }>(`/hostel-admin/staff/${id}`, {
     method: "PATCH",
     body: payload,

@@ -1754,6 +1754,7 @@ function normalizeRole(role) {
   if (value === "SUPER" || value === "SUPER_ADMIN") return "SUPER_ADMIN";
   if (value === "HOSTEL_ADMIN" || value === "ADMIN") return "HOSTEL_ADMIN";
   if (value === "SECURITY_GUARD" || value === "SECURITY") return "SECURITY_GUARD";
+  if (value === "CARETAKER" || value === "CARE_TAKER") return "CARETAKER";
   return value;
 }
 
@@ -1930,7 +1931,7 @@ async function createStaffRecord(hostelId, payload, actor) {
   const role = normalizeRole(payload.role);
   const name = String(payload.name ?? "").trim();
   const email = String(payload.email ?? "").trim().toLowerCase();
-  const defaultPassword = role === "SECURITY_GUARD" ? "Security@12345" : "Staff@12345";
+  const defaultPassword = role === "SECURITY_GUARD" ? "Security@12345" : role === "CARETAKER" ? "Caretaker@12345" : "Staff@12345";
   const password = String(payload.password ?? defaultPassword);
 
   if (!role || !name || !email) {
@@ -3396,7 +3397,7 @@ async function handleReviewLeaveRequest(req, res, leaveRequestId, body) {
   if (!student || !allowedHostelIds.includes(student.hostel_id)) return sendJson(res, 403, { error: "Forbidden" });
 
   const status = String(body.status ?? "").toUpperCase();
-  if (!["APPROVED", "REJECTED"].includes(status)) return sendJson(res, 400, { error: "Invalid status" });
+  if (!["APPROVED", "REJECTED", "CANCELLED"].includes(status)) return sendJson(res, 400, { error: "Invalid status" });
 
   const hostel_lat = body.hostel_lat != null ? Number(body.hostel_lat) : (body.staff_lat != null ? Number(body.staff_lat) : (body.lat != null ? Number(body.lat) : null));
   const hostel_lng = body.hostel_lng != null ? Number(body.hostel_lng) : (body.staff_lng != null ? Number(body.staff_lng) : (body.lng != null ? Number(body.lng) : null));
@@ -3409,12 +3410,12 @@ async function handleReviewLeaveRequest(req, res, leaveRequestId, body) {
     return sendJson(res, 400, { error: "Cannot approve request. Waiting for parent approval." });
   }
 
-  leave.hostel_status = status;
+  leave.hostel_status = status === "CANCELLED" ? "CANCELLED" : status;
   leave.hostel_lat = hostel_lat;
   leave.hostel_lng = hostel_lng;
   leave.updated_at = nowIso();
-  if (status === "REJECTED") {
-    leave.hostel_reject_reason = body.hostel_reject_reason ? String(body.hostel_reject_reason).trim() : null;
+  if (status === "REJECTED" || status === "CANCELLED") {
+    leave.hostel_reject_reason = body.hostel_reject_reason ? String(body.hostel_reject_reason).trim() : (status === "CANCELLED" ? "Cancelled by Staff" : null);
     leave.final_status = "REJECTED";
     const gatePass = gatePassByLeaveId(leave.id);
     if (gatePass) {
@@ -3448,7 +3449,7 @@ async function handleBulkReviewLeaveRequests(req, res, body) {
   if (!Array.isArray(ids)) {
     return sendJson(res, 400, { error: "ids must be an array of strings" });
   }
-  if (!["APPROVED", "REJECTED"].includes(status)) {
+  if (!["APPROVED", "REJECTED", "CANCELLED"].includes(status)) {
     return sendJson(res, 400, { error: "Invalid status" });
   }
 
@@ -3474,9 +3475,9 @@ async function handleBulkReviewLeaveRequests(req, res, body) {
       continue;
     }
 
-    leave.hostel_status = status;
-    if (status === "REJECTED") {
-      leave.hostel_reject_reason = body.hostel_reject_reason ? String(body.hostel_reject_reason).trim() : null;
+    leave.hostel_status = status === "CANCELLED" ? "CANCELLED" : status;
+    if (status === "REJECTED" || status === "CANCELLED") {
+      leave.hostel_reject_reason = body.hostel_reject_reason ? String(body.hostel_reject_reason).trim() : (status === "CANCELLED" ? "Cancelled by Staff" : null);
       leave.final_status = "REJECTED";
       const gatePass = gatePassByLeaveId(leave.id);
       if (gatePass) {
@@ -3584,7 +3585,7 @@ async function handleUploadHostelLogo(req, res, data) {
 }
 
 function handleGetHostelInfo(req, res) {
-  const user = requireAuth(req, res, ["STUDENT", "PARENT", "SECURITY_GUARD", "HOSTEL_STAFF", "HOSTEL_ADMIN", "SUPER_ADMIN"]);
+  const user = requireAuth(req, res, ["STUDENT", "PARENT", "SECURITY_GUARD", "HOSTEL_STAFF", "CARETAKER", "HOSTEL_ADMIN", "SUPER_ADMIN"]);
   if (!user) return;
   let hostel = null;
   if (user.role === "STUDENT") {
@@ -4098,6 +4099,147 @@ async function handleGuardScan(req, res, body) {
   return sendJson(res, 200, { data: gatePass, branch_warning: branchWarning });
 }
 
+function handleCaretakerOverview(req, res) {
+  const user = requireAuth(req, res, ["CARETAKER", "HOSTEL_STAFF", "HOSTEL_ADMIN", "SUPER_ADMIN"]);
+  if (!user) return;
+
+  const allowedHostelIds = getAccessibleHostelIds(user);
+  const activeStudents = db.students.filter(
+    (s) => s.status === "ACTIVE" && allowedHostelIds.includes(s.hostel_id)
+  );
+
+  const studentIds = new Set(activeStudents.map((s) => s.id));
+
+  // Find all active gate passes with status 'OUT'
+  const activeOutsidePasses = db.gatePasses.filter((gp) => {
+    if (gp.status !== "OUT") return false;
+    const leave = db.leaveRequests.find((l) => l.id === gp.leave_request_id);
+    return leave && studentIds.has(leave.student_id);
+  });
+
+  const outsideStudentIds = new Set(
+    activeOutsidePasses
+      .map((gp) => {
+        const leave = db.leaveRequests.find((l) => l.id === gp.leave_request_id);
+        return leave ? leave.student_id : null;
+      })
+      .filter(Boolean)
+  );
+
+  const totalStudents = activeStudents.length;
+  const outsideCount = outsideStudentIds.size;
+  const insideCount = Math.max(0, totalStudents - outsideCount);
+
+  // Pending requests count
+  const pendingRequestsCount = db.leaveRequests.filter(
+    (l) => studentIds.has(l.student_id) && l.final_status === "PENDING"
+  ).length;
+
+  const parentApprovedCount = db.leaveRequests.filter(
+    (l) => studentIds.has(l.student_id) && l.parent_status === "APPROVED" && l.hostel_status === "PENDING"
+  ).length;
+
+  return sendJson(res, 200, {
+    data: {
+      totalStudents,
+      insideCount,
+      outsideCount,
+      pendingRequestsCount,
+      parentApprovedCount,
+    },
+  });
+}
+
+function handleCaretakerStudents(req, res) {
+  const user = requireAuth(req, res, ["CARETAKER", "HOSTEL_STAFF", "HOSTEL_ADMIN", "SUPER_ADMIN"]);
+  if (!user) return;
+
+  const allowedHostelIds = getAccessibleHostelIds(user);
+  const activeStudents = db.students
+    .filter((s) => s.status === "ACTIVE" && allowedHostelIds.includes(s.hostel_id))
+    .map((student) => {
+      // Check if student has an active OUT pass
+      const studentLeaves = db.leaveRequests.filter((l) => l.student_id === student.id);
+      let activeOutPass = null;
+      let activeLeave = null;
+
+      for (const leave of studentLeaves) {
+        const gp = gatePassByLeaveId(leave.id);
+        if (gp && gp.status === "OUT") {
+          activeOutPass = gp;
+          activeLeave = leave;
+          break;
+        }
+      }
+
+      const isOut = activeOutPass !== null;
+      const studentPhotoUrl = student.profile_photo ? `/api/profile-photo/${student.id}` : null;
+      const parentPhoto = findRegisteredParentPhoto(student);
+      const parentPhotoUrl = parentPhoto ? `/api/hostel-admin/students/${student.id}/parent-photo` : null;
+      const hostelName = db.hostels.find((h) => h.id === student.hostel_id)?.hostel_name ?? "";
+
+      return {
+        ...student,
+        profile_photo: studentPhotoUrl,
+        parent_profile_photo: parentPhotoUrl,
+        hostel_name: hostelName,
+        presence_status: isOut ? "OUT" : "IN",
+        active_pass: isOut
+          ? {
+              out_time_actual: activeOutPass.out_time_actual,
+              expected_return_date: activeLeave?.to_date,
+              expected_return_time: activeLeave?.return_time,
+              reason: activeLeave?.reason,
+              request_type: activeLeave?.request_type || "LEAVE",
+            }
+          : null,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return sendJson(res, 200, { data: activeStudents });
+}
+
+function handleCaretakerRequests(req, res) {
+  const user = requireAuth(req, res, ["CARETAKER", "HOSTEL_STAFF", "HOSTEL_ADMIN", "SUPER_ADMIN"]);
+  if (!user) return;
+
+  const allowedHostelIds = getAccessibleHostelIds(user);
+  const studentIds = new Set(
+    db.students
+      .filter((student) => allowedHostelIds.includes(student.hostel_id))
+      .map((student) => student.id)
+  );
+
+  const leaves = db.leaveRequests
+    .filter((leave) => studentIds.has(leave.student_id))
+    .map((leave) => {
+      const student = db.students.find((s) => s.id === leave.student_id);
+      const parentPhoto = student ? findRegisteredParentPhoto(student) : null;
+      const studentPhotoUrl = student && student.profile_photo ? `/api/profile-photo/${student.id}` : null;
+      const parentPhotoUrl = parentPhoto ? `/api/hostel-admin/students/${student.id}/parent-photo` : null;
+      const approvalPhotoUrl = leave.parent_approval_photo ? `/api/leave-requests/${leave.id}/parent-approval-photo` : null;
+
+      return {
+        ...leave,
+        parent_approval_photo: approvalPhotoUrl,
+        parent_profile_photo: parentPhotoUrl,
+        student: student
+          ? {
+              ...student,
+              profile_photo: studentPhotoUrl,
+              parent_profile_photo: parentPhotoUrl,
+              hostel_name: db.hostels.find((h) => h.id === student.hostel_id)?.hostel_name ?? "",
+            }
+          : null,
+        gatePass: gatePassByLeaveId(leave.id) ?? null,
+      };
+    })
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+
+  return sendJson(res, 200, { data: leaves });
+}
+
 function serveStaticFile(res, filePath) {
   const stream = fs.createReadStream(filePath);
   const ext = path.extname(filePath).toLowerCase();
@@ -4462,7 +4604,7 @@ async function handleApi(req, res, pathname) {
     }
 
     if (pathname === "/api/hostels" && req.method === "GET") {
-      const user = requireAuth(req, res, ["SUPER_ADMIN", "HOSTEL_ADMIN", "HOSTEL_STAFF", "SECURITY_GUARD"]);
+      const user = requireAuth(req, res, ["SUPER_ADMIN", "HOSTEL_ADMIN", "HOSTEL_STAFF", "SECURITY_GUARD", "CARETAKER"]);
       if (!user) return;
       let list = db.hostels.filter(h => h.status === "ACTIVE" && !h.id.endsWith("_ALL"));
       if (user.role !== "SUPER_ADMIN") {
@@ -4549,6 +4691,18 @@ async function handleApi(req, res, pathname) {
     if (pathname === "/api/guards/scan" && req.method === "POST") {
       const data = await readRequestData(req);
       return handleGuardScan(req, res, data.kind === "json" ? data.value : {});
+    }
+
+    if (pathname === "/api/caretaker/overview" && req.method === "GET") {
+      return handleCaretakerOverview(req, res);
+    }
+
+    if (pathname === "/api/caretaker/students" && req.method === "GET") {
+      return handleCaretakerStudents(req, res);
+    }
+
+    if (pathname === "/api/caretaker/requests" && req.method === "GET") {
+      return handleCaretakerRequests(req, res);
     }
 
     return sendJson(res, 404, { error: "Not Found" });

@@ -360,28 +360,11 @@ function Reports() {
   };
 
   // Printable PDF Handler (Directly prints the exact visual cards displayed on screen)
-  const handlePrintPdf = async () => {
+  const handlePrintPdf = () => {
     const printElem = document.getElementById("dialog-print-cards");
     if (!printElem) {
       window.print();
       return;
-    }
-
-    // Convert logo to base64 Data URL to guarantee immediate synchronous rendering inside print iframe
-    let logoDataUrl = `${window.location.origin}/gatex-logo.jpg`;
-    try {
-      const res = await fetch("/gatex-logo.jpg");
-      if (res.ok) {
-        const blob = await res.blob();
-        logoDataUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = () => resolve(`${window.location.origin}/gatex-logo.jpg`);
-          reader.readAsDataURL(blob);
-        });
-      }
-    } catch (_) {
-      logoDataUrl = `${window.location.origin}/gatex-logo.jpg`;
     }
 
     const printFrame = document.createElement("iframe");
@@ -405,15 +388,15 @@ function Reports() {
       .join("\n");
 
     const headerHtml = `
-      <div style="border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <img src="${logoDataUrl}" alt="GATEX Logo" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover; border: 1.5px solid #cbd5e1; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" />
+      <div style="border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <img src="/gatex-logo.jpg" alt="Logo" style="width: 36px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid #cbd5e1;" />
           <div>
-            <h1 style="font-size: 17px; font-weight: 800; text-transform: uppercase; color: #0f172a; margin: 0; line-height: 1.2; letter-spacing: 0.5px;">GATEX Management System</h1>
-            <h2 style="font-size: 12px; font-weight: 600; color: #475569; margin: 2px 0 0 0;">${reportTitle}</h2>
+            <h1 style="font-size: 16px; font-weight: 800; text-transform: uppercase; color: #0f172a; margin: 0; line-height: 1.2;">GATEX Management System</h1>
+            <h2 style="font-size: 12px; font-weight: 600; color: #475569; margin: 0;">${reportTitle}</h2>
           </div>
         </div>
-        <div style="text-align: right; font-size: 11px; color: #475569; line-height: 1.4;">
+        <div style="text-align: right; font-size: 11px; color: #64748b; line-height: 1.3;">
           <p style="margin: 0;"><strong>Date Range:</strong> ${fromDate} to ${toDate}</p>
           <p style="margin: 0;"><strong>Total Requests:</strong> ${filteredLeaves.length}</p>
         </div>
@@ -430,7 +413,7 @@ function Reports() {
           <style>
             @page {
               size: A4 portrait;
-              margin: 8mm 8mm 8mm 8mm;
+              margin: 8mm 10mm 8mm 10mm;
             }
             *, *::before, *::after {
               box-sizing: border-box !important;
@@ -451,61 +434,31 @@ function Reports() {
               padding: 0 !important;
               display: block !important;
             }
-            /* Keep each request card intact without awkward page breaks; allocate ~half page per card */
-            #dialog-print-cards > div,
-            .audit-request-card {
+            /* Keep each request card intact without awkward page breaks */
+            #dialog-print-cards > div {
               break-inside: avoid !important;
               page-break-inside: avoid !important;
-              min-height: 480px !important;
-              margin-bottom: 22px !important;
+              margin-bottom: 14px !important;
               background: #ffffff !important;
-              border: 1.5px solid #cbd5e1 !important;
+              border: 1px solid #e2e8f0 !important;
               border-radius: 12px !important;
-              padding: 16px 18px !important;
+              padding: 14px !important;
               box-shadow: none !important;
-              display: flex !important;
-              flex-direction: column !important;
-              justify-content: space-between !important;
             }
-            /* Student Profile Header in Print */
+            /* Ensure images never explode in size */
             img.student-photo {
-              width: 46px !important;
-              height: 46px !important;
+              width: 36px !important;
+              height: 36px !important;
               border-radius: 9999px !important;
               object-fit: cover !important;
-              border: 1.5px solid #cbd5e1 !important;
             }
-            /* Force 5-Column Audit Grid in Print */
-            .audit-steps-grid {
-              display: grid !important;
-              grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-              gap: 8px !important;
-              margin-top: 12px !important;
-            }
-            .audit-step-col {
-              display: flex !important;
-              flex-direction: column !important;
-              justify-content: space-between !important;
-              min-height: 225px !important;
-              padding: 10px 8px !important;
-              border-radius: 8px !important;
-            }
-            /* Large, high-resolution audit photos */
             img.timeline-photo,
             img.live-photo {
               width: 100% !important;
-              height: 80px !important;
-              max-height: 80px !important;
+              height: 48px !important;
+              max-height: 48px !important;
               border-radius: 6px !important;
               object-fit: cover !important;
-              border: 1.5px solid #cbd5e1 !important;
-            }
-            .photo-placeholder {
-              height: 80px !important;
-              min-height: 80px !important;
-              display: flex !important;
-              align-items: center !important;
-              justify-content: center !important;
             }
           </style>
         </head>
@@ -519,27 +472,15 @@ function Reports() {
     `);
     doc.close();
 
-    // Ensure all images are fully loaded before opening print preview
-    const images = Array.from(doc.images);
-    const imagePromises = images.map((img) => {
-      if (img.complete) return Promise.resolve();
-      return new Promise<void>((resolve) => {
-        img.onload = () => resolve();
-        img.onerror = () => resolve();
-      });
-    });
-
-    Promise.all(imagePromises).then(() => {
+    setTimeout(() => {
+      printFrame.contentWindow?.focus();
+      printFrame.contentWindow?.print();
       setTimeout(() => {
-        printFrame.contentWindow?.focus();
-        printFrame.contentWindow?.print();
-        setTimeout(() => {
-          try {
-            document.body.removeChild(printFrame);
-          } catch (_) {}
-        }, 2000);
-      }, 250);
-    });
+        try {
+          document.body.removeChild(printFrame);
+        } catch (_) {}
+      }, 2000);
+    }, 400);
   };
 
   return (
@@ -1053,7 +994,7 @@ function Reports() {
                 return (
                   <div
                     key={leave.id || idx}
-                    className="audit-request-card rounded-xl border border-border/80 bg-card p-4 sm:p-5 shadow-sm transition hover:border-primary/40"
+                    className="rounded-xl border border-border/80 bg-card p-4 shadow-sm transition hover:border-primary/40"
                   >
                     {/* Record Top Bar */}
                     <div className="flex flex-col gap-2 border-b border-border/60 pb-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1062,47 +1003,47 @@ function Reports() {
                           <img
                             src={studentPhoto}
                             alt=""
-                            className="student-photo h-11 w-11 cursor-pointer rounded-full border border-primary/30 object-cover shadow-sm transition hover:scale-105"
+                            className="student-photo h-10 w-10 cursor-pointer rounded-full border border-primary/20 object-cover shadow-sm transition hover:scale-105"
                             onClick={() => setZoomedPhoto({ url: studentPhoto, title: `Student Photo - ${leave.student?.name}` })}
                           />
                         ) : (
-                          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 font-bold text-primary border border-primary/20">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 font-bold text-primary">
                             {leave.student?.name?.slice(0, 2).toUpperCase() || "ST"}
                           </div>
                         )}
                         <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-foreground text-sm sm:text-base">{leave.student?.name || "Student"}</span>
-                            <Badge variant="outline" className="font-mono text-xs font-semibold px-2 py-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-foreground">{leave.student?.name || "Student"}</span>
+                            <Badge variant="outline" className="font-mono text-[10px]">
                               {leave.student?.student_id || leave.student_id}
                             </Badge>
-                            <Badge variant="secondary" className="text-xs px-2 py-0.5">
+                            <Badge variant="secondary" className="text-[10px]">
                               {formatRoom(leave.student?.room_number)}
                             </Badge>
-                            <Badge variant="outline" className="text-xs bg-muted/60 px-2 py-0.5">
+                            <Badge variant="outline" className="text-[10px] bg-muted/60">
                               Request #{idx + 1}
                             </Badge>
                           </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            Hostel: <strong className="text-foreground/80">{leave.student?.hostel_name || "Primary"}</strong> | Mobile: <strong className="text-foreground/80">{leave.student?.mobile || "—"}</strong> | Parent: <strong className="text-foreground/80">{leave.student?.parent_mobile || "—"}</strong>
+                          <div className="text-[11px] text-muted-foreground">
+                            Hostel: {leave.student?.hostel_name || "Primary"} | Mobile: {leave.student?.mobile || "—"} | Parent: {leave.student?.parent_mobile || "—"}
                           </div>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2">
                         {isReturned ? (
-                          <Badge className="bg-teal-600 text-white font-bold px-3 py-1 text-xs">RETURNED</Badge>
+                          <Badge className="bg-teal-600 text-white font-semibold">RETURNED</Badge>
                         ) : isOut ? (
-                          <Badge className="bg-blue-600 text-white font-bold px-3 py-1 text-xs animate-pulse">CURRENTLY OUT</Badge>
+                          <Badge className="bg-blue-600 text-white font-semibold animate-pulse">CURRENTLY OUT</Badge>
                         ) : (
                           <Badge
-                            className={`font-semibold px-3 py-1 text-xs ${
+                            className={
                               leave.final_status === "APPROVED"
                                 ? "bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20"
                                 : leave.final_status === "REJECTED"
                                 ? "bg-rose-500/15 text-rose-700 hover:bg-rose-500/20"
                                 : "bg-amber-500/15 text-amber-700 hover:bg-amber-500/20"
-                            }`}
+                            }
                           >
                             {leave.final_status}
                           </Badge>
@@ -1111,20 +1052,20 @@ function Reports() {
                     </div>
 
                     {/* Reason and Scheduled Times */}
-                    <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
-                      <div className="rounded-lg bg-muted/50 p-2.5 sm:col-span-2 border border-border/40">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      <div className="rounded-lg bg-muted/40 p-2.5 sm:col-span-2">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                           Reason / Destination
                         </span>
-                        <p className="mt-0.5 text-xs font-semibold text-foreground">
+                        <p className="mt-0.5 text-xs font-medium text-foreground">
                           {leave.reason || "No reason specified"}
                         </p>
                       </div>
-                      <div className="rounded-lg bg-muted/50 p-2.5 border border-border/40">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      <div className="rounded-lg bg-muted/40 p-2.5">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                           Scheduled Window
                         </span>
-                        <p className="mt-0.5 text-xs font-semibold text-foreground">
+                        <p className="mt-0.5 text-xs font-medium text-foreground">
                           {leave.from_date?.slice(0, 10)} ➔ {leave.to_date?.slice(0, 10)}
                         </p>
                       </div>
@@ -1132,25 +1073,25 @@ function Reports() {
 
                     {/* 5-Step Visual Timeline Audit */}
                     <div className="mt-4">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                         Movement &amp; Verification Audit Trail
                       </span>
-                      <div className="audit-steps-grid mt-2.5 grid gap-2.5 grid-cols-1 sm:grid-cols-5">
+                      <div className="mt-2 grid gap-2.5 grid-cols-1 sm:grid-cols-5">
                         {/* Step 1: Student Request */}
-                        <div className="audit-step-col rounded-lg border border-border/80 bg-muted/20 p-2.5 flex flex-col justify-between">
+                        <div className="rounded-lg border border-border/80 bg-muted/20 p-2.5 flex flex-col justify-between">
                           <div>
-                            <div className="flex items-center gap-1.5 font-bold text-xs text-foreground">
+                            <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
                               <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground font-bold">1</span>
                               Student Request
                             </div>
-                            <div className="mt-1.5 space-y-1 text-xs text-muted-foreground">
+                            <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
                               <div>Submitted: {leave.created_at ? new Date(leave.created_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "—"}</div>
                               {(leave as any).student_lat != null && (leave as any).student_lng != null ? (
                                 <a
                                   href={`https://maps.google.com/?q=${(leave as any).student_lat},${(leave as any).student_lng}`}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                                  className="flex items-center gap-1 text-[10px] text-primary hover:underline"
                                 >
                                   <MapPin className="h-3 w-3 shrink-0" />
                                   Lat: {Number((leave as any).student_lat).toFixed(4)}, Lng: {Number((leave as any).student_lng).toFixed(4)}
@@ -1162,25 +1103,25 @@ function Reports() {
                           </div>
 
                           {/* Student Photo Thumbnail */}
-                          <div className="mt-2.5 pt-2 border-t border-border/40">
-                            <span className="text-[10px] font-semibold text-muted-foreground block truncate mb-1">Student Photo</span>
+                          <div className="mt-2 pt-1.5 border-t border-border/40">
+                            <span className="text-[9px] font-semibold text-muted-foreground block truncate mb-1">Student Photo</span>
                             {studentPhoto ? (
                               <img
                                 src={studentPhoto}
                                 alt="Student"
-                                className="timeline-photo h-20 w-full cursor-pointer rounded-md border border-primary/30 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
+                                className="timeline-photo h-14 w-full cursor-pointer rounded border border-primary/30 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
                                 onClick={() => setZoomedPhoto({ url: studentPhoto, title: `Student Photo - ${leave.student?.name} (${leave.student?.student_id || leave.student_id})` })}
                               />
                             ) : (
-                              <div className="photo-placeholder flex flex-col items-center justify-center h-20 rounded-md border border-dashed border-border/60 bg-muted/30">
-                                <span className="text-[10px] font-medium text-muted-foreground">{leave.student?.name || "No Photo"}</span>
+                              <div className="flex flex-col items-center justify-center h-14 rounded border border-dashed border-border/60 bg-muted/30">
+                                <span className="text-[9px] font-medium text-muted-foreground">{leave.student?.name || "No Photo"}</span>
                               </div>
                             )}
                           </div>
                         </div>
 
                         {/* Step 2: Parent Verification (Dual Photos: Registered Reference vs Live Selfie) */}
-                        <div className={`audit-step-col rounded-lg border p-2.5 flex flex-col justify-between ${
+                        <div className={`rounded-lg border p-2.5 flex flex-col justify-between ${
                           leave.parent_status === "APPROVED"
                             ? "border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20"
                             : leave.parent_status === "REJECTED"
@@ -1189,7 +1130,7 @@ function Reports() {
                         }`}>
                           <div>
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5 font-bold text-xs text-foreground">
+                              <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
                                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground font-bold">2</span>
                                 Parent Verification
                               </div>
@@ -1199,13 +1140,13 @@ function Reports() {
                                 {leave.parent_status || "PENDING"}
                               </span>
                             </div>
-                            <div className="mt-1.5 space-y-1 text-xs text-muted-foreground">
+                            <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
                               {(leave as any).parent_lat != null && (leave as any).parent_lng != null && (
                                 <a
                                   href={`https://maps.google.com/?q=${(leave as any).parent_lat},${(leave as any).parent_lng}`}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                                  className="flex items-center gap-1 text-[10px] text-primary hover:underline"
                                 >
                                   <MapPin className="h-3 w-3 shrink-0" />
                                   Parent GPS
@@ -1218,20 +1159,20 @@ function Reports() {
                           </div>
 
                           {/* Dual Parent Photos: Registered Photo vs Live Selfie */}
-                          <div className="mt-2.5 pt-2 border-t border-border/40">
+                          <div className="mt-2 pt-1.5 border-t border-border/40">
                             <div className="grid grid-cols-2 gap-1.5">
                               {/* Registered Reference Photo */}
                               <div>
-                                <span className="text-[9px] font-semibold text-muted-foreground block text-center truncate mb-1">Registered</span>
+                                <span className="text-[9px] font-semibold text-muted-foreground block text-center truncate mb-0.5">Registered</span>
                                 {parentRegPhoto ? (
                                   <img
                                     src={parentRegPhoto}
                                     alt="Registered Parent"
-                                    className="timeline-photo h-20 w-full cursor-pointer rounded-md border border-border/80 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
+                                    className="timeline-photo h-14 w-full cursor-pointer rounded border border-border/80 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
                                     onClick={() => setZoomedPhoto({ url: parentRegPhoto, title: `Registered Parent Photo - ${leave.student?.name}` })}
                                   />
                                 ) : (
-                                  <div className="photo-placeholder flex flex-col items-center justify-center h-20 rounded-md border border-dashed border-border/60 bg-muted/20">
+                                  <div className="flex flex-col items-center justify-center h-14 rounded border border-dashed border-border/60 bg-muted/20">
                                     <span className="text-[8px] text-muted-foreground text-center">No Reg Photo</span>
                                   </div>
                                 )}
@@ -1239,16 +1180,16 @@ function Reports() {
 
                               {/* Live Action Selfie Photo */}
                               <div>
-                                <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 block text-center truncate mb-1">Live Action</span>
+                                <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 block text-center truncate mb-0.5">Live Action</span>
                                 {parentLivePhoto ? (
                                   <img
                                     src={parentLivePhoto}
                                     alt="Live Verification Selfie"
-                                    className="timeline-photo h-20 w-full cursor-pointer rounded-md border border-emerald-500/50 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
+                                    className="timeline-photo h-14 w-full cursor-pointer rounded border border-emerald-500/50 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
                                     onClick={() => setZoomedPhoto({ url: parentLivePhoto, title: `Live Action Selfie - ${leave.student?.name}` })}
                                   />
                                 ) : (
-                                  <div className="photo-placeholder flex flex-col items-center justify-center h-20 rounded-md border border-dashed border-border/60 bg-muted/20">
+                                  <div className="flex flex-col items-center justify-center h-14 rounded border border-dashed border-border/60 bg-muted/20">
                                     <span className="text-[8px] text-muted-foreground text-center">No Live Selfie</span>
                                   </div>
                                 )}
@@ -1258,7 +1199,7 @@ function Reports() {
                         </div>
 
                         {/* Step 3: Warden / Hostel Admin Approval */}
-                        <div className={`audit-step-col rounded-lg border p-2.5 flex flex-col justify-between ${
+                        <div className={`rounded-lg border p-2.5 flex flex-col justify-between ${
                           leave.hostel_status === "APPROVED"
                             ? "border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20"
                             : leave.hostel_status === "REJECTED"
@@ -1267,7 +1208,7 @@ function Reports() {
                         }`}>
                           <div>
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5 font-bold text-xs text-foreground">
+                              <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
                                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground font-bold">3</span>
                                 Warden Review
                               </div>
@@ -1277,44 +1218,44 @@ function Reports() {
                                 {leave.hostel_status || "PENDING"}
                               </span>
                             </div>
-                            <div className="mt-1.5 space-y-1 text-xs text-muted-foreground">
+                            <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
                               {(leave as any).hostel_lat != null && (
                                 <a
                                   href={`https://maps.google.com/?q=${(leave as any).hostel_lat},${(leave as any).hostel_lng}`}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                                  className="flex items-center gap-1 text-[10px] text-primary hover:underline"
                                 >
                                   <MapPin className="h-3 w-3 shrink-0" /> Warden GPS
                                 </a>
                               )}
-                              {(leave as any).note && <p className="text-[10px] text-foreground font-semibold">Note: {(leave as any).note}</p>}
+                              {(leave as any).note && <p className="text-[10px] text-foreground font-medium">Note: {(leave as any).note}</p>}
                               {(leave as any).hostel_reject_reason && (
-                                <p className="text-[10px] text-rose-600 font-semibold">Reject: {(leave as any).hostel_reject_reason}</p>
+                                <p className="text-[10px] text-rose-600 font-medium">Reject: {(leave as any).hostel_reject_reason}</p>
                               )}
                             </div>
                           </div>
 
                           {/* Warden Photo / Identity */}
-                          <div className="mt-2.5 pt-2 border-t border-border/40 space-y-1.5">
+                          <div className="mt-2 pt-1.5 border-t border-border/40 space-y-1">
                             {wardenPhoto ? (
                               <div>
-                                <span className="text-[9px] font-semibold text-muted-foreground block text-center truncate mb-1">Warden Photo</span>
+                                <span className="text-[9px] font-semibold text-muted-foreground block text-center truncate mb-0.5">Warden Photo</span>
                                 <img
                                   src={wardenPhoto}
                                   alt="Warden"
-                                  className="timeline-photo h-20 w-full cursor-pointer rounded-md border border-border/80 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
+                                  className="timeline-photo h-14 w-full cursor-pointer rounded border border-border/80 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
                                   onClick={() => setZoomedPhoto({ url: wardenPhoto, title: `Warden Photo - ${wardenName}` })}
                                 />
                               </div>
                             ) : (
-                              <div className="photo-placeholder flex flex-col items-center justify-center h-20 rounded-md border border-dashed border-border/60 bg-muted/20">
+                              <div className="flex flex-col items-center justify-center h-14 rounded border border-dashed border-border/60 bg-muted/20">
                                 <span className="text-[8px] text-muted-foreground text-center">No Photo Uploaded</span>
                               </div>
                             )}
-                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                               <ShieldCheck className="h-3.5 w-3.5 text-primary shrink-0" />
-                              <span className="font-semibold text-foreground truncate">
+                              <span className="font-medium text-foreground truncate">
                                 {`Verified: ${wardenName}`}
                               </span>
                             </div>
@@ -1322,27 +1263,27 @@ function Reports() {
                         </div>
 
                         {/* Step 4: Gate Security Exit */}
-                        <div className="audit-step-col rounded-lg border border-border/80 bg-muted/20 p-2.5 flex flex-col justify-between">
+                        <div className="rounded-lg border border-border/80 bg-muted/20 p-2.5 flex flex-col justify-between">
                           <div>
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5 font-bold text-xs text-foreground">
+                              <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
                                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground font-bold">4</span>
                                 Gate Exit
                               </div>
                               {leave.gatePass?.out_time_actual ? (
-                                <Badge variant="outline" className="bg-emerald-500/10 text-[9px] font-bold text-emerald-700 dark:text-emerald-400">SCANNED OUT</Badge>
+                                <Badge variant="outline" className="bg-emerald-500/10 text-[9px] text-emerald-700 dark:text-emerald-400">SCANNED OUT</Badge>
                               ) : (
                                 <span className="text-[10px] text-muted-foreground">Pending</span>
                               )}
                             </div>
-                            <div className="mt-1.5 space-y-1 text-xs text-muted-foreground">
+                            <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
                               <div>Time: {leave.gatePass?.out_time_actual ? new Date(leave.gatePass.out_time_actual).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</div>
                               {(leave as any).gatePass?.out_guard_lat != null && (
                                 <a
                                   href={`https://maps.google.com/?q=${(leave as any).gatePass.out_guard_lat},${(leave as any).gatePass.out_guard_lng}`}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                                  className="flex items-center gap-1 text-[10px] text-primary hover:underline"
                                 >
                                   <MapPin className="h-3 w-3 shrink-0" /> Gate GPS
                                 </a>
@@ -1351,27 +1292,27 @@ function Reports() {
                           </div>
 
                           {/* Guard Exit Photo / Identity */}
-                          <div className="mt-2.5 pt-2 border-t border-border/40 space-y-1.5">
+                          <div className="mt-2 pt-1.5 border-t border-border/40 space-y-1">
                             {guardExitPhoto ? (
                               <div>
-                                <span className="text-[9px] font-semibold text-muted-foreground block text-center truncate mb-1">Guard Photo</span>
+                                <span className="text-[9px] font-semibold text-muted-foreground block text-center truncate mb-0.5">Guard Photo</span>
                                 <img
                                   src={guardExitPhoto}
                                   alt="Guard"
-                                  className="timeline-photo h-20 w-full cursor-pointer rounded-md border border-border/80 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
+                                  className="timeline-photo h-14 w-full cursor-pointer rounded border border-border/80 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
                                   onClick={() => setZoomedPhoto({ url: guardExitPhoto, title: `Security Guard Photo - ${guardExitName}` })}
                                 />
                               </div>
                             ) : (
-                              <div className="photo-placeholder flex flex-col items-center justify-center h-20 rounded-md border border-dashed border-border/60 bg-muted/20">
+                              <div className="flex flex-col items-center justify-center h-14 rounded border border-dashed border-border/60 bg-muted/20">
                                 <span className="text-[8px] text-muted-foreground text-center">No Photo Uploaded</span>
                               </div>
                             )}
-                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                               <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-600 shrink-0">
                                 <ShieldCheck className="h-2.5 w-2.5" />
                               </div>
-                              <span className="font-semibold text-foreground truncate">
+                              <span className="font-medium text-foreground truncate">
                                 {`Guard: ${guardExitName}`}
                               </span>
                             </div>
@@ -1379,29 +1320,29 @@ function Reports() {
                         </div>
 
                         {/* Step 5: Gate Security Return */}
-                        <div className="audit-step-col rounded-lg border border-border/80 bg-muted/20 p-2.5 flex flex-col justify-between">
+                        <div className="rounded-lg border border-border/80 bg-muted/20 p-2.5 flex flex-col justify-between">
                           <div>
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5 font-bold text-xs text-foreground">
+                              <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
                                 <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground font-bold">5</span>
                                 Gate Return
                               </div>
                               {leave.gatePass?.in_time_actual ? (
-                                <Badge variant="outline" className="bg-teal-500/10 text-[9px] font-bold text-teal-700 dark:text-teal-400">RETURNED</Badge>
+                                <Badge variant="outline" className="bg-teal-500/10 text-[9px] text-teal-700 dark:text-teal-400">RETURNED</Badge>
                               ) : isOut ? (
-                                <Badge variant="outline" className="bg-blue-500/10 text-[9px] font-bold text-blue-700 dark:text-blue-400">OUTSIDE</Badge>
+                                <Badge variant="outline" className="bg-blue-500/10 text-[9px] text-blue-700 dark:text-blue-400">OUTSIDE</Badge>
                               ) : (
                                 <span className="text-[10px] text-muted-foreground">Pending</span>
                               )}
                             </div>
-                            <div className="mt-1.5 space-y-1 text-xs text-muted-foreground">
+                            <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
                               <div>Time: {leave.gatePass?.in_time_actual ? new Date(leave.gatePass.in_time_actual).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</div>
                               {(leave as any).gatePass?.in_guard_lat != null && (
                                 <a
                                   href={`https://maps.google.com/?q=${(leave as any).gatePass.in_guard_lat},${(leave as any).gatePass.in_guard_lng}`}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                                  className="flex items-center gap-1 text-[10px] text-primary hover:underline"
                                 >
                                   <MapPin className="h-3 w-3 shrink-0" /> Return GPS
                                 </a>
@@ -1410,27 +1351,27 @@ function Reports() {
                           </div>
 
                           {/* Guard Return Photo / Identity */}
-                          <div className="mt-2.5 pt-2 border-t border-border/40 space-y-1.5">
+                          <div className="mt-2 pt-1.5 border-t border-border/40 space-y-1">
                             {guardReturnPhoto ? (
                               <div>
-                                <span className="text-[9px] font-semibold text-muted-foreground block text-center truncate mb-1">Guard Photo</span>
+                                <span className="text-[9px] font-semibold text-muted-foreground block text-center truncate mb-0.5">Guard Photo</span>
                                 <img
                                   src={guardReturnPhoto}
                                   alt="Guard"
-                                  className="timeline-photo h-20 w-full cursor-pointer rounded-md border border-border/80 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
+                                  className="timeline-photo h-14 w-full cursor-pointer rounded border border-border/80 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
                                   onClick={() => setZoomedPhoto({ url: guardReturnPhoto, title: `Security Guard Photo - ${guardReturnName}` })}
                                 />
                               </div>
                             ) : (
-                              <div className="photo-placeholder flex flex-col items-center justify-center h-20 rounded-md border border-dashed border-border/60 bg-muted/20">
+                              <div className="flex flex-col items-center justify-center h-14 rounded border border-dashed border-border/60 bg-muted/20">
                                 <span className="text-[8px] text-muted-foreground text-center">No Photo Uploaded</span>
                               </div>
                             )}
-                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                               <div className="flex h-4 w-4 items-center justify-center rounded-full bg-teal-500/20 text-teal-600 shrink-0">
                                 <ShieldCheck className="h-2.5 w-2.5" />
                               </div>
-                              <span className="font-semibold text-foreground truncate">
+                              <span className="font-medium text-foreground truncate">
                                 {`Guard: ${guardReturnName}`}
                               </span>
                             </div>

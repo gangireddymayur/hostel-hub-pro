@@ -4002,6 +4002,8 @@ function getCombinedDateTime(dateVal, timeVal) {
   return null;
 }
 
+const GATE_PASS_HMAC_SECRET = process.env.GATE_PASS_HMAC_SECRET || "HostelHub_Secure_GatePass_2026_HMAC_Signature_Key";
+
 async function handleGuardScan(req, res, body) {
   const user = requireAuth(req, res, ["SECURITY_GUARD"]);
   if (!user) return;
@@ -4016,7 +4018,33 @@ async function handleGuardScan(req, res, body) {
 
   if (!qrCode) return sendJson(res, 400, { error: "qr_code is required" });
 
-  const gatePass = db.gatePasses.find((gp) => gp.qr_code === qrCode);
+  let targetQr = qrCode;
+  let targetPassId = null;
+  if (qrCode.startsWith("DYNv1.")) {
+    const parts = qrCode.split(".");
+    if (parts.length !== 6) {
+      return sendJson(res, 400, { error: "Malformed dynamic gate pass token structure." });
+    }
+    const [_, passId, baseQrCode, studentId, timestampStr, signature] = parts;
+    const timestamp = parseInt(timestampStr, 10);
+    if (Number.isNaN(timestamp)) {
+      return sendJson(res, 400, { error: "Invalid timestamp in dynamic gate pass token." });
+    }
+    const now = Math.floor(Date.now() / 1000);
+    const diff = Math.abs(now - timestamp);
+    if (diff > 90) {
+      return sendJson(res, 400, { error: `QR code expired (${diff}s old). Student must present their live active screen.` });
+    }
+    const message = `${passId}:${baseQrCode}:${studentId}:${timestamp}`;
+    const expectedSig = crypto.createHmac("sha256", GATE_PASS_HMAC_SECRET).update(message).digest("hex").substring(0, 16);
+    if (expectedSig !== signature) {
+      return sendJson(res, 400, { error: "Security Alert: Invalid or forged QR signature detected." });
+    }
+    targetQr = baseQrCode;
+    targetPassId = passId;
+  }
+
+  const gatePass = db.gatePasses.find((gp) => gp.qr_code === targetQr || (targetPassId && gp.id === targetPassId));
   if (!gatePass) return sendJson(res, 404, { error: "Gate pass not found" });
 
   const leave = db.leaveRequests.find((l) => l.id === gatePass.leave_request_id);

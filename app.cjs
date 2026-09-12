@@ -3584,6 +3584,214 @@ async function handleUploadHostelLogo(req, res, data) {
   }
 }
 
+async function handleCreateSystemBackup(req, res) {
+  const user = requireAuth(req, res, ["SUPER_ADMIN", "HOSTEL_ADMIN"]);
+  if (!user) return;
+
+  const isSuper = user.role === "SUPER_ADMIN";
+  const accessibleHostels = getAccessibleHostelIds(user);
+
+  let hostelsToExport = db.hostels;
+  let studentsToExport = db.students;
+  let parentsToExport = db.parents;
+  let staffToExport = db.staff;
+  let usersToExport = db.users;
+  let leavesToExport = db.leaveRequests;
+  let gatePassesToExport = db.gatePasses;
+  let auditLogsToExport = db.auditLogs;
+
+  if (!isSuper) {
+    hostelsToExport = db.hostels.filter((h) => accessibleHostels.includes(h.id));
+    const hostelSet = new Set(accessibleHostels);
+    studentsToExport = db.students.filter((s) => hostelSet.has(s.hostel_id));
+    const studentSet = new Set(studentsToExport.map((s) => s.id));
+    parentsToExport = db.parents.filter((p) => studentSet.has(p.student_id));
+    staffToExport = db.staff.filter((s) => hostelSet.has(s.hostel_id));
+    usersToExport = db.users.filter((u) => hostelSet.has(u.hostelId));
+    leavesToExport = db.leaveRequests.filter((l) => studentSet.has(l.student_id) || hostelSet.has(l.hostel_id));
+    const leaveSet = new Set(leavesToExport.map((l) => l.id));
+    gatePassesToExport = db.gatePasses.filter((gp) => leaveSet.has(gp.leave_request_id));
+    auditLogsToExport = db.auditLogs.filter((a) => hostelSet.has(a.hostel_id));
+  }
+
+  const payload = {
+    app: "GATEX_HOSTEL_MANAGEMENT",
+    version: "1.0",
+    exported_at: nowIso(),
+    exported_by: user.email || user.name || "admin",
+    exported_role: user.role,
+    hostel_scope: isSuper ? "ALL_HOSTELS" : accessibleHostels.join(","),
+    counts: {
+      hostels: hostelsToExport.length,
+      students: studentsToExport.length,
+      parents: parentsToExport.length,
+      staff: staffToExport.length,
+      users: usersToExport.length,
+      leaveRequests: leavesToExport.length,
+      gatePasses: gatePassesToExport.length,
+      auditLogs: auditLogsToExport.length,
+    },
+    data: {
+      hostels: hostelsToExport,
+      students: studentsToExport,
+      parents: parentsToExport,
+      staff: staffToExport,
+      users: usersToExport,
+      leaveRequests: leavesToExport,
+      gatePasses: gatePassesToExport,
+      auditLogs: auditLogsToExport,
+    },
+  };
+
+  addAudit("EXPORT_BACKUP", "SYSTEM", null, user, { counts: payload.counts });
+  return sendJson(res, 200, payload);
+}
+
+async function handleRestoreSystemBackup(req, res, backupPayload) {
+  const user = requireAuth(req, res, ["SUPER_ADMIN", "HOSTEL_ADMIN"]);
+  if (!user) return;
+
+  if (!backupPayload || typeof backupPayload !== "object") {
+    return sendJson(res, 400, { error: "Invalid backup file structure." });
+  }
+
+  const mode = String(backupPayload.mode || "merge").toLowerCase(); // "merge" | "clean_replace"
+  const data = backupPayload.data || backupPayload;
+  if (!data || typeof data !== "object") {
+    return sendJson(res, 400, { error: "Missing data payload in backup." });
+  }
+
+  const isSuper = user.role === "SUPER_ADMIN";
+  const accessibleHostels = getAccessibleHostelIds(user);
+  const hostelSet = new Set(accessibleHostels);
+
+  const preRestoreCounts = {
+    hostels: db.hostels.length,
+    students: db.students.length,
+    leaveRequests: db.leaveRequests.length,
+    gatePasses: db.gatePasses.length,
+  };
+
+  const stats = {
+    studentsUpdated: 0,
+    studentsAdded: 0,
+    studentsPreserved: 0,
+    leavesMerged: 0,
+    passesMerged: 0,
+    mode,
+  };
+
+  if (mode === "clean_replace" && isSuper) {
+    if (Array.isArray(data.hostels) && data.hostels.length > 0) db.hostels = data.hostels;
+    if (Array.isArray(data.students)) db.students = data.students;
+    if (Array.isArray(data.parents)) db.parents = data.parents;
+    if (Array.isArray(data.staff)) db.staff = data.staff;
+    if (Array.isArray(data.users) && data.users.length > 0) db.users = data.users;
+    if (Array.isArray(data.leaveRequests)) db.leaveRequests = data.leaveRequests;
+    if (Array.isArray(data.gatePasses)) db.gatePasses = data.gatePasses;
+    if (Array.isArray(data.auditLogs)) db.auditLogs = [...db.auditLogs, ...data.auditLogs];
+    stats.studentsAdded = db.students.length;
+  } else {
+    // SMART UPSERT & MERGE (Default - Zero data loss of existing unbacked-up records)
+    // 1. Students Upsert by student_id / id
+    if (Array.isArray(data.students)) {
+      const incomingStudents = isSuper ? data.students : data.students.filter((s) => hostelSet.has(s.hostel_id));
+      const existingStudentMap = new Map();
+      db.students.forEach((s) => {
+        existingStudentMap.set(s.id, s);
+        if (s.student_id) existingStudentMap.set(s.student_id.toLowerCase(), s);
+      });
+
+      const processedIds = new Set();
+      for (const inc of incomingStudents) {
+        const existing = existingStudentMap.get(inc.id) || (inc.student_id ? existingStudentMap.get(inc.student_id.toLowerCase()) : null);
+        if (existing) {
+          Object.assign(existing, inc);
+          processedIds.add(existing.id);
+          stats.studentsUpdated++;
+        } else {
+          db.students.push(inc);
+          processedIds.add(inc.id);
+          stats.studentsAdded++;
+        }
+      }
+      stats.studentsPreserved = db.students.filter((s) => !processedIds.has(s.id)).length;
+    }
+
+    // 2. Parents Upsert by student_id / mobile
+    if (Array.isArray(data.parents)) {
+      const existingParentMap = new Map();
+      db.parents.forEach((p) => {
+        existingParentMap.set(p.id, p);
+        if (p.mobile) existingParentMap.set(p.mobile, p);
+      });
+      for (const inc of data.parents) {
+        const existing = existingParentMap.get(inc.id) || (inc.mobile ? existingParentMap.get(inc.mobile) : null);
+        if (existing) {
+          Object.assign(existing, inc);
+        } else {
+          db.parents.push(inc);
+        }
+      }
+    }
+
+    // 3. Leave Requests Upsert by ID
+    if (Array.isArray(data.leaveRequests)) {
+      const incomingLeaves = isSuper ? data.leaveRequests : data.leaveRequests.filter((l) => hostelSet.has(l.hostel_id));
+      const existingLeaveMap = new Map(db.leaveRequests.map((l) => [l.id, l]));
+      for (const inc of incomingLeaves) {
+        if (existingLeaveMap.has(inc.id)) {
+          Object.assign(existingLeaveMap.get(inc.id), inc);
+        } else {
+          db.leaveRequests.push(inc);
+        }
+        stats.leavesMerged++;
+      }
+    }
+
+    // 4. Gate Passes Upsert by ID / qr_code
+    if (Array.isArray(data.gatePasses)) {
+      const existingGpMap = new Map(db.gatePasses.map((g) => [g.id, g]));
+      for (const inc of data.gatePasses) {
+        if (existingGpMap.has(inc.id)) {
+          Object.assign(existingGpMap.get(inc.id), inc);
+        } else {
+          db.gatePasses.push(inc);
+        }
+        stats.passesMerged++;
+      }
+    }
+
+    // 5. Hostels Upsert
+    if (Array.isArray(data.hostels)) {
+      const existingHostelMap = new Map(db.hostels.map((h) => [h.id, h]));
+      for (const inc of data.hostels) {
+        if (existingHostelMap.has(inc.id)) {
+          Object.assign(existingHostelMap.get(inc.id), inc);
+        } else if (isSuper) {
+          db.hostels.push(inc);
+        }
+      }
+    }
+  }
+
+  addAudit("RESTORE_BACKUP", "SYSTEM", null, user, {
+    preRestoreCounts,
+    stats,
+    mode,
+  });
+
+  await persist();
+
+  return sendJson(res, 200, {
+    success: true,
+    message: mode === "clean_replace"
+      ? "Full system rollback completed."
+      : `Smart Merge completed: ${stats.studentsAdded} added, ${stats.studentsUpdated} updated, ${stats.studentsPreserved} existing records safely preserved.`,
+    stats,
+  });
+}
+
 function handleGetHostelInfo(req, res) {
   const user = requireAuth(req, res, ["STUDENT", "PARENT", "SECURITY_GUARD", "HOSTEL_STAFF", "CARETAKER", "HOSTEL_ADMIN", "SUPER_ADMIN"]);
   if (!user) return;
@@ -4625,6 +4833,15 @@ async function handleApi(req, res, pathname) {
     if (pathname === "/api/hostel-admin/settings/logo" && req.method === "POST") {
       const data = await readRequestData(req);
       return handleUploadHostelLogo(req, res, data);
+    }
+
+    if ((pathname === "/api/system/backup" || pathname === "/api/hostel-admin/backup") && req.method === "GET") {
+      return handleCreateSystemBackup(req, res);
+    }
+
+    if ((pathname === "/api/system/restore" || pathname === "/api/hostel-admin/restore") && req.method === "POST") {
+      const data = await readRequestData(req);
+      return handleRestoreSystemBackup(req, res, data.kind === "json" ? data.value : {});
     }
 
     if (pathname === "/api/hostel-info" && req.method === "GET") {

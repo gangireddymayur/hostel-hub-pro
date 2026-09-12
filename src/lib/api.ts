@@ -413,3 +413,49 @@ export async function uploadHostelLogo(file: File) {
   });
 }
 
+export type SystemBackupPayload = {
+  app: string;
+  version: string;
+  exported_at: string;
+  exported_by?: string;
+  exported_role?: string;
+  hostel_scope?: string;
+  counts: {
+    hostels: number;
+    students: number;
+    parents: number;
+    staff: number;
+    users: number;
+    leaveRequests: number;
+    gatePasses: number;
+    auditLogs: number;
+  };
+  data: {
+    hostels: unknown[];
+    students: unknown[];
+    parents: unknown[];
+    staff: unknown[];
+    users: unknown[];
+    leaveRequests: unknown[];
+    gatePasses: unknown[];
+    auditLogs: unknown[];
+  };
+};
+
+export async function downloadSystemBackup(): Promise<SystemBackupPayload> {
+  return request<SystemBackupPayload>("/system/backup", {
+    method: "GET",
+  });
+}
+
+export async function restoreSystemBackup(payload: Record<string, unknown>) {
+  return request<{
+    success: boolean;
+    message: string;
+    restoredCounts: Record<string, number>;
+  }>("/system/restore", {
+    method: "POST",
+    body: payload,
+  });
+}
+

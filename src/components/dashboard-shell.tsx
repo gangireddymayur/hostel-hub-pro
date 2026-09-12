@@ -3,10 +3,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
-import { Bell, Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Search } from "lucide-react";
 import { getSession, initTheme, type Role } from "@/lib/role";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -50,16 +48,8 @@ export function DashboardShell({ expectedRole, children }: { expectedRole: Role;
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input placeholder="Search…" className="h-9 pl-9" />
           </div>
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
-            <Button variant="ghost" size="icon" aria-label="Notifications">
-              <Bell className="h-4 w-4" />
-            </Button>
-            <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                {expectedRole === "super" ? "SA" : "HA"}
-              </AvatarFallback>
-            </Avatar>
           </div>
         </header>
         <main className="flex-1 p-4 md:p-6">{children ?? <Outlet />}</main>

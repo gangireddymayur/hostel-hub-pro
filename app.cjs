@@ -3337,21 +3337,6 @@ async function handleUpdateStaff(req, res, staffId, body) {
   }
 }
 
-function handleLeaveRequests(req, res) {
-  const user = requireAuth(req, res, ["HOSTEL_ADMIN", "HOSTEL_STAFF", "SECURITY_GUARD"]);
-  if (!user) return;
-
-  let baseRequests;
-  if (user.role === "SUPER_ADMIN") {
-    baseRequests = db.leaveRequests;
-  } else {
-    const allowedHostelIds = getAccessibleHostelIds(user);
-    baseRequests = db.leaveRequests.filter((leave) => {
-      const student = db.students.find((s) => s.id === leave.student_id);
-      return student && allowedHostelIds.includes(student.hostel_id);
-    });
-  }
-
 function enrichLeaveWithPhotosAndStaff(leave) {
   const student = db.students.find((s) => s.id === leave.student_id) ?? null;
   let studentWithHostel = null;

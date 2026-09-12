@@ -39,7 +39,7 @@ import {
   CartesianGrid,
   Tooltip,
 } from "recharts";
-import { getLeaveRequests, getHostelReports, getHostelStudents, getHostelStaff } from "@/lib/api";
+import { getLeaveRequests, getHostelReports, getHostelStudents } from "@/lib/api";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin/reports")({
@@ -62,11 +62,9 @@ function Reports() {
   const reportsQuery = useQuery({ queryKey: ["hostel-reports"], queryFn: getHostelReports });
   const leavesQuery = useQuery({ queryKey: ["hostel-leaves"], queryFn: getLeaveRequests });
   const studentsQuery = useQuery({ queryKey: ["hostel-students"], queryFn: getHostelStudents });
-  const staffQuery = useQuery({ queryKey: ["hostel-staff"], queryFn: getHostelStaff });
 
   const leaves = leavesQuery.data?.data ?? [];
   const students = studentsQuery.data?.data ?? [];
-  const allStaff = staffQuery.data?.data ?? [];
 
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -960,36 +958,6 @@ function Reports() {
                 const parentLivePhoto = (leave as any).parent_approval_photo;
                 const parentRegPhoto = leave.student?.parent_profile_photo || (leave as any).parent_profile_photo;
                 const studentPhoto = leave.student?.profile_photo;
-                const studentHostelId = leave.student?.hostel_id || (leave as any).hostel_id;
-
-                // Warden Photo & Identity Resolution
-                const wardenPhoto = (leave as any).reviewed_by_photo
-                  || (leave as any).warden_photo
-                  || allStaff.find((s: any) => s.hostel_id === studentHostelId && ["HOSTEL_ADMIN", "HOSTEL_STAFF", "CARETAKER"].includes(s.role) && s.profile_photo)?.profile_photo
-                  || allStaff.find((s: any) => ["HOSTEL_ADMIN", "HOSTEL_STAFF", "CARETAKER"].includes(s.role) && s.profile_photo)?.profile_photo;
-
-                const wardenName = (leave as any).reviewed_by_name
-                  || allStaff.find((s: any) => s.hostel_id === studentHostelId && ["HOSTEL_ADMIN", "HOSTEL_STAFF", "CARETAKER"].includes(s.role))?.name
-                  || "Hostel Warden";
-
-                // Guard Exit Photo & Identity Resolution
-                const guardExitPhoto = (leave as any).gatePass?.out_guard_photo
-                  || (leave as any).gatePass?.guard_photo
-                  || allStaff.find((s: any) => s.hostel_id === studentHostelId && s.role === "SECURITY_GUARD" && s.profile_photo)?.profile_photo
-                  || allStaff.find((s: any) => s.role === "SECURITY_GUARD" && s.profile_photo)?.profile_photo;
-
-                const guardExitName = (leave as any).gatePass?.out_guard_name
-                  || allStaff.find((s: any) => s.hostel_id === studentHostelId && s.role === "SECURITY_GUARD")?.name
-                  || "Security Guard";
-
-                // Guard Return Photo & Identity Resolution
-                const guardReturnPhoto = (leave as any).gatePass?.in_guard_photo
-                  || allStaff.find((s: any) => s.hostel_id === studentHostelId && s.role === "SECURITY_GUARD" && s.profile_photo)?.profile_photo
-                  || allStaff.find((s: any) => s.role === "SECURITY_GUARD" && s.profile_photo)?.profile_photo;
-
-                const guardReturnName = (leave as any).gatePass?.in_guard_name
-                  || allStaff.find((s: any) => s.hostel_id === studentHostelId && s.role === "SECURITY_GUARD")?.name
-                  || "Security Guard";
 
                 return (
                   <div
@@ -1238,25 +1206,21 @@ function Reports() {
 
                           {/* Warden Photo / Identity */}
                           <div className="mt-2 pt-1.5 border-t border-border/40 space-y-1">
-                            {wardenPhoto ? (
+                            {(leave as any).reviewed_by_photo ? (
                               <div>
                                 <span className="text-[9px] font-semibold text-muted-foreground block text-center truncate mb-0.5">Warden Photo</span>
                                 <img
-                                  src={wardenPhoto}
+                                  src={(leave as any).reviewed_by_photo}
                                   alt="Warden"
                                   className="timeline-photo h-14 w-full cursor-pointer rounded border border-border/80 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
-                                  onClick={() => setZoomedPhoto({ url: wardenPhoto, title: `Warden Photo - ${wardenName}` })}
+                                  onClick={() => setZoomedPhoto({ url: (leave as any).reviewed_by_photo, title: `Warden Photo - ${(leave as any).reviewed_by_name || "Hostel Warden"}` })}
                                 />
                               </div>
-                            ) : (
-                              <div className="flex flex-col items-center justify-center h-14 rounded border border-dashed border-border/60 bg-muted/20">
-                                <span className="text-[8px] text-muted-foreground text-center">No Photo Uploaded</span>
-                              </div>
-                            )}
+                            ) : null}
                             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                               <ShieldCheck className="h-3.5 w-3.5 text-primary shrink-0" />
                               <span className="font-medium text-foreground truncate">
-                                {`Verified: ${wardenName}`}
+                                {(leave as any).reviewed_by_name ? `Verified: ${(leave as any).reviewed_by_name}` : "Verified by Warden"}
                               </span>
                             </div>
                           </div>
@@ -1293,27 +1257,23 @@ function Reports() {
 
                           {/* Guard Exit Photo / Identity */}
                           <div className="mt-2 pt-1.5 border-t border-border/40 space-y-1">
-                            {guardExitPhoto ? (
+                            {(leave as any).gatePass?.out_guard_photo ? (
                               <div>
                                 <span className="text-[9px] font-semibold text-muted-foreground block text-center truncate mb-0.5">Guard Photo</span>
                                 <img
-                                  src={guardExitPhoto}
+                                  src={(leave as any).gatePass.out_guard_photo}
                                   alt="Guard"
                                   className="timeline-photo h-14 w-full cursor-pointer rounded border border-border/80 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
-                                  onClick={() => setZoomedPhoto({ url: guardExitPhoto, title: `Security Guard Photo - ${guardExitName}` })}
+                                  onClick={() => setZoomedPhoto({ url: (leave as any).gatePass.out_guard_photo, title: `Security Guard Photo - ${(leave as any).gatePass?.out_guard_name || "Gate Exit Guard"}` })}
                                 />
                               </div>
-                            ) : (
-                              <div className="flex flex-col items-center justify-center h-14 rounded border border-dashed border-border/60 bg-muted/20">
-                                <span className="text-[8px] text-muted-foreground text-center">No Photo Uploaded</span>
-                              </div>
-                            )}
+                            ) : null}
                             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                               <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-600 shrink-0">
                                 <ShieldCheck className="h-2.5 w-2.5" />
                               </div>
                               <span className="font-medium text-foreground truncate">
-                                {`Guard: ${guardExitName}`}
+                                {(leave as any).gatePass?.out_guard_name ? `Guard: ${(leave as any).gatePass.out_guard_name}` : "Gate Security Post"}
                               </span>
                             </div>
                           </div>
@@ -1352,27 +1312,23 @@ function Reports() {
 
                           {/* Guard Return Photo / Identity */}
                           <div className="mt-2 pt-1.5 border-t border-border/40 space-y-1">
-                            {guardReturnPhoto ? (
+                            {(leave as any).gatePass?.in_guard_photo ? (
                               <div>
                                 <span className="text-[9px] font-semibold text-muted-foreground block text-center truncate mb-0.5">Guard Photo</span>
                                 <img
-                                  src={guardReturnPhoto}
+                                  src={(leave as any).gatePass.in_guard_photo}
                                   alt="Guard"
                                   className="timeline-photo h-14 w-full cursor-pointer rounded border border-border/80 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
-                                  onClick={() => setZoomedPhoto({ url: guardReturnPhoto, title: `Security Guard Photo - ${guardReturnName}` })}
+                                  onClick={() => setZoomedPhoto({ url: (leave as any).gatePass.in_guard_photo, title: `Security Guard Photo - ${(leave as any).gatePass?.in_guard_name || "Gate Return Guard"}` })}
                                 />
                               </div>
-                            ) : (
-                              <div className="flex flex-col items-center justify-center h-14 rounded border border-dashed border-border/60 bg-muted/20">
-                                <span className="text-[8px] text-muted-foreground text-center">No Photo Uploaded</span>
-                              </div>
-                            )}
+                            ) : null}
                             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                               <div className="flex h-4 w-4 items-center justify-center rounded-full bg-teal-500/20 text-teal-600 shrink-0">
                                 <ShieldCheck className="h-2.5 w-2.5" />
                               </div>
                               <span className="font-medium text-foreground truncate">
-                                {`Guard: ${guardReturnName}`}
+                                {(leave as any).gatePass?.in_guard_name ? `Guard: ${(leave as any).gatePass.in_guard_name}` : "Return Checkpoint"}
                               </span>
                             </div>
                           </div>

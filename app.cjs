@@ -518,19 +518,10 @@ async function ensureLocationColumns() {
     { table: "leave_requests", name: "request_type", type: "VARCHAR(50) NOT NULL DEFAULT 'LEAVE'" },
     { table: "leave_requests", name: "note", type: "TEXT NULL" },
     { table: "leave_requests", name: "parent_approval_photo", type: "LONGTEXT NULL" },
-    { table: "leave_requests", name: "reviewed_by_id", type: "VARCHAR(100) NULL" },
-    { table: "leave_requests", name: "reviewed_by_name", type: "VARCHAR(255) NULL" },
-    { table: "leave_requests", name: "reviewed_by_photo", type: "LONGTEXT NULL" },
     { table: "gate_passes", name: "out_guard_lat", type: "DOUBLE NULL" },
     { table: "gate_passes", name: "out_guard_lng", type: "DOUBLE NULL" },
-    { table: "gate_passes", name: "out_guard_id", type: "VARCHAR(100) NULL" },
-    { table: "gate_passes", name: "out_guard_name", type: "VARCHAR(255) NULL" },
-    { table: "gate_passes", name: "out_guard_photo", type: "LONGTEXT NULL" },
     { table: "gate_passes", name: "in_guard_lat", type: "DOUBLE NULL" },
     { table: "gate_passes", name: "in_guard_lng", type: "DOUBLE NULL" },
-    { table: "gate_passes", name: "in_guard_id", type: "VARCHAR(100) NULL" },
-    { table: "gate_passes", name: "in_guard_name", type: "VARCHAR(255) NULL" },
-    { table: "gate_passes", name: "in_guard_photo", type: "LONGTEXT NULL" },
   ];
 
   for (const c of columns) {
@@ -3352,107 +3343,6 @@ function handleLeaveRequests(req, res) {
     });
   }
 
-function enrichLeaveWithPhotosAndStaff(leave) {
-  const student = db.students.find((s) => s.id === leave.student_id) ?? null;
-  let studentWithHostel = null;
-  const hostelId = student?.hostel_id || leave.hostel_id;
-  if (student) {
-    const hostel = findHostelById(student.hostel_id);
-    studentWithHostel = {
-      ...student,
-      hostel_name: hostel ? hostel.hostel_name : "",
-    };
-  }
-  const parentPhoto = findRegisteredParentPhoto(student);
-  const studentPhotoUrl = student && student.profile_photo ? `/api/profile-photo/${student.id}` : null;
-  const parentPhotoUrl = parentPhoto ? `/api/hostel-admin/students/${student.id}/parent-photo` : null;
-  const approvalPhotoUrl = leave.parent_approval_photo ? `/api/leave-requests/${leave.id}/parent-approval-photo` : null;
-
-  // 1. Resolve Warden / Reviewing Staff
-  let warden = null;
-  if (leave.reviewed_by_id) {
-    warden = db.staff.find((s) => s.id === leave.reviewed_by_id) || db.users.find((u) => u.id === leave.reviewed_by_id);
-  }
-  if (!warden && hostelId) {
-    warden = db.staff.find((s) => s.hostel_id === hostelId && ["HOSTEL_ADMIN", "HOSTEL_STAFF", "CARETAKER"].includes(s.role) && s.profile_photo)
-      || db.staff.find((s) => s.hostel_id === hostelId && ["HOSTEL_ADMIN", "HOSTEL_STAFF", "CARETAKER"].includes(s.role))
-      || db.users.find((u) => u.hostelId === hostelId && ["HOSTEL_ADMIN", "HOSTEL_STAFF", "CARETAKER"].includes(u.role) && u.profile_photo)
-      || db.users.find((u) => u.hostelId === hostelId && ["HOSTEL_ADMIN", "HOSTEL_STAFF", "CARETAKER"].includes(u.role));
-  }
-  const wardenPhotoUrl = warden && warden.profile_photo ? `/api/profile-photo/${warden.id}` : (leave.reviewed_by_photo || null);
-  const wardenName = leave.reviewed_by_name || (warden ? warden.name : "Hostel Warden");
-
-  // 2. Resolve Gate Pass & Security Guards
-  const baseGatePass = gatePassByLeaveId(leave.id);
-  let enrichedGatePass = null;
-  if (baseGatePass) {
-    let outGuard = null;
-    if (baseGatePass.out_guard_id) {
-      outGuard = db.staff.find((s) => s.id === baseGatePass.out_guard_id) || db.users.find((u) => u.id === baseGatePass.out_guard_id);
-    }
-    if (!outGuard && hostelId) {
-      outGuard = db.staff.find((s) => s.hostel_id === hostelId && s.role === "SECURITY_GUARD" && s.profile_photo)
-        || db.staff.find((s) => s.hostel_id === hostelId && s.role === "SECURITY_GUARD")
-        || db.users.find((u) => u.hostelId === hostelId && u.role === "SECURITY_GUARD" && u.profile_photo)
-        || db.users.find((u) => u.hostelId === hostelId && u.role === "SECURITY_GUARD");
-    }
-    const outGuardPhotoUrl = outGuard && outGuard.profile_photo ? `/api/profile-photo/${outGuard.id}` : (baseGatePass.out_guard_photo || null);
-    const outGuardName = baseGatePass.out_guard_name || (outGuard ? outGuard.name : "Security Guard");
-
-    let inGuard = null;
-    if (baseGatePass.in_guard_id) {
-      inGuard = db.staff.find((s) => s.id === baseGatePass.in_guard_id) || db.users.find((u) => u.id === baseGatePass.in_guard_id);
-    }
-    if (!inGuard && hostelId) {
-      inGuard = db.staff.find((s) => s.hostel_id === hostelId && s.role === "SECURITY_GUARD" && s.profile_photo)
-        || db.staff.find((s) => s.hostel_id === hostelId && s.role === "SECURITY_GUARD")
-        || db.users.find((u) => u.hostelId === hostelId && u.role === "SECURITY_GUARD" && u.profile_photo)
-        || db.users.find((u) => u.hostelId === hostelId && u.role === "SECURITY_GUARD");
-    }
-    const inGuardPhotoUrl = inGuard && inGuard.profile_photo ? `/api/profile-photo/${inGuard.id}` : (baseGatePass.in_guard_photo || null);
-    const inGuardName = baseGatePass.in_guard_name || (inGuard ? inGuard.name : "Security Guard");
-
-    enrichedGatePass = {
-      ...baseGatePass,
-      out_guard_photo: outGuardPhotoUrl,
-      out_guard_name: outGuardName,
-      guard_photo: outGuardPhotoUrl,
-      in_guard_photo: inGuardPhotoUrl,
-      in_guard_name: inGuardName,
-    };
-  }
-
-  return {
-    ...leave,
-    student: studentWithHostel ? {
-      ...studentWithHostel,
-      profile_photo: studentPhotoUrl,
-      parent_profile_photo: parentPhotoUrl,
-    } : null,
-    parent_approval_photo: approvalPhotoUrl,
-    parent_profile_photo: parentPhotoUrl,
-    reviewed_by_name: wardenName,
-    reviewed_by_photo: wardenPhotoUrl,
-    warden_photo: wardenPhotoUrl,
-    gatePass: enrichedGatePass,
-  };
-}
-
-async function handleGetLeaveRequests(req, res) {
-  const user = requireAuth(req, res, ["SUPER_ADMIN", "HOSTEL_ADMIN", "HOSTEL_STAFF", "SECURITY_GUARD"]);
-  if (!user) return;
-
-  let baseRequests = [];
-  if (user.role === "SUPER_ADMIN") {
-    baseRequests = db.leaveRequests;
-  } else {
-    const allowedHostelIds = getAccessibleHostelIds(user);
-    baseRequests = db.leaveRequests.filter((leave) => {
-      const student = db.students.find((s) => s.id === leave.student_id);
-      return student && allowedHostelIds.includes(student.hostel_id);
-    });
-  }
-
   const urlObj = new URL(req.url, "http://localhost");
   const limit = parseInt(urlObj.searchParams.get("limit"), 10);
   const page = parseInt(urlObj.searchParams.get("page"), 10) || 1;
@@ -3466,7 +3356,34 @@ async function handleGetLeaveRequests(req, res) {
     sortedRequests = sortedRequests.slice(offset, offset + limit);
   }
 
-  const leaveRequests = sortedRequests.map(enrichLeaveWithPhotosAndStaff);
+  const leaveRequests = sortedRequests
+    .map((leave) => {
+      const student = db.students.find((student) => student.id === leave.student_id) ?? null;
+      let studentWithHostel = null;
+      if (student) {
+        const hostel = findHostelById(student.hostel_id);
+        studentWithHostel = {
+          ...student,
+          hostel_name: hostel ? hostel.hostel_name : "",
+        };
+      }
+      const parentPhoto = findRegisteredParentPhoto(student);
+      const studentPhotoUrl = student && student.profile_photo ? `/api/profile-photo/${student.id}` : null;
+      const parentPhotoUrl = parentPhoto ? `/api/hostel-admin/students/${student.id}/parent-photo` : null;
+      const approvalPhotoUrl = leave.parent_approval_photo ? `/api/leave-requests/${leave.id}/parent-approval-photo` : null;
+
+      return {
+        ...leave,
+        student: studentWithHostel ? {
+          ...studentWithHostel,
+          profile_photo: studentPhotoUrl,
+          parent_profile_photo: parentPhotoUrl,
+        } : null,
+        parent_approval_photo: approvalPhotoUrl,
+        parent_profile_photo: parentPhotoUrl,
+        gatePass: gatePassByLeaveId(leave.id) ?? null,
+      };
+    });
   return sendJson(res, 200, { data: leaveRequests, total: baseRequests.length });
 }
 
@@ -3496,9 +3413,6 @@ async function handleReviewLeaveRequest(req, res, leaveRequestId, body) {
   leave.hostel_status = status === "CANCELLED" ? "CANCELLED" : status;
   leave.hostel_lat = hostel_lat;
   leave.hostel_lng = hostel_lng;
-  leave.reviewed_by_id = user.id;
-  leave.reviewed_by_name = user.name || user.email;
-  leave.reviewed_by_photo = user.profile_photo ? `/api/profile-photo/${user.id}` : null;
   leave.updated_at = nowIso();
   if (status === "REJECTED" || status === "CANCELLED") {
     leave.hostel_reject_reason = body.hostel_reject_reason ? String(body.hostel_reject_reason).trim() : (status === "CANCELLED" ? "Cancelled by Staff" : null);
@@ -3524,7 +3438,7 @@ async function handleReviewLeaveRequest(req, res, leaveRequestId, body) {
     final_status: leave.final_status,
   });
   await persist();
-  return sendJson(res, 200, { data: enrichLeaveWithPhotosAndStaff(leave) });
+  return sendJson(res, 200, { data: leave });
 }
 
 async function handleBulkReviewLeaveRequests(req, res, body) {
@@ -4167,9 +4081,6 @@ async function handleGuardScan(req, res, body) {
     gatePass.out_time_actual = nowIso();
     gatePass.out_guard_lat = guard_lat;
     gatePass.out_guard_lng = guard_lng;
-    gatePass.out_guard_id = user.id;
-    gatePass.out_guard_name = user.name || user.email;
-    gatePass.out_guard_photo = user.profile_photo ? `/api/profile-photo/${user.id}` : null;
     // Invalidate the old exit QR by generating a new entry QR
     const newQr = `GP-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
     gatePass.qr_code = newQr;
@@ -4188,9 +4099,6 @@ async function handleGuardScan(req, res, body) {
     gatePass.in_time_actual = nowIso();
     gatePass.in_guard_lat = guard_lat;
     gatePass.in_guard_lng = guard_lng;
-    gatePass.in_guard_id = user.id;
-    gatePass.in_guard_name = user.name || user.email;
-    gatePass.in_guard_photo = user.profile_photo ? `/api/profile-photo/${user.id}` : null;
     leave.final_status = "RETURNED";
     addAudit("SCAN_IN", "GATE_PASS", gatePass.id, user, { qr_code: qrCode, guard_lat, guard_lng });
   } else if (gatePass.status === "RETURNED") {

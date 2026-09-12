@@ -450,10 +450,11 @@ function Reports() {
               border-radius: 9999px !important;
               object-fit: cover !important;
             }
+            img.timeline-photo,
             img.live-photo {
               width: 100% !important;
-              height: 55px !important;
-              max-height: 55px !important;
+              height: 48px !important;
+              max-height: 48px !important;
               border-radius: 6px !important;
               object-fit: cover !important;
             }
@@ -954,7 +955,8 @@ function Reports() {
               filteredLeaves.map((leave, idx) => {
                 const isOut = leave.gatePass?.status === "OUT" || (leave.gatePass?.out_time_actual && !leave.gatePass?.in_time_actual);
                 const isReturned = Boolean(leave.gatePass?.in_time_actual || leave.gatePass?.status === "RETURNED" || leave.final_status === "RETURNED");
-                const parentPhoto = (leave as any).parent_approval_photo || (leave as any).parent_profile_photo;
+                const parentLivePhoto = (leave as any).parent_approval_photo;
+                const parentRegPhoto = leave.student?.parent_profile_photo || (leave as any).parent_profile_photo;
                 const studentPhoto = leave.student?.profile_photo;
 
                 return (
@@ -969,7 +971,8 @@ function Reports() {
                           <img
                             src={studentPhoto}
                             alt=""
-                            className="student-photo h-10 w-10 rounded-full border border-primary/20 object-cover shadow-sm"
+                            className="student-photo h-10 w-10 cursor-pointer rounded-full border border-primary/20 object-cover shadow-sm transition hover:scale-105"
+                            onClick={() => setZoomedPhoto({ url: studentPhoto, title: `Student Photo - ${leave.student?.name}` })}
                           />
                         ) : (
                           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 font-bold text-primary">
@@ -1041,176 +1044,293 @@ function Reports() {
                       <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                         Movement &amp; Verification Audit Trail
                       </span>
-                      <div className="mt-2 grid gap-2 grid-cols-5">
+                      <div className="mt-2 grid gap-2.5 grid-cols-1 sm:grid-cols-5">
                         {/* Step 1: Student Request */}
-                        <div className="rounded-lg border border-border/80 bg-muted/20 p-2.5">
-                          <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
-                            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground">1</span>
-                            Student Request
+                        <div className="rounded-lg border border-border/80 bg-muted/20 p-2.5 flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
+                              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground font-bold">1</span>
+                              Student Request
+                            </div>
+                            <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
+                              <div>Submitted: {leave.created_at ? new Date(leave.created_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "—"}</div>
+                              {(leave as any).student_lat != null && (leave as any).student_lng != null ? (
+                                <a
+                                  href={`https://maps.google.com/?q=${(leave as any).student_lat},${(leave as any).student_lng}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex items-center gap-1 text-[10px] text-primary hover:underline"
+                                >
+                                  <MapPin className="h-3 w-3 shrink-0" />
+                                  Lat: {Number((leave as any).student_lat).toFixed(4)}, Lng: {Number((leave as any).student_lng).toFixed(4)}
+                                </a>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground/70">No GPS recorded</span>
+                              )}
+                            </div>
                           </div>
-                          <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
-                            <div>Submitted: {leave.created_at ? new Date(leave.created_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "—"}</div>
-                            {(leave as any).student_lat != null && (leave as any).student_lng != null ? (
-                              <a
-                                href={`https://maps.google.com/?q=${(leave as any).student_lat},${(leave as any).student_lng}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="flex items-center gap-1 text-[10px] text-primary hover:underline"
-                              >
-                                <MapPin className="h-3 w-3" />
-                                Lat: {Number((leave as any).student_lat).toFixed(4)}, Lng: {Number((leave as any).student_lng).toFixed(4)}
-                              </a>
+
+                          {/* Student Photo Thumbnail */}
+                          <div className="mt-2 pt-1.5 border-t border-border/40">
+                            <span className="text-[9px] font-semibold text-muted-foreground block truncate mb-1">Student Photo</span>
+                            {studentPhoto ? (
+                              <img
+                                src={studentPhoto}
+                                alt="Student"
+                                className="timeline-photo h-14 w-full cursor-pointer rounded border border-primary/30 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
+                                onClick={() => setZoomedPhoto({ url: studentPhoto, title: `Student Photo - ${leave.student?.name} (${leave.student?.student_id || leave.student_id})` })}
+                              />
                             ) : (
-                              <span className="text-[10px] text-muted-foreground/70">No GPS recorded</span>
+                              <div className="flex flex-col items-center justify-center h-14 rounded border border-dashed border-border/60 bg-muted/30">
+                                <span className="text-[9px] font-medium text-muted-foreground">{leave.student?.name || "No Photo"}</span>
+                              </div>
                             )}
                           </div>
                         </div>
 
-                        {/* Step 2: Parent Verification */}
-                        <div className={`rounded-lg border p-2.5 ${
+                        {/* Step 2: Parent Verification (Dual Photos: Registered Reference vs Live Selfie) */}
+                        <div className={`rounded-lg border p-2.5 flex flex-col justify-between ${
                           leave.parent_status === "APPROVED"
-                            ? "border-emerald-500/30 bg-emerald-50/50"
+                            ? "border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20"
                             : leave.parent_status === "REJECTED"
-                            ? "border-rose-500/30 bg-rose-50/50"
-                            : "border-amber-500/30 bg-amber-50/50"
+                            ? "border-rose-500/30 bg-rose-50/50 dark:bg-rose-950/20"
+                            : "border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20"
                         }`}>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
-                              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground">2</span>
-                              Parent Verification
-                            </div>
-                            <span className={`text-[10px] font-bold ${
-                              leave.parent_status === "APPROVED" ? "text-emerald-600" : leave.parent_status === "REJECTED" ? "text-rose-600" : "text-amber-600"
-                            }`}>
-                              {leave.parent_status || "PENDING"}
-                            </span>
-                          </div>
-                          <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
-                            {(leave as any).parent_lat != null && (leave as any).parent_lng != null && (
-                              <a
-                                href={`https://maps.google.com/?q=${(leave as any).parent_lat},${(leave as any).parent_lng}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="flex items-center gap-1 text-[10px] text-primary hover:underline"
-                              >
-                                <MapPin className="h-3 w-3" />
-                                Parent GPS
-                              </a>
-                            )}
-                            {/* Live Verification Photo */}
-                            {parentPhoto ? (
-                              <div className="pt-1">
-                                <span className="text-[10px] font-semibold text-foreground flex items-center gap-1">
-                                  <Camera className="h-3 w-3 text-primary" /> Live Photo:
-                                </span>
-                                <img
-                                  src={parentPhoto}
-                                  alt="Parent Live Verification"
-                                  className="live-photo mt-1 h-14 w-full cursor-pointer rounded border border-border object-cover transition hover:opacity-90 shadow-sm"
-                                  onClick={() => setZoomedPhoto({ url: parentPhoto, title: `Parent Verification Photo - ${leave.student?.name}` })}
-                                />
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
+                                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground font-bold">2</span>
+                                Parent Verification
                               </div>
-                            ) : (
-                              <span className="text-[10px] italic text-muted-foreground">No photo uploaded</span>
-                            )}
-                            {(leave as any).parent_reject_reason && (
-                              <p className="text-[10px] text-rose-600">Reject: {(leave as any).parent_reject_reason}</p>
-                            )}
+                              <span className={`text-[10px] font-bold ${
+                                leave.parent_status === "APPROVED" ? "text-emerald-600 dark:text-emerald-400" : leave.parent_status === "REJECTED" ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400"
+                              }`}>
+                                {leave.parent_status || "PENDING"}
+                              </span>
+                            </div>
+                            <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
+                              {(leave as any).parent_lat != null && (leave as any).parent_lng != null && (
+                                <a
+                                  href={`https://maps.google.com/?q=${(leave as any).parent_lat},${(leave as any).parent_lng}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex items-center gap-1 text-[10px] text-primary hover:underline"
+                                >
+                                  <MapPin className="h-3 w-3 shrink-0" />
+                                  Parent GPS
+                                </a>
+                              )}
+                              {(leave as any).parent_reject_reason && (
+                                <p className="text-[10px] font-medium text-rose-600">Reject: {(leave as any).parent_reject_reason}</p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Dual Parent Photos: Registered Photo vs Live Selfie */}
+                          <div className="mt-2 pt-1.5 border-t border-border/40">
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {/* Registered Reference Photo */}
+                              <div>
+                                <span className="text-[9px] font-semibold text-muted-foreground block text-center truncate mb-0.5">Registered</span>
+                                {parentRegPhoto ? (
+                                  <img
+                                    src={parentRegPhoto}
+                                    alt="Registered Parent"
+                                    className="timeline-photo h-14 w-full cursor-pointer rounded border border-border/80 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
+                                    onClick={() => setZoomedPhoto({ url: parentRegPhoto, title: `Registered Parent Photo - ${leave.student?.name}` })}
+                                  />
+                                ) : (
+                                  <div className="flex flex-col items-center justify-center h-14 rounded border border-dashed border-border/60 bg-muted/20">
+                                    <span className="text-[8px] text-muted-foreground text-center">No Reg Photo</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Live Action Selfie Photo */}
+                              <div>
+                                <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 block text-center truncate mb-0.5">Live Action</span>
+                                {parentLivePhoto ? (
+                                  <img
+                                    src={parentLivePhoto}
+                                    alt="Live Verification Selfie"
+                                    className="timeline-photo h-14 w-full cursor-pointer rounded border border-emerald-500/50 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
+                                    onClick={() => setZoomedPhoto({ url: parentLivePhoto, title: `Live Action Selfie - ${leave.student?.name}` })}
+                                  />
+                                ) : (
+                                  <div className="flex flex-col items-center justify-center h-14 rounded border border-dashed border-border/60 bg-muted/20">
+                                    <span className="text-[8px] text-muted-foreground text-center">No Live Selfie</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
 
                         {/* Step 3: Warden / Hostel Admin Approval */}
-                        <div className={`rounded-lg border p-2.5 ${
+                        <div className={`rounded-lg border p-2.5 flex flex-col justify-between ${
                           leave.hostel_status === "APPROVED"
-                            ? "border-emerald-500/30 bg-emerald-50/50"
+                            ? "border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20"
                             : leave.hostel_status === "REJECTED"
-                            ? "border-rose-500/30 bg-rose-50/50"
-                            : "border-amber-500/30 bg-amber-50/50"
+                            ? "border-rose-500/30 bg-rose-50/50 dark:bg-rose-950/20"
+                            : "border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20"
                         }`}>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
-                              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground">3</span>
-                              Warden Review
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
+                                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground font-bold">3</span>
+                                Warden Review
+                              </div>
+                              <span className={`text-[10px] font-bold ${
+                                leave.hostel_status === "APPROVED" ? "text-emerald-600 dark:text-emerald-400" : leave.hostel_status === "REJECTED" ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400"
+                              }`}>
+                                {leave.hostel_status || "PENDING"}
+                              </span>
                             </div>
-                            <span className={`text-[10px] font-bold ${
-                              leave.hostel_status === "APPROVED" ? "text-emerald-600" : leave.hostel_status === "REJECTED" ? "text-rose-600" : "text-amber-600"
-                            }`}>
-                              {leave.hostel_status || "PENDING"}
-                            </span>
+                            <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
+                              {(leave as any).hostel_lat != null && (
+                                <a
+                                  href={`https://maps.google.com/?q=${(leave as any).hostel_lat},${(leave as any).hostel_lng}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex items-center gap-1 text-[10px] text-primary hover:underline"
+                                >
+                                  <MapPin className="h-3 w-3 shrink-0" /> Warden GPS
+                                </a>
+                              )}
+                              {(leave as any).note && <p className="text-[10px] text-foreground font-medium">Note: {(leave as any).note}</p>}
+                              {(leave as any).hostel_reject_reason && (
+                                <p className="text-[10px] text-rose-600 font-medium">Reject: {(leave as any).hostel_reject_reason}</p>
+                              )}
+                            </div>
                           </div>
-                          <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
-                            {(leave as any).hostel_lat != null && (
-                              <a
-                                href={`https://maps.google.com/?q=${(leave as any).hostel_lat},${(leave as any).hostel_lng}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="flex items-center gap-1 text-[10px] text-primary hover:underline"
-                              >
-                                <MapPin className="h-3 w-3" /> Warden GPS
-                              </a>
-                            )}
-                            {(leave as any).note && <p className="text-[10px] text-foreground font-medium">Note: {(leave as any).note}</p>}
-                            {(leave as any).hostel_reject_reason && (
-                              <p className="text-[10px] text-rose-600 font-medium">Reject: {(leave as any).hostel_reject_reason}</p>
-                            )}
+
+                          {/* Warden Photo / Identity */}
+                          <div className="mt-2 pt-1.5 border-t border-border/40 space-y-1">
+                            {(leave as any).reviewed_by_photo ? (
+                              <div>
+                                <span className="text-[9px] font-semibold text-muted-foreground block text-center truncate mb-0.5">Warden Photo</span>
+                                <img
+                                  src={(leave as any).reviewed_by_photo}
+                                  alt="Warden"
+                                  className="timeline-photo h-14 w-full cursor-pointer rounded border border-border/80 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
+                                  onClick={() => setZoomedPhoto({ url: (leave as any).reviewed_by_photo, title: `Warden Photo - ${(leave as any).reviewed_by_name || "Hostel Warden"}` })}
+                                />
+                              </div>
+                            ) : null}
+                            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                              <ShieldCheck className="h-3.5 w-3.5 text-primary shrink-0" />
+                              <span className="font-medium text-foreground truncate">
+                                {(leave as any).reviewed_by_name ? `Verified: ${(leave as any).reviewed_by_name}` : "Verified by Warden"}
+                              </span>
+                            </div>
                           </div>
                         </div>
 
                         {/* Step 4: Gate Security Exit */}
-                        <div className="rounded-lg border border-border/80 bg-muted/20 p-2.5">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
-                              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground">4</span>
-                              Gate Exit
+                        <div className="rounded-lg border border-border/80 bg-muted/20 p-2.5 flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
+                                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground font-bold">4</span>
+                                Gate Exit
+                              </div>
+                              {leave.gatePass?.out_time_actual ? (
+                                <Badge variant="outline" className="bg-emerald-500/10 text-[9px] text-emerald-700 dark:text-emerald-400">SCANNED OUT</Badge>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground">Pending</span>
+                              )}
                             </div>
-                            {leave.gatePass?.out_time_actual ? (
-                              <Badge variant="outline" className="bg-emerald-500/10 text-[9px] text-emerald-700">SCANNED OUT</Badge>
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground">Pending</span>
-                            )}
+                            <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
+                              <div>Time: {leave.gatePass?.out_time_actual ? new Date(leave.gatePass.out_time_actual).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</div>
+                              {(leave as any).gatePass?.out_guard_lat != null && (
+                                <a
+                                  href={`https://maps.google.com/?q=${(leave as any).gatePass.out_guard_lat},${(leave as any).gatePass.out_guard_lng}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex items-center gap-1 text-[10px] text-primary hover:underline"
+                                >
+                                  <MapPin className="h-3 w-3 shrink-0" /> Gate GPS
+                                </a>
+                              )}
+                            </div>
                           </div>
-                          <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
-                            <div>Time: {leave.gatePass?.out_time_actual ? new Date(leave.gatePass.out_time_actual).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</div>
-                            {(leave as any).gatePass?.out_guard_lat != null && (
-                              <a
-                                href={`https://maps.google.com/?q=${(leave as any).gatePass.out_guard_lat},${(leave as any).gatePass.out_guard_lng}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="flex items-center gap-1 text-[10px] text-primary hover:underline"
-                              >
-                                <MapPin className="h-3 w-3" /> Gate GPS
-                              </a>
-                            )}
+
+                          {/* Guard Exit Photo / Identity */}
+                          <div className="mt-2 pt-1.5 border-t border-border/40 space-y-1">
+                            {(leave as any).gatePass?.out_guard_photo ? (
+                              <div>
+                                <span className="text-[9px] font-semibold text-muted-foreground block text-center truncate mb-0.5">Guard Photo</span>
+                                <img
+                                  src={(leave as any).gatePass.out_guard_photo}
+                                  alt="Guard"
+                                  className="timeline-photo h-14 w-full cursor-pointer rounded border border-border/80 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
+                                  onClick={() => setZoomedPhoto({ url: (leave as any).gatePass.out_guard_photo, title: `Security Guard Photo - ${(leave as any).gatePass?.out_guard_name || "Gate Exit Guard"}` })}
+                                />
+                              </div>
+                            ) : null}
+                            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-600 shrink-0">
+                                <ShieldCheck className="h-2.5 w-2.5" />
+                              </div>
+                              <span className="font-medium text-foreground truncate">
+                                {(leave as any).gatePass?.out_guard_name ? `Guard: ${(leave as any).gatePass.out_guard_name}` : "Gate Security Post"}
+                              </span>
+                            </div>
                           </div>
                         </div>
 
                         {/* Step 5: Gate Security Return */}
-                        <div className="rounded-lg border border-border/80 bg-muted/20 p-2.5">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
-                              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground">5</span>
-                              Gate Return
+                        <div className="rounded-lg border border-border/80 bg-muted/20 p-2.5 flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
+                                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground font-bold">5</span>
+                                Gate Return
+                              </div>
+                              {leave.gatePass?.in_time_actual ? (
+                                <Badge variant="outline" className="bg-teal-500/10 text-[9px] text-teal-700 dark:text-teal-400">RETURNED</Badge>
+                              ) : isOut ? (
+                                <Badge variant="outline" className="bg-blue-500/10 text-[9px] text-blue-700 dark:text-blue-400">OUTSIDE</Badge>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground">Pending</span>
+                              )}
                             </div>
-                            {leave.gatePass?.in_time_actual ? (
-                              <Badge variant="outline" className="bg-teal-500/10 text-[9px] text-teal-700">RETURNED</Badge>
-                            ) : isOut ? (
-                              <Badge variant="outline" className="bg-blue-500/10 text-[9px] text-blue-700">OUTSIDE</Badge>
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground">Pending</span>
-                            )}
+                            <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
+                              <div>Time: {leave.gatePass?.in_time_actual ? new Date(leave.gatePass.in_time_actual).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</div>
+                              {(leave as any).gatePass?.in_guard_lat != null && (
+                                <a
+                                  href={`https://maps.google.com/?q=${(leave as any).gatePass.in_guard_lat},${(leave as any).gatePass.in_guard_lng}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex items-center gap-1 text-[10px] text-primary hover:underline"
+                                >
+                                  <MapPin className="h-3 w-3 shrink-0" /> Return GPS
+                                </a>
+                              )}
+                            </div>
                           </div>
-                          <div className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
-                            <div>Time: {leave.gatePass?.in_time_actual ? new Date(leave.gatePass.in_time_actual).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</div>
-                            {(leave as any).gatePass?.in_guard_lat != null && (
-                              <a
-                                href={`https://maps.google.com/?q=${(leave as any).gatePass.in_guard_lat},${(leave as any).gatePass.in_guard_lng}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="flex items-center gap-1 text-[10px] text-primary hover:underline"
-                              >
-                                <MapPin className="h-3 w-3" /> Return GPS
-                              </a>
-                            )}
+
+                          {/* Guard Return Photo / Identity */}
+                          <div className="mt-2 pt-1.5 border-t border-border/40 space-y-1">
+                            {(leave as any).gatePass?.in_guard_photo ? (
+                              <div>
+                                <span className="text-[9px] font-semibold text-muted-foreground block text-center truncate mb-0.5">Guard Photo</span>
+                                <img
+                                  src={(leave as any).gatePass.in_guard_photo}
+                                  alt="Guard"
+                                  className="timeline-photo h-14 w-full cursor-pointer rounded border border-border/80 object-cover shadow-sm transition hover:opacity-90 hover:scale-[1.02]"
+                                  onClick={() => setZoomedPhoto({ url: (leave as any).gatePass.in_guard_photo, title: `Security Guard Photo - ${(leave as any).gatePass?.in_guard_name || "Gate Return Guard"}` })}
+                                />
+                              </div>
+                            ) : null}
+                            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-teal-500/20 text-teal-600 shrink-0">
+                                <ShieldCheck className="h-2.5 w-2.5" />
+                              </div>
+                              <span className="font-medium text-foreground truncate">
+                                {(leave as any).gatePass?.in_guard_name ? `Guard: ${(leave as any).gatePass.in_guard_name}` : "Return Checkpoint"}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
